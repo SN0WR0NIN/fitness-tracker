@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { Activity, Upload, X } from 'lucide-react';
+import { Upload, X } from 'lucide-react';
+import Navbar from '@/components/Navbar';
 
 const ACTIVITY_CATEGORIES = [
   { value: 'RUN', label: 'Run', icon: '🏃' },
@@ -92,38 +93,22 @@ export default function NewActivityPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-2">
-            <Activity className="w-8 h-8 text-blue-600" />
-            <span className="font-bold text-lg">Fitness Tracker</span>
-          </Link>
-          <div className="flex gap-4">
-            <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
-              Dashboard
-            </Link>
-            <Link href="/leaderboard" className="text-gray-600 hover:text-gray-900">
-              Leaderboard
-            </Link>
-          </div>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <Navbar />
 
       {/* Main Content */}
       <div className="max-w-2xl mx-auto px-4 py-12">
-        <Link href="/dashboard" className="text-blue-600 hover:text-blue-700 mb-6 inline-flex items-center">
+        <Link href="/dashboard" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 mb-6 inline-flex items-center">
           ← Back
         </Link>
 
-        <div className="bg-white rounded-lg shadow-md p-8">
-          <h1 className="text-3xl font-bold mb-8">Log New Activity</h1>
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-8">
+          <h1 className="text-3xl font-bold mb-8 text-gray-900 dark:text-gray-100">Log New Activity</h1>
 
           <form onSubmit={handleSubmit} className="space-y-8">
             {/* Category Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
                 Activity Type
               </label>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -135,7 +120,7 @@ export default function NewActivityPage() {
                     className={`p-4 rounded-lg text-center transition ${
                       category === cat.value
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700'
                     }`}
                   >
                     <div className="text-2xl mb-2">{cat.icon}</div>
@@ -148,7 +133,7 @@ export default function NewActivityPage() {
             {/* Distance */}
             {category !== 'TROOP_GAMES' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Distance ({category === 'SWIM' ? 'meters' : 'km'})
                 </label>
                 <input
@@ -159,7 +144,7 @@ export default function NewActivityPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, distance: e.target.value })
                   }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                   placeholder="Enter distance"
                 />
               </div>
@@ -168,7 +153,7 @@ export default function NewActivityPage() {
             {/* Pace */}
             {category === 'RUN' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Pace (min/km)
                 </label>
                 <input
@@ -176,7 +161,7 @@ export default function NewActivityPage() {
                   step="0.1"
                   value={formData.pace}
                   onChange={(e) => setFormData({ ...formData, pace: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                   placeholder="Enter pace"
                 />
               </div>
@@ -193,7 +178,7 @@ export default function NewActivityPage() {
                 }
                 className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-600"
               />
-              <label htmlFor="friend" className="ml-2 text-sm text-gray-700">
+              <label htmlFor="friend" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 Completed with a friend?
               </label>
             </div>
@@ -201,14 +186,14 @@ export default function NewActivityPage() {
             {/* Companion name */}
             {formData.completedWithFriend && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Friend's Name
                 </label>
                 <input
                   type="text"
                   value={formData.companion}
                   onChange={(e) => setFormData({ ...formData, companion: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                   placeholder="Who did you do this with?"
                 />
               </div>
@@ -216,7 +201,7 @@ export default function NewActivityPage() {
 
             {/* Proof Screenshot */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Proof Screenshot
               </label>
               {formData.proofUrl ? (
@@ -225,7 +210,7 @@ export default function NewActivityPage() {
                   <img
                     src={formData.proofUrl}
                     alt="Proof preview"
-                    className="h-32 rounded-lg border border-gray-300 object-cover"
+                    className="h-32 rounded-lg border border-gray-300 dark:border-gray-700 object-cover"
                   />
                   <button
                     type="button"
@@ -236,7 +221,7 @@ export default function NewActivityPage() {
                   </button>
                 </div>
               ) : (
-                <label className="flex items-center justify-center gap-2 w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 transition text-gray-500">
+                <label className="flex items-center justify-center gap-2 w-full px-4 py-6 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition text-gray-500 dark:text-gray-400">
                   <Upload className="w-5 h-5" />
                   <span>{uploading ? 'Uploading...' : 'Click to upload a screenshot'}</span>
                   <input
@@ -262,7 +247,7 @@ export default function NewActivityPage() {
               </button>
               <Link
                 href="/dashboard"
-                className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                className="px-6 py-3 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition"
               >
                 Cancel
               </Link>

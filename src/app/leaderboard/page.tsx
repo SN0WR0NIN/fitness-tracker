@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Activity, Trophy } from 'lucide-react';
+import { Trophy } from 'lucide-react';
+import Navbar from '@/components/Navbar';
 
 interface IndividualLeader {
   userId: string;
@@ -60,35 +60,19 @@ export default function LeaderboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-2">
-            <Activity className="w-8 h-8 text-blue-600" />
-            <span className="font-bold text-lg">Fitness Tracker</span>
-          </Link>
-          <div className="flex gap-4">
-            <Link href="/" className="text-gray-600 hover:text-gray-900">
-              Home
-            </Link>
-            <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
-              Dashboard
-            </Link>
-          </div>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <Navbar />
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-12">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-6 flex items-center gap-2">
+          <h1 className="text-3xl font-bold mb-6 flex items-center gap-2 text-gray-900 dark:text-gray-100">
             <Trophy className="w-8 h-8 text-yellow-500" />
             Leaderboards
           </h1>
 
           {/* Controls */}
-          <div className="flex flex-col md:flex-row gap-6 bg-white p-6 rounded-lg shadow">
+          <div className="flex flex-col md:flex-row gap-6 bg-white dark:bg-gray-900 p-6 rounded-lg shadow">
             {/* Type Toggle */}
             <div className="flex gap-4">
               <label className="flex items-center gap-2">
@@ -101,7 +85,7 @@ export default function LeaderboardPage() {
                   }
                   className="w-4 h-4"
                 />
-                <span className="text-sm font-medium">Individual</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Individual</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -113,7 +97,7 @@ export default function LeaderboardPage() {
                   }
                   className="w-4 h-4"
                 />
-                <span className="text-sm font-medium">Team</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Team</span>
               </label>
             </div>
 
@@ -121,7 +105,7 @@ export default function LeaderboardPage() {
             <select
               value={week}
               onChange={(e) => setWeek(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              className="px-4 py-2 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
             >
               <option value="all">All Time</option>
               <option value="1">Week 1</option>
@@ -134,36 +118,36 @@ export default function LeaderboardPage() {
         </div>
 
         {/* Leaderboard Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow overflow-hidden">
           {loading ? (
-            <div className="p-12 text-center text-gray-500">Loading...</div>
+            <div className="p-12 text-center text-gray-500 dark:text-gray-400">Loading...</div>
           ) : leaderboardType === 'individual' && individualLeaders.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                  <tr className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Rank
                     </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Name
                     </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Column
                     </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Total
                     </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Run
                     </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Cycle
                     </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Swim
                     </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Hike
                     </th>
                   </tr>
@@ -172,30 +156,30 @@ export default function LeaderboardPage() {
                   {individualLeaders.map((leader, index) => (
                     <tr
                       key={leader.userId}
-                      className="border-b border-gray-200 hover:bg-gray-50 transition"
+                      className="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
                     >
-                      <td className="px-6 py-4 font-bold text-lg">
+                      <td className="px-6 py-4 font-bold text-lg text-gray-900 dark:text-gray-100">
                         {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                       </td>
-                      <td className="px-6 py-4 font-medium text-gray-900">
+                      <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">
                         {leader.userName}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
+                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                         {leader.columnName}
                       </td>
-                      <td className="px-6 py-4 text-right font-bold text-blue-600">
+                      <td className="px-6 py-4 text-right font-bold text-blue-600 dark:text-blue-400">
                         {leader.totalPoints.toFixed(1)}
                       </td>
-                      <td className="px-6 py-4 text-right text-gray-600">
+                      <td className="px-6 py-4 text-right text-gray-600 dark:text-gray-400">
                         {leader.runPoints.toFixed(1)}
                       </td>
-                      <td className="px-6 py-4 text-right text-gray-600">
+                      <td className="px-6 py-4 text-right text-gray-600 dark:text-gray-400">
                         {leader.cyclePoints.toFixed(1)}
                       </td>
-                      <td className="px-6 py-4 text-right text-gray-600">
+                      <td className="px-6 py-4 text-right text-gray-600 dark:text-gray-400">
                         {leader.swimPoints.toFixed(1)}
                       </td>
-                      <td className="px-6 py-4 text-right text-gray-600">
+                      <td className="px-6 py-4 text-right text-gray-600 dark:text-gray-400">
                         {leader.hikePoints.toFixed(1)}
                       </td>
                     </tr>
@@ -207,20 +191,20 @@ export default function LeaderboardPage() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                  <tr className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Rank
                     </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Column
                     </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Members
                     </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Total Points
                     </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Avg Points
                     </th>
                   </tr>
@@ -229,21 +213,21 @@ export default function LeaderboardPage() {
                   {teamLeaders.map((leader, index) => (
                     <tr
                       key={leader.columnId}
-                      className="border-b border-gray-200 hover:bg-gray-50 transition"
+                      className="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
                     >
-                      <td className="px-6 py-4 font-bold text-lg">
+                      <td className="px-6 py-4 font-bold text-lg text-gray-900 dark:text-gray-100">
                         {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                       </td>
-                      <td className="px-6 py-4 font-medium text-gray-900">
+                      <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">
                         {leader.columnName}
                       </td>
-                      <td className="px-6 py-4 text-right text-gray-600">
+                      <td className="px-6 py-4 text-right text-gray-600 dark:text-gray-400">
                         {leader.memberCount}
                       </td>
-                      <td className="px-6 py-4 text-right font-bold text-blue-600">
+                      <td className="px-6 py-4 text-right font-bold text-blue-600 dark:text-blue-400">
                         {leader.totalPoints.toFixed(1)}
                       </td>
-                      <td className="px-6 py-4 text-right text-gray-600">
+                      <td className="px-6 py-4 text-right text-gray-600 dark:text-gray-400">
                         {leader.averagePoints.toFixed(1)}
                       </td>
                     </tr>
@@ -252,7 +236,7 @@ export default function LeaderboardPage() {
               </table>
             </div>
           ) : (
-            <div className="p-12 text-center text-gray-500">
+            <div className="p-12 text-center text-gray-500 dark:text-gray-400">
               No data available for this view.
             </div>
           )}

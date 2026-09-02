@@ -2,9 +2,10 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { Activity, TrendingUp, Users, ShieldCheck } from 'lucide-react';
+import { Activity, TrendingUp, Users } from 'lucide-react';
+import Navbar from '@/components/Navbar';
 
 interface Activity {
   id: string;
@@ -108,41 +109,14 @@ function DashboardContent() {
   const totalActivities = approvedActivities.length;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-2">
-            <Activity className="w-8 h-8 text-blue-600" />
-            <span className="font-bold text-lg">Fitness Tracker</span>
-          </Link>
-          <div className="flex gap-4 items-center">
-            <Link href="/" className="text-gray-600 hover:text-gray-900">
-              Home
-            </Link>
-            <Link href="/leaderboard" className="text-gray-600 hover:text-gray-900">
-              Leaderboard
-            </Link>
-            {currentUser?.role === 'ADMIN' && (
-              <Link href="/admin/activities" className="flex items-center gap-1 text-gray-600 hover:text-gray-900">
-                <ShieldCheck className="w-4 h-4" /> Review
-              </Link>
-            )}
-            <button
-              onClick={() => signOut({ callbackUrl: '/' })}
-              className="text-gray-600 hover:text-gray-900"
-            >
-              Log Out
-            </button>
-          </div>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <Navbar />
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-12">
         {/* Header */}
         <div className="flex justify-between items-center mb-12">
-          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
           <Link
             href="/activities/new"
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
@@ -152,10 +126,10 @@ function DashboardContent() {
         </div>
 
         {/* Strava Connection */}
-        <div className="bg-white rounded-lg shadow p-6 mb-8 flex items-center justify-between flex-wrap gap-4">
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 mb-8 flex items-center justify-between flex-wrap gap-4">
           <div>
-            <h2 className="font-bold text-lg">Strava</h2>
-            {syncMessage && <p className="text-sm text-gray-600 mt-1">{syncMessage}</p>}
+            <h2 className="font-bold text-lg text-gray-900 dark:text-gray-100">Strava</h2>
+            {syncMessage && <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{syncMessage}</p>}
           </div>
           {currentUser?.stravaConnected ? (
             <button
@@ -179,48 +153,48 @@ function DashboardContent() {
 
         {/* Stats Cards */}
         <div className="grid md:grid-cols-3 gap-6 mb-12">
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-600 text-sm mb-1">Total Points</p>
-                <p className="text-3xl font-bold text-blue-600">{totalPoints.toFixed(1)}</p>
+                <p className="text-gray-600 dark:text-gray-400 text-sm mb-1">Total Points</p>
+                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{totalPoints.toFixed(1)}</p>
               </div>
-              <TrendingUp className="w-12 h-12 text-blue-100" />
+              <TrendingUp className="w-12 h-12 text-blue-100 dark:text-blue-900" />
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-600 text-sm mb-1">Activities Logged</p>
-                <p className="text-3xl font-bold text-green-600">{totalActivities}</p>
+                <p className="text-gray-600 dark:text-gray-400 text-sm mb-1">Activities Logged</p>
+                <p className="text-3xl font-bold text-green-600 dark:text-green-400">{totalActivities}</p>
               </div>
-              <Activity className="w-12 h-12 text-green-100" />
+              <Activity className="w-12 h-12 text-green-100 dark:text-green-900" />
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-600 text-sm mb-1">Average Points</p>
-                <p className="text-3xl font-bold text-purple-600">
+                <p className="text-gray-600 dark:text-gray-400 text-sm mb-1">Average Points</p>
+                <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
                   {totalActivities > 0 ? (totalPoints / totalActivities).toFixed(1) : '0'}
                 </p>
               </div>
-              <Users className="w-12 h-12 text-purple-100" />
+              <Users className="w-12 h-12 text-purple-100 dark:text-purple-900" />
             </div>
           </div>
         </div>
 
         {/* Recent Activities */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-xl font-bold">Recent Activities</h2>
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Recent Activities</h2>
           </div>
           {loading ? (
-            <div className="p-6 text-center text-gray-500">Loading...</div>
+            <div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading...</div>
           ) : activities.length === 0 ? (
-            <div className="p-6 text-center text-gray-500">
+            <div className="p-6 text-center text-gray-500 dark:text-gray-400">
               <p>No activities logged yet.</p>
-              <Link href="/activities/new" className="text-blue-600 hover:text-blue-700">
+              <Link href="/activities/new" className="text-blue-600 dark:text-blue-400 hover:text-blue-700">
                 Log your first activity →
               </Link>
             </div>
@@ -228,23 +202,23 @@ function DashboardContent() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left px-6 py-3 font-semibold text-gray-700">
+                  <tr className="border-b border-gray-200 dark:border-gray-800">
+                    <th className="text-left px-6 py-3 font-semibold text-gray-700 dark:text-gray-300">
                       Date
                     </th>
-                    <th className="text-left px-6 py-3 font-semibold text-gray-700">
+                    <th className="text-left px-6 py-3 font-semibold text-gray-700 dark:text-gray-300">
                       Activity
                     </th>
-                    <th className="text-left px-6 py-3 font-semibold text-gray-700">
+                    <th className="text-left px-6 py-3 font-semibold text-gray-700 dark:text-gray-300">
                       Distance
                     </th>
-                    <th className="text-left px-6 py-3 font-semibold text-gray-700">
+                    <th className="text-left px-6 py-3 font-semibold text-gray-700 dark:text-gray-300">
                       Points
                     </th>
-                    <th className="text-left px-6 py-3 font-semibold text-gray-700">
+                    <th className="text-left px-6 py-3 font-semibold text-gray-700 dark:text-gray-300">
                       With Friend
                     </th>
-                    <th className="text-left px-6 py-3 font-semibold text-gray-700">
+                    <th className="text-left px-6 py-3 font-semibold text-gray-700 dark:text-gray-300">
                       Status
                     </th>
                   </tr>
@@ -253,32 +227,32 @@ function DashboardContent() {
                   {activities.map((activity) => (
                     <tr
                       key={activity.id}
-                      className="border-b border-gray-200 hover:bg-gray-50 transition"
+                      className="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
                     >
-                      <td className="px-6 py-3 text-sm">
+                      <td className="px-6 py-3 text-sm text-gray-700 dark:text-gray-300">
                         {new Date(activity.createdAt).toLocaleDateString()}
                       </td>
-                      <td className="px-6 py-3 font-medium capitalize">
+                      <td className="px-6 py-3 font-medium capitalize text-gray-900 dark:text-gray-100">
                         {activity.category.replace(/_/g, ' ')}
                       </td>
-                      <td className="px-6 py-3 text-sm">
+                      <td className="px-6 py-3 text-sm text-gray-700 dark:text-gray-300">
                         {activity.distance}{' '}
                         {activity.category === 'SWIM' ? 'm' : 'km'}
                       </td>
-                      <td className="px-6 py-3 font-semibold text-blue-600">
+                      <td className="px-6 py-3 font-semibold text-blue-600 dark:text-blue-400">
                         {activity.points.toFixed(1)}
                       </td>
-                      <td className="px-6 py-3">
+                      <td className="px-6 py-3 text-gray-700 dark:text-gray-300">
                         {activity.completedWithFriend ? '✓' : ''}
                       </td>
                       <td className="px-6 py-3">
                         <span
                           className={`px-2 py-1 rounded-full text-xs font-medium ${
                             activity.status === 'APPROVED'
-                              ? 'bg-green-100 text-green-700'
+                              ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
                               : activity.status === 'REJECTED'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-yellow-100 text-yellow-700'
+                              ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+                              : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
                           }`}
                         >
                           {activity.status}
