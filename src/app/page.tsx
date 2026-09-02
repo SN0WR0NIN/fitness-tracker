@@ -7,6 +7,7 @@ import Navbar from '@/components/Navbar';
 import UserActivitiesModal from '@/components/UserActivitiesModal';
 import StravaIcon from '@/components/StravaIcon';
 import { formatDistance } from '@/lib/format';
+import { getMapboxStaticMapUrl } from '@/lib/mapbox';
 
 interface IndividualLeader {
   userId: string;
@@ -30,6 +31,7 @@ interface RecentActivity {
   points: number;
   proofUrl?: string;
   stravaActivityId?: string;
+  mapPolyline?: string;
   user: { id: string; name: string };
 }
 
@@ -212,44 +214,55 @@ export default function Home() {
             <p className="text-center text-gray-500 dark:text-gray-400">No approved activities yet.</p>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {recentApproved.map((activity) => (
-                <button
-                  key={activity.id}
-                  onClick={() =>
-                    activity.proofUrl
-                      ? setEnlargedPhoto(activity.proofUrl)
-                      : setSelectedUser({ userId: activity.user.id, userName: activity.user.name })
-                  }
-                  className="bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden text-left hover:shadow-lg hover:-translate-y-0.5 transition"
-                >
-                  <div className="h-40 bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
-                    {activity.proofUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={activity.proofUrl}
-                        alt={`${activity.user.name}'s activity proof`}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : activity.stravaActivityId ? (
-                      <StravaIcon className="w-16 h-16 text-orange-500" />
-                    ) : (
-                      <Activity className="w-16 h-16 text-gray-300 dark:text-gray-700" />
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{activity.user.name}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">
-                      {activity.category.replace(/_/g, ' ')}
-                      {activity.distance
-                        ? ` — ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}`
-                        : ''}
-                    </p>
-                    <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">
-                      {activity.points.toFixed(1)} pts
-                    </p>
-                  </div>
-                </button>
-              ))}
+              {recentApproved.map((activity) => {
+                const mapUrl = getMapboxStaticMapUrl(activity.mapPolyline, { width: 400, height: 300 });
+                const enlargeTarget = activity.proofUrl || mapUrl;
+                return (
+                  <button
+                    key={activity.id}
+                    onClick={() =>
+                      enlargeTarget
+                        ? setEnlargedPhoto(enlargeTarget)
+                        : setSelectedUser({ userId: activity.user.id, userName: activity.user.name })
+                    }
+                    className="bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden text-left hover:shadow-lg hover:-translate-y-0.5 transition"
+                  >
+                    <div className="h-40 bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                      {activity.proofUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={activity.proofUrl}
+                          alt={`${activity.user.name}'s activity proof`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : mapUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={mapUrl}
+                          alt={`${activity.user.name}'s route map`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : activity.stravaActivityId ? (
+                        <StravaIcon className="w-16 h-16 text-orange-500" />
+                      ) : (
+                        <Activity className="w-16 h-16 text-gray-300 dark:text-gray-700" />
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <p className="font-medium text-gray-900 dark:text-gray-100">{activity.user.name}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">
+                        {activity.category.replace(/_/g, ' ')}
+                        {activity.distance
+                          ? ` — ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}`
+                          : ''}
+                      </p>
+                      <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">
+                        {activity.points.toFixed(1)} pts
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

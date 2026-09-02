@@ -70,6 +70,7 @@ export async function POST() {
         proofUrl: photoUrl ?? undefined,
         stravaActivityId: activity.stravaActivityId,
         occurredAt: activity.occurredAt,
+        mapPolyline: activity.mapPolyline,
       });
       imported++;
     }

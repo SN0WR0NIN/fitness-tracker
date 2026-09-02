@@ -68,6 +68,7 @@ model Activity {
   weekStart       DateTime   // Sunday of the week
   weekNumber      Int
   stravaActivityId String?   @unique
+  mapPolyline     String?    // Strava's encoded route polyline, for rendering a static map image
   pointsLog       PointsLog?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt

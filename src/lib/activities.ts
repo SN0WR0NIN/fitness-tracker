@@ -22,6 +22,7 @@ interface CreateActivityInput {
   proofUrl?: string;
   stravaActivityId?: string;
   occurredAt?: Date;
+  mapPolyline?: string;
 }
 
 /**
@@ -64,6 +65,7 @@ export async function createActivity(input: CreateActivityInput) {
       companion: companionName,
       proofUrl: input.proofUrl,
       stravaActivityId: input.stravaActivityId,
+      mapPolyline: input.mapPolyline,
       points: scoring.totalPoints,
       status: 'PENDING',
       occurredAt,

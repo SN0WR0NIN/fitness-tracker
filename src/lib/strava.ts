@@ -56,6 +56,7 @@ interface StravaSummaryActivity {
   moving_time: number; // seconds
   start_date: string;
   athlete_count?: number;
+  map?: { summary_polyline?: string };
 }
 
 const STRAVA_TYPE_TO_CATEGORY: Record<string, ActivityCategory> = {
@@ -76,6 +77,7 @@ export interface MappedStravaActivity {
   pace?: number;
   completedWithFriend: boolean;
   occurredAt: Date;
+  mapPolyline?: string;
 }
 
 /**
@@ -123,6 +125,7 @@ export async function fetchAndMapStravaActivities(
       pace,
       completedWithFriend: (activity.athlete_count ?? 1) > 1,
       occurredAt: new Date(activity.start_date),
+      mapPolyline: activity.map?.summary_polyline || undefined,
     });
   }
 
