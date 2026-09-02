@@ -21,12 +21,14 @@ export default function NewActivityPage() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [submitError, setSubmitError] = useState('');
   const [category, setCategory] = useState('RUN');
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [formData, setFormData] = useState({
     distance: '',
     pace: '',
     completedWithFriend: false,
-    companion: '',
+    companionUserId: '',
     proofUrl: '',
   });
 
@@ -35,6 +37,13 @@ export default function NewActivityPage() {
       router.push('/auth/login');
     }
   }, [status, router]);
+
+  useEffect(() => {
+    fetch('/api/users')
+      .then((res) => res.json())
+      .then((data) => setUsers(Array.isArray(data) ? data : []))
+      .catch(() => setUsers([]));
+  }, []);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -64,6 +73,7 @@ export default function NewActivityPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setSubmitError('');
 
     try {
       const response = await fetch('/api/activities', {
@@ -73,8 +83,7 @@ export default function NewActivityPage() {
           category,
           distance: formData.distance ? parseFloat(formData.distance) : undefined,
           pace: formData.pace ? parseFloat(formData.pace) : undefined,
-          completedWithFriend: formData.completedWithFriend,
-          companion: formData.companion,
+          companionUserId: formData.completedWithFriend ? formData.companionUserId || undefined : undefined,
           proofUrl: formData.proofUrl,
         }),
       });
@@ -82,11 +91,12 @@ export default function NewActivityPage() {
       if (response.ok) {
         router.push('/dashboard?success=true');
       } else {
-        alert('Failed to log activity');
+        const data = await response.json().catch(() => ({}));
+        setSubmitError(typeof data.error === 'string' ? data.error : 'Failed to log activity');
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('Error logging activity');
+      setSubmitError('Error logging activity');
     } finally {
       setLoading(false);
     }
@@ -147,6 +157,11 @@ export default function NewActivityPage() {
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                   placeholder="Enter distance"
                 />
+                {category === 'WALK_OR_HIKE' && (
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Walks require a minimum of 5km to count. Hikes with significant elevation have no minimum.
+                  </p>
+                )}
               </div>
             )}
 
@@ -164,6 +179,9 @@ export default function NewActivityPage() {
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                   placeholder="Enter pace"
                 />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Runs slower than 9:00/km are automatically counted as a Walk/Hike instead.
+                </p>
               </div>
             )}
 
@@ -183,19 +201,27 @@ export default function NewActivityPage() {
               </label>
             </div>
 
-            {/* Companion name */}
+            {/* Companion selection */}
             {formData.completedWithFriend && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Friend's Name
+                  Who did you do this with?
                 </label>
-                <input
-                  type="text"
-                  value={formData.companion}
-                  onChange={(e) => setFormData({ ...formData, companion: e.target.value })}
+                <select
+                  value={formData.companionUserId}
+                  onChange={(e) => setFormData({ ...formData, companionUserId: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                  placeholder="Who did you do this with?"
-                />
+                >
+                  <option value="">Select a friend...</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  The +3 friend bonus only applies when you select a registered account.
+                </p>
               </div>
             )}
 
@@ -235,6 +261,12 @@ export default function NewActivityPage() {
               )}
               {uploadError && <p className="mt-2 text-sm text-red-600">{uploadError}</p>}
             </div>
+
+            {submitError && (
+              <div className="p-3 bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 rounded-lg text-sm">
+                {submitError}
+              </div>
+            )}
 
             {/* Submit Button */}
             <div className="flex gap-4 pt-4">

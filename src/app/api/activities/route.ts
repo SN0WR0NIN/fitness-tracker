@@ -10,8 +10,7 @@ const ActivitySchema = z.object({
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']),
   distance: z.number().optional(),
   pace: z.number().optional(),
-  completedWithFriend: z.boolean().default(false),
-  companion: z.string().optional(),
+  companionUserId: z.string().optional(),
   proofUrl: z.preprocess((val) => (val === '' ? undefined : val), z.string().url().optional()),
 });
 
@@ -26,6 +25,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = ActivitySchema.parse(body);
 
+    if (validatedData.companionUserId === sessionUserId) {
+      return NextResponse.json(
+        { error: 'You cannot select yourself as your own companion' },
+        { status: 400 }
+      );
+    }
+
     // userId and columnId are derived from the session, never trusted from the client
     const user = await prisma.user.findUnique({ where: { id: sessionUserId } });
     if (!user || !user.columnId) {
@@ -35,14 +41,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (validatedData.companionUserId) {
+      const companion = await prisma.user.findUnique({ where: { id: validatedData.companionUserId } });
+      if (!companion) {
+        return NextResponse.json({ error: 'Selected companion was not found' }, { status: 400 });
+      }
+    }
+
     const activity = await createActivity({
       userId: sessionUserId,
       columnId: user.columnId,
       category: validatedData.category,
       distance: validatedData.distance,
       pace: validatedData.pace,
-      completedWithFriend: validatedData.completedWithFriend,
-      companion: validatedData.companion,
+      companionUserId: validatedData.companionUserId,
       proofUrl: validatedData.proofUrl,
     });
 

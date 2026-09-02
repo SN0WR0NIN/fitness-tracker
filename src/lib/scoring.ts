@@ -1,6 +1,13 @@
 /**
- * Scoring algorithm for fitness activities
- * Based on distance, pace, and activity type
+ * Scoring algorithm for fitness activities.
+ * Rules per the official KG Stay Active Challenge point system:
+ * - Run: 1pt/km base + pace bonus (>6min/km: +0.5/km, <6min/km: +1.0/km, <5min/km: +1.5/km).
+ *   Runs slower than 9:00/km are not runs — they get auto-recategorized as Walk/Hike.
+ * - Cycle: 1pt per 3km.
+ * - Swim: 1pt per 100m.
+ * - Walk/Hike: 1pt/km, but requires a minimum 5km distance to count at all.
+ * - Troop Games: 5 points flat.
+ * - Friend bonus: +3pts, only when completed with a verified registered companion.
  */
 
 export type ActivityCategory = 
@@ -9,6 +16,9 @@ export type ActivityCategory =
   | 'SWIM'
   | 'WALK_OR_HIKE'
   | 'TROOP_GAMES';
+
+export const RUN_SLOW_PACE_THRESHOLD_MIN_PER_KM = 9; // runs slower than this are recategorized as a walk
+export const WALK_MIN_DISTANCE_KM = 5; // minimum distance for a Walk/Hike entry to count
 
 interface ScoringInput {
   category: ActivityCategory;
@@ -24,43 +34,57 @@ interface ScoringOutput {
 }
 
 /**
- * Calculate points based on activity type and metrics
- * Scoring rules from data analysis:
- * - Run: distance * (12 - pace) / 2, friend bonus +1
- * - Cycle: distance / 1.7, friend bonus +1
- * - Swim: distance / 50, friend bonus +1
- * - Hike: distance * 1.6, friend bonus +1
- * - Troop Games: 5 points base
+ * A "Run" submitted with a pace slower than the slow-pace threshold isn't a
+ * real run per the rules — it gets auto-recategorized as Walk/Hike instead.
+ * Returns the effective category to actually score and store.
+ */
+export function resolveEffectiveCategory(
+  category: ActivityCategory,
+  pace?: number
+): ActivityCategory {
+  if (category === 'RUN' && pace !== undefined && pace > RUN_SLOW_PACE_THRESHOLD_MIN_PER_KM) {
+    return 'WALK_OR_HIKE';
+  }
+  return category;
+}
+
+function runPaceBonusPerKm(pace: number): number {
+  if (pace < 5) return 1.5;
+  if (pace < 6) return 1.0;
+  return 0.5; // pace >= 6 (includes exactly 6:00/km)
+}
+
+/**
+ * Calculate points based on activity type and metrics.
+ * NOTE: callers should pass the category returned by resolveEffectiveCategory(),
+ * not the raw user-selected category, so slow "runs" score as walks.
  */
 export function calculateActivityPoints(input: ScoringInput): ScoringOutput {
   let basePoints = 0;
 
   switch (input.category) {
     case 'RUN':
-      if (input.distance && input.pace) {
-        // Run scoring: distance * (12 - pace) / 2
-        basePoints = Math.max(0, input.distance * (12 - input.pace) / 2);
+      if (input.distance) {
+        const bonusPerKm = input.pace !== undefined ? runPaceBonusPerKm(input.pace) : 0;
+        basePoints = input.distance * (1 + bonusPerKm);
       }
       break;
 
     case 'CYCLE':
       if (input.distance) {
-        // Cycle scoring: distance / 1.7
-        basePoints = input.distance / 1.7;
+        basePoints = input.distance / 3;
       }
       break;
 
     case 'SWIM':
       if (input.distance) {
-        // Swim scoring: distance (meters) / 50
-        basePoints = input.distance / 50;
+        basePoints = input.distance / 100;
       }
       break;
 
     case 'WALK_OR_HIKE':
-      if (input.distance) {
-        // Hike scoring: distance * 1.6
-        basePoints = input.distance * 1.6;
+      if (input.distance && input.distance >= WALK_MIN_DISTANCE_KM) {
+        basePoints = input.distance;
       }
       break;
 
@@ -69,7 +93,7 @@ export function calculateActivityPoints(input: ScoringInput): ScoringOutput {
       break;
   }
 
-  const friendBonus = input.completedWithFriend ? 1 : 0;
+  const friendBonus = input.completedWithFriend ? 3 : 0;
   const totalPoints = Math.ceil(basePoints + friendBonus);
 
   return {

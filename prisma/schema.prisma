@@ -21,6 +21,7 @@ model User {
   columnId      String?
   activities    Activity[]
   reviewedActivities Activity[] @relation("ActivityReviewer")
+  companionOfActivities Activity[] @relation("ActivityCompanion")
   weeklyScores  WeeklyScore[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -54,6 +55,8 @@ model Activity {
   duration        Int?       // in minutes
   completedWithFriend Boolean @default(false)
   companion       String?
+  companionUserId String?
+  companionUser   User?      @relation("ActivityCompanion", fields: [companionUserId], references: [id])
   proofUrl        String?
   points          Float
   status          ActivityStatus @default(PENDING)

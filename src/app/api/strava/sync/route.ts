@@ -53,13 +53,16 @@ export async function POST() {
 
       const photoUrl = await fetchActivityPhoto(tokens.accessToken, activity.stravaActivityId);
 
+      // Strava tells us athlete_count > 1 but not WHO the companion was, so we
+      // can't verify they're a real registered troop member — no friend bonus
+      // for synced activities; the friend bonus only applies to activities
+      // where a companion was explicitly selected from real accounts.
       await createActivity({
         userId,
         columnId,
         category: activity.category,
         distance: activity.distance,
         pace: activity.pace,
-        completedWithFriend: activity.completedWithFriend,
         proofUrl: photoUrl ?? undefined,
         stravaActivityId: activity.stravaActivityId,
         occurredAt: activity.occurredAt,

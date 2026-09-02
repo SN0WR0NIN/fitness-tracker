@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { calculateActivityPoints, getWeekStart, getWeekNumber, ActivityCategory } from '@/lib/scoring';
+import { calculateActivityPoints, resolveEffectiveCategory, getWeekStart, getWeekNumber, ActivityCategory } from '@/lib/scoring';
 
 function getCategoryScoreField(category: string): string {
   const mapping: Record<string, string> = {
@@ -18,8 +18,7 @@ interface CreateActivityInput {
   category: ActivityCategory;
   distance?: number;
   pace?: number;
-  completedWithFriend?: boolean;
-  companion?: string;
+  companionUserId?: string;
   proofUrl?: string;
   stravaActivityId?: string;
   occurredAt?: Date;
@@ -28,13 +27,25 @@ interface CreateActivityInput {
 /**
  * Creates an activity in PENDING status. Points are computed and stored on the
  * record, but never applied to the weekly score until a reviewer approves it.
+ * Slow "runs" (pace > 9 min/km) are auto-recategorized as Walk/Hike per the
+ * official rules, and the friend bonus only applies when a real registered
+ * companion user is selected (verifies they're an actual troop member).
  */
 export async function createActivity(input: CreateActivityInput) {
+  const effectiveCategory = resolveEffectiveCategory(input.category, input.pace);
+  const completedWithFriend = !!input.companionUserId;
+
+  let companionName: string | undefined;
+  if (input.companionUserId) {
+    const companionUser = await prisma.user.findUnique({ where: { id: input.companionUserId } });
+    companionName = companionUser?.name;
+  }
+
   const scoring = calculateActivityPoints({
-    category: input.category,
+    category: effectiveCategory,
     distance: input.distance,
     pace: input.pace,
-    completedWithFriend: input.completedWithFriend,
+    completedWithFriend,
   });
 
   const occurredAt = input.occurredAt ?? new Date();
@@ -45,11 +56,12 @@ export async function createActivity(input: CreateActivityInput) {
     data: {
       userId: input.userId,
       columnId: input.columnId,
-      category: input.category,
+      category: effectiveCategory,
       distance: input.distance,
       pace: input.pace,
-      completedWithFriend: input.completedWithFriend ?? false,
-      companion: input.companion,
+      completedWithFriend,
+      companionUserId: input.companionUserId,
+      companion: companionName,
       proofUrl: input.proofUrl,
       stravaActivityId: input.stravaActivityId,
       points: scoring.totalPoints,
@@ -167,9 +179,10 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
       throw new Error('Activity not found');
     }
 
-    const newCategory = input.category ?? activity.category;
+    const requestedCategory = input.category ?? activity.category;
     const newDistance = input.distance ?? activity.distance;
     const newPace = input.pace ?? activity.pace;
+    const newCategory = resolveEffectiveCategory(requestedCategory, newPace ?? undefined);
 
     const scoring = calculateActivityPoints({
       category: newCategory,
