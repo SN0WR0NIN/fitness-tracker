@@ -5,6 +5,11 @@ import { prisma } from '@/lib/prisma';
 import { getValidStravaToken, fetchAndMapStravaActivities } from '@/lib/strava';
 import { createActivity } from '@/lib/activities';
 
+// Only import activities from this date onward (configurable without a code change)
+const SYNC_START_DATE = process.env.STRAVA_SYNC_START_DATE
+  ? new Date(process.env.STRAVA_SYNC_START_DATE)
+  : new Date('2026-09-01T00:00:00Z');
+
 export async function POST() {
   try {
     const session = await getServerSession(authOptions);
@@ -30,7 +35,9 @@ export async function POST() {
       );
     }
 
-    const stravaActivities = await fetchAndMapStravaActivities(tokens.accessToken);
+    const stravaActivities = await fetchAndMapStravaActivities(tokens.accessToken, {
+      after: SYNC_START_DATE,
+    });
 
     let imported = 0;
     let skipped = 0;

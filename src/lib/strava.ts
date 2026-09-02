@@ -84,13 +84,20 @@ export interface MappedStravaActivity {
  */
 export async function fetchAndMapStravaActivities(
   accessToken: string,
-  perPage = 30
+  options: { perPage?: number; after?: Date } = {}
 ): Promise<MappedStravaActivity[]> {
+  const { perPage = 30, after } = options;
+
+  const params: Record<string, number> = { per_page: perPage };
+  if (after) {
+    params.after = Math.floor(after.getTime() / 1000);
+  }
+
   const response = await axios.get<StravaSummaryActivity[]>(
     'https://www.strava.com/api/v3/athlete/activities',
     {
       headers: { Authorization: `Bearer ${accessToken}` },
-      params: { per_page: perPage },
+      params,
     }
   );
 
