@@ -165,8 +165,11 @@ interface UpdateActivityInput {
   category?: ActivityCategory;
   distance?: number;
   pace?: number;
-  // undefined = leave companion unchanged, null = remove companion, string = set companion
+  // undefined = leave companion unchanged, null = remove companion, string = set a verified companion
   companionUserId?: string | null;
+  // admin-only manual override for a friend who hasn't registered an account yet;
+  // only takes effect when companionUserId is NOT present in the same request
+  companionName?: string | null;
 }
 
 /**
@@ -188,17 +191,28 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
 
     let newCompanionUserId = activity.companionUserId;
     let newCompanionName = activity.companion;
+    let newCompletedWithFriend = activity.completedWithFriend;
     if (input.companionUserId !== undefined) {
       if (input.companionUserId === null) {
         newCompanionUserId = null;
         newCompanionName = null;
+        newCompletedWithFriend = false;
       } else {
         const companionUser = await tx.user.findUnique({ where: { id: input.companionUserId } });
         newCompanionUserId = input.companionUserId;
         newCompanionName = companionUser?.name ?? null;
+        newCompletedWithFriend = true;
       }
+    } else if (input.companionName !== undefined) {
+      // Manual override: an admin can grant the friend bonus for a companion who
+      // hasn't registered an account yet (e.g. Strava-synced rides, or a friend
+      // that isn't a troop member). No identity verification is possible here,
+      // it's the reviewing admin's discretion.
+      const trimmed = input.companionName?.trim() || null;
+      newCompanionUserId = null;
+      newCompanionName = trimmed;
+      newCompletedWithFriend = !!trimmed;
     }
-    const newCompletedWithFriend = !!newCompanionUserId;
 
     const scoring = calculateActivityPoints({
       category: newCategory,

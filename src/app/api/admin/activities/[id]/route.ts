@@ -9,6 +9,7 @@ const EditActivitySchema = z.object({
   distance: z.number().optional(),
   pace: z.number().optional(),
   companionUserId: z.string().nullable().optional(),
+  companionName: z.string().nullable().optional(),
 });
 
 export async function PATCH(

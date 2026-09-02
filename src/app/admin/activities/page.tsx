@@ -47,7 +47,13 @@ export default function AdminActivitiesPage() {
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ category: '', distance: '', pace: '', companionUserId: '' });
+  const [editForm, setEditForm] = useState({
+    category: '',
+    distance: '',
+    pace: '',
+    companionSelect: '', // '' = none, '__manual__' = unregistered friend, otherwise a user id
+    companionName: '',
+  });
   const [users, setUsers] = useState<SelectableUser[]>([]);
 
   useEffect(() => {
@@ -117,22 +123,28 @@ export default function AdminActivitiesPage() {
       category: activity.category,
       distance: activity.distance?.toString() ?? '',
       pace: activity.pace?.toString() ?? '',
-      companionUserId: activity.companionUserId ?? '',
+      companionSelect: activity.companionUserId ?? (activity.completedWithFriend ? '__manual__' : ''),
+      companionName: activity.companionUserId ? '' : activity.companion ?? '',
     });
   };
 
   const saveEdit = async (id: string, ownerId: string) => {
     setActioningId(id);
     try {
+      const body: Record<string, unknown> = {
+        category: editForm.category,
+        distance: editForm.distance ? parseFloat(editForm.distance) : undefined,
+        pace: editForm.pace ? parseFloat(editForm.pace) : undefined,
+      };
+      if (editForm.companionSelect === '__manual__') {
+        body.companionName = editForm.companionName.trim() || null;
+      } else {
+        body.companionUserId = editForm.companionSelect || null;
+      }
       const response = await fetch(`/api/admin/activities/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category: editForm.category,
-          distance: editForm.distance ? parseFloat(editForm.distance) : undefined,
-          pace: editForm.pace ? parseFloat(editForm.pace) : undefined,
-          companionUserId: editForm.companionUserId || null,
-        }),
+        body: JSON.stringify(body),
       });
       if (response.ok) {
         const updated = await response.json();
@@ -235,11 +247,12 @@ export default function AdminActivitiesPage() {
                           className="w-32 px-3 py-1.5 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
                         />
                         <select
-                          value={editForm.companionUserId}
-                          onChange={(e) => setEditForm({ ...editForm, companionUserId: e.target.value })}
+                          value={editForm.companionSelect}
+                          onChange={(e) => setEditForm({ ...editForm, companionSelect: e.target.value })}
                           className="px-3 py-1.5 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
                         >
                           <option value="">No companion</option>
+                          <option value="__manual__">Friend not registered yet…</option>
                           {users
                             .filter((u) => u.id !== activity.user.id)
                             .map((u) => (
@@ -248,6 +261,15 @@ export default function AdminActivitiesPage() {
                               </option>
                             ))}
                         </select>
+                        {editForm.companionSelect === '__manual__' && (
+                          <input
+                            type="text"
+                            value={editForm.companionName}
+                            onChange={(e) => setEditForm({ ...editForm, companionName: e.target.value })}
+                            placeholder="Friend's name"
+                            className="w-40 px-3 py-1.5 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
+                          />
+                        )}
                         <button
                           onClick={() => saveEdit(activity.id, activity.user.id)}
                           disabled={actioningId === activity.id}
