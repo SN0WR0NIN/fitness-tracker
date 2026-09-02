@@ -161,6 +161,48 @@ export async function rejectActivity(activityId: string, reviewerId: string, rea
   });
 }
 
+/**
+ * Resets an already-reviewed activity (Approved or Rejected) back to Pending
+ * for re-review. If it was Approved, its points are first reversed out of the
+ * weekly score. Idempotent if already pending.
+ */
+export async function resetActivityToPending(activityId: string) {
+  return prisma.$transaction(async (tx: any) => {
+    const activity = await tx.activity.findUnique({ where: { id: activityId } });
+    if (!activity) {
+      throw new Error('Activity not found');
+    }
+    if (activity.status === 'PENDING') {
+      return activity;
+    }
+
+    if (activity.status === 'APPROVED') {
+      await tx.weeklyScore.update({
+        where: {
+          userId_weekStart: {
+            userId: activity.userId,
+            weekStart: activity.weekStart,
+          },
+        },
+        data: {
+          totalPoints: { decrement: activity.points },
+          [getCategoryScoreField(activity.category)]: { decrement: activity.points },
+        },
+      });
+    }
+
+    return tx.activity.update({
+      where: { id: activityId },
+      data: {
+        status: 'PENDING',
+        reviewedById: null,
+        reviewedAt: null,
+        rejectionReason: null,
+      },
+    });
+  });
+}
+
 interface UpdateActivityInput {
   category?: ActivityCategory;
   distance?: number;

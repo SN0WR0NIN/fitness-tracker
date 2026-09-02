@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { CheckCircle, XCircle, ShieldCheck, ExternalLink, Pencil } from 'lucide-react';
+import { CheckCircle, XCircle, ShieldCheck, ExternalLink, Pencil, RotateCcw } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { formatDistance, formatPace } from '@/lib/format';
 
@@ -109,6 +109,18 @@ export default function AdminActivitiesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason }),
       });
+      if (response.ok) {
+        setActivities((prev) => prev.filter((a) => a.id !== id));
+      }
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleReset = async (id: string) => {
+    setActioningId(id);
+    try {
+      const response = await fetch(`/api/admin/activities/${id}/reset`, { method: 'POST' });
       if (response.ok) {
         setActivities((prev) => prev.filter((a) => a.id !== id));
       }
@@ -347,6 +359,15 @@ export default function AdminActivitiesPage() {
                           className="flex items-center gap-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
                         >
                           <XCircle className="w-4 h-4" /> Reject
+                        </button>
+                      )}
+                      {activity.status !== 'PENDING' && (
+                        <button
+                          onClick={() => handleReset(activity.id)}
+                          disabled={actioningId === activity.id}
+                          className="flex items-center gap-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition disabled:opacity-50"
+                        >
+                          <RotateCcw className="w-4 h-4" /> Reset to Pending
                         </button>
                       )}
                     </div>
