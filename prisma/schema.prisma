@@ -1,0 +1,127 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String     @id @default(cuid())
+  name          String
+  email         String     @unique
+  password      String
+  role          Role       @default(MEMBER)
+  column        Column?    @relation(fields: [columnId], references: [id])
+  columnId      String?
+  activities    Activity[]
+  reviewedActivities Activity[] @relation("ActivityReviewer")
+  weeklyScores  WeeklyScore[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  stravaAthleteId String?  @unique
+  stravaRefreshToken String?
+  stravaAccessToken  String?
+  stravaTokenExpiresAt DateTime?
+
+  @@index([columnId])
+}
+
+model Column {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  members   User[]
+  activities Activity[]
+  weeklyScores WeeklyScore[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Activity {
+  id              String     @id @default(cuid())
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  column          Column     @relation(fields: [columnId], references: [id])
+  columnId        String
+  category        ActivityCategory
+  distance        Float      // in km for run/cycle/hike, meters for swim
+  pace            Float?     // in min/km
+  duration        Int?       // in minutes
+  completedWithFriend Boolean @default(false)
+  companion       String?
+  proofUrl        String?
+  points          Float
+  status          ActivityStatus @default(PENDING)
+  reviewedBy      User?      @relation("ActivityReviewer", fields: [reviewedById], references: [id])
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectionReason String?
+  weekStart       DateTime   // Sunday of the week
+  weekNumber      Int
+  stravaActivityId String?   @unique
+  pointsLog       PointsLog?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([userId])
+  @@index([columnId])
+  @@index([weekStart])
+  @@index([status])
+}
+
+model PointsLog {
+  id              String     @id @default(cuid())
+  activity        Activity   @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  activityId      String
+  basePoints      Float
+  friendBonus     Float      @default(0)
+  totalPoints     Float
+  createdAt       DateTime   @default(now())
+
+  @@unique([activityId])
+}
+
+model WeeklyScore {
+  id              String     @id @default(cuid())
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  column          Column     @relation(fields: [columnId], references: [id])
+  columnId        String
+  weekStart       DateTime
+  weekNumber      Int
+  totalPoints     Float      @default(0)
+  runPoints       Float      @default(0)
+  cyclePoints     Float      @default(0)
+  swimPoints      Float      @default(0)
+  hikePoints      Float      @default(0)
+  troopGamePoints Float      @default(0)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@unique([userId, weekStart])
+  @@index([weekStart])
+}
+
+enum ActivityCategory {
+  RUN
+  CYCLE
+  SWIM
+  WALK_OR_HIKE
+  TROOP_GAMES
+}
+
+enum ActivityStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum Role {
+  MEMBER
+  ADMIN
+}
