@@ -62,3 +62,47 @@ export async function PATCH(
     return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const guard = await requireAdmin();
+  if (guard.error) {
+    return NextResponse.json({ error: guard.error }, { status: guard.status });
+  }
+
+  try {
+    const { id } = await params;
+
+    if (id === guard.userId) {
+      return NextResponse.json(
+        { error: 'You cannot delete your own account' },
+        { status: 400 }
+      );
+    }
+
+    const target = await prisma.user.findUnique({ where: { id } });
+    if (!target) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    if (target.role === 'ADMIN') {
+      const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
+      if (adminCount <= 1) {
+        return NextResponse.json(
+          { error: 'Cannot delete the last remaining admin' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Activities and weekly scores cascade-delete automatically via the schema's onDelete: Cascade
+    await prisma.user.delete({ where: { id } });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
+  }
+}

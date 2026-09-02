@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Fitness Tracker - The Nomads",
+  title: "KG Stay Active Challenge",
   description: "Track fitness activities and compete in leaderboards",
 };
 

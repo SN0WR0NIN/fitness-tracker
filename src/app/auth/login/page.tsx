@@ -41,7 +41,7 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2">
             <Activity className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-            <span className="font-bold text-xl text-gray-900 dark:text-gray-100">Fitness Tracker</span>
+            <span className="font-bold text-xl text-gray-900 dark:text-gray-100">KG Stay Active Challenge</span>
           </Link>
         </div>
 

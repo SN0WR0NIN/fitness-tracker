@@ -65,11 +65,13 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get('userId');
     const columnId = searchParams.get('columnId');
     const weekNumber = searchParams.get('weekNumber');
+    const status = searchParams.get('status');
 
     const where: any = {};
     if (userId) where.userId = userId;
     if (columnId) where.columnId = columnId;
     if (weekNumber) where.weekNumber = parseInt(weekNumber);
+    if (status) where.status = status;
 
     const activities = await prisma.activity.findMany({
       where,

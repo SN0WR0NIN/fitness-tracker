@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Trophy } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import UserActivitiesModal from '@/components/UserActivitiesModal';
 
 interface IndividualLeader {
   userId: string;
@@ -32,6 +33,7 @@ export default function LeaderboardPage() {
   const [individualLeaders, setIndividualLeaders] = useState<IndividualLeader[]>([]);
   const [teamLeaders, setTeamLeaders] = useState<TeamLeader[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<IndividualLeader | null>(null);
 
   useEffect(() => {
     fetchLeaderboard();
@@ -156,7 +158,8 @@ export default function LeaderboardPage() {
                   {individualLeaders.map((leader, index) => (
                     <tr
                       key={leader.userId}
-                      className="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                      onClick={() => setSelectedUser(leader)}
+                      className="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer"
                     >
                       <td className="px-6 py-4 font-bold text-lg text-gray-900 dark:text-gray-100">
                         {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
@@ -242,6 +245,14 @@ export default function LeaderboardPage() {
           )}
         </div>
       </div>
+
+      {selectedUser && (
+        <UserActivitiesModal
+          userId={selectedUser.userId}
+          userName={selectedUser.userName}
+          onClose={() => setSelectedUser(null)}
+        />
+      )}
     </div>
   );
 }

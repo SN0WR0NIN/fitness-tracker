@@ -20,7 +20,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
         <Link href="/" className="flex items-center gap-2">
           <Activity className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-          <span className="font-bold text-lg text-gray-900 dark:text-gray-100">Fitness Tracker</span>
+          <span className="font-bold text-lg text-gray-900 dark:text-gray-100">KG Stay Active Challenge</span>
         </Link>
         <div className="flex gap-4 items-center text-sm">
           {status === 'authenticated' ? (

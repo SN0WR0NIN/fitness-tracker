@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { ShieldCheck, Users as UsersIcon } from 'lucide-react';
+import { ShieldCheck, Users as UsersIcon, Trash2 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 
 interface ManagedUser {
@@ -87,6 +87,28 @@ export default function ManageUsersPage() {
     }
   };
 
+  const deleteUser = async (id: string, name: string) => {
+    if (!window.confirm(`Delete ${name}? This also permanently deletes all of their logged activities. This cannot be undone.`)) {
+      return;
+    }
+    setSavingId(id);
+    setErrorMessage('');
+    try {
+      const response = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+      const data = await response.json();
+      if (response.ok) {
+        setUsers((prev) => prev.filter((u) => u.id !== id));
+      } else {
+        setErrorMessage(typeof data.error === 'string' ? data.error : 'Failed to delete user');
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      setErrorMessage('Failed to delete user');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   if (forbidden) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center px-4">
@@ -138,6 +160,9 @@ export default function ManageUsersPage() {
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Role
                     </th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -181,6 +206,16 @@ export default function ManageUsersPage() {
                           <option value="MEMBER">Member</option>
                           <option value="ADMIN">Admin</option>
                         </select>
+                      </td>
+                      <td className="px-6 py-3 text-right">
+                        <button
+                          onClick={() => deleteUser(user.id, user.name)}
+                          disabled={savingId === user.id}
+                          aria-label={`Delete ${user.name}`}
+                          className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))}
