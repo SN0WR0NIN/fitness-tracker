@@ -4,8 +4,10 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { Activity, TrendingUp, Users } from 'lucide-react';
+import { Activity, TrendingUp, Users, ExternalLink } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import StravaIcon from '@/components/StravaIcon';
+import { formatDistance, formatPace } from '@/lib/format';
 
 interface Activity {
   id: string;
@@ -15,7 +17,8 @@ interface Activity {
   points: number;
   completedWithFriend: boolean;
   status: string;
-  createdAt: string;
+  occurredAt: string;
+  stravaActivityId?: string;
   user: {
     name: string;
   };
@@ -127,9 +130,12 @@ function DashboardContent() {
 
         {/* Strava Connection */}
         <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 mb-8 flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h2 className="font-bold text-lg text-gray-900 dark:text-gray-100">Strava</h2>
-            {syncMessage && <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{syncMessage}</p>}
+          <div className="flex items-center gap-3">
+            <StravaIcon className="w-8 h-8 text-orange-500" />
+            <div>
+              <h2 className="font-bold text-lg text-gray-900 dark:text-gray-100">Strava</h2>
+              {syncMessage && <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{syncMessage}</p>}
+            </div>
           </div>
           {currentUser?.stravaConnected ? (
             <button
@@ -221,6 +227,9 @@ function DashboardContent() {
                     <th className="text-left px-6 py-3 font-semibold text-gray-700 dark:text-gray-300">
                       Status
                     </th>
+                    <th className="text-left px-6 py-3 font-semibold text-gray-700 dark:text-gray-300">
+                      
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -230,14 +239,16 @@ function DashboardContent() {
                       className="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
                     >
                       <td className="px-6 py-3 text-sm text-gray-700 dark:text-gray-300">
-                        {new Date(activity.createdAt).toLocaleDateString()}
+                        {new Date(activity.occurredAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-3 font-medium capitalize text-gray-900 dark:text-gray-100">
                         {activity.category.replace(/_/g, ' ')}
                       </td>
                       <td className="px-6 py-3 text-sm text-gray-700 dark:text-gray-300">
-                        {activity.distance}{' '}
-                        {activity.category === 'SWIM' ? 'm' : 'km'}
+                        {activity.distance !== undefined && activity.distance !== null
+                          ? `${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}`
+                          : ''}
+                        {activity.pace ? ` @ ${formatPace(activity.pace)}/km` : ''}
                       </td>
                       <td className="px-6 py-3 font-semibold text-blue-600 dark:text-blue-400">
                         {activity.points.toFixed(1)}
@@ -257,6 +268,18 @@ function DashboardContent() {
                         >
                           {activity.status}
                         </span>
+                      </td>
+                      <td className="px-6 py-3">
+                        {activity.stravaActivityId && (
+                          <a
+                            href={`https://www.strava.com/activities/${activity.stravaActivityId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400 hover:underline"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" /> View on Strava
+                          </a>
+                        )}
                       </td>
                     </tr>
                   ))}

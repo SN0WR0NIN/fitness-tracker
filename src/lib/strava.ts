@@ -128,3 +128,39 @@ export async function fetchAndMapStravaActivities(
 
   return mapped;
 }
+
+interface StravaPhoto {
+  urls?: Record<string, string>;
+}
+
+/**
+ * Best-effort fetch of the first photo attached to a Strava activity (if any).
+ * Returns null on any error or if the activity has no photos — callers should
+ * treat this as optional and not fail the sync if it's unavailable.
+ */
+export async function fetchActivityPhoto(
+  accessToken: string,
+  stravaActivityId: string
+): Promise<string | null> {
+  try {
+    const response = await axios.get<StravaPhoto[]>(
+      `https://www.strava.com/api/v3/activities/${stravaActivityId}/photos`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        params: { size: 600 },
+      }
+    );
+
+    const firstPhoto = response.data?.[0];
+    const urls = firstPhoto?.urls;
+    if (!urls) {
+      return null;
+    }
+
+    const firstUrl = Object.values(urls)[0];
+    return typeof firstUrl === 'string' ? firstUrl : null;
+  } catch (error) {
+    console.error(`Error fetching Strava photo for activity ${stravaActivityId}:`, error);
+    return null;
+  }
+}

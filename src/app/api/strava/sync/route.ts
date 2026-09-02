@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { getValidStravaToken, fetchAndMapStravaActivities } from '@/lib/strava';
+import { getValidStravaToken, fetchAndMapStravaActivities, fetchActivityPhoto } from '@/lib/strava';
 import { createActivity } from '@/lib/activities';
 
 // Only import activities from this date onward (configurable without a code change)
@@ -51,6 +51,8 @@ export async function POST() {
         continue;
       }
 
+      const photoUrl = await fetchActivityPhoto(tokens.accessToken, activity.stravaActivityId);
+
       await createActivity({
         userId,
         columnId,
@@ -58,6 +60,7 @@ export async function POST() {
         distance: activity.distance,
         pace: activity.pace,
         completedWithFriend: activity.completedWithFriend,
+        proofUrl: photoUrl ?? undefined,
         stravaActivityId: activity.stravaActivityId,
         occurredAt: activity.occurredAt,
       });

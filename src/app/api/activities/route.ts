@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
     const columnId = searchParams.get('columnId');
     const weekNumber = searchParams.get('weekNumber');
     const status = searchParams.get('status');
+    const limit = searchParams.get('limit');
 
     const where: any = {};
     if (userId) where.userId = userId;
@@ -80,7 +81,8 @@ export async function GET(request: NextRequest) {
           select: { id: true, name: true, email: true },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: status === 'APPROVED' ? { reviewedAt: 'desc' } : { createdAt: 'desc' },
+      ...(limit ? { take: parseInt(limit) } : {}),
     });
 
     return NextResponse.json(activities);

@@ -61,6 +61,7 @@ model Activity {
   reviewedById    String?
   reviewedAt      DateTime?
   rejectionReason String?
+  occurredAt      DateTime   @default(now()) // actual date the activity happened (Strava start_date, or submission time for manual entries)
   weekStart       DateTime   // Sunday of the week
   weekNumber      Int
   stravaActivityId String?   @unique

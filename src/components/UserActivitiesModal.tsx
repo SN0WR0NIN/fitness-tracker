@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { X, ExternalLink } from 'lucide-react';
+import { formatDistance, formatPace } from '@/lib/format';
 
 interface UserActivity {
   id: string;
@@ -13,7 +14,7 @@ interface UserActivity {
   companion?: string;
   proofUrl?: string;
   stravaActivityId?: string;
-  createdAt: string;
+  occurredAt: string;
 }
 
 interface UserActivitiesModalProps {
@@ -72,11 +73,12 @@ export default function UserActivitiesModal({ userId, userName, onClose }: UserA
                     <p className="font-medium capitalize text-gray-900 dark:text-gray-100">
                       {activity.category.replace(/_/g, ' ')}
                       {activity.distance
-                        ? ` — ${activity.distance}${activity.category === 'SWIM' ? 'm' : 'km'}`
+                        ? ` — ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}`
                         : ''}
+                      {activity.pace ? ` @ ${formatPace(activity.pace)}/km` : ''}
                     </p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {new Date(activity.createdAt).toLocaleDateString()}
+                      {new Date(activity.occurredAt).toLocaleDateString()}
                       {activity.completedWithFriend ? ` · with ${activity.companion || 'a friend'}` : ''}
                     </p>
                     <div className="flex gap-3 mt-1">

@@ -4,8 +4,17 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { CheckCircle, XCircle, ShieldCheck, ExternalLink } from 'lucide-react';
+import { CheckCircle, XCircle, ShieldCheck, ExternalLink, Pencil } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import { formatDistance, formatPace } from '@/lib/format';
+
+const ACTIVITY_CATEGORIES = [
+  { value: 'RUN', label: 'Run' },
+  { value: 'CYCLE', label: 'Cycle' },
+  { value: 'SWIM', label: 'Swim' },
+  { value: 'WALK_OR_HIKE', label: 'Walk/Hike' },
+  { value: 'TROOP_GAMES', label: 'Troop Games' },
+];
 
 interface PendingActivity {
   id: string;
@@ -18,7 +27,7 @@ interface PendingActivity {
   proofUrl?: string;
   stravaActivityId?: string;
   status: string;
-  createdAt: string;
+  occurredAt: string;
   user: { id: string; name: string; email: string };
   column: { id: string; name: string };
 }
@@ -31,6 +40,8 @@ export default function AdminActivitiesPage() {
   const [filter, setFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ category: '', distance: '', pace: '' });
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -83,6 +94,37 @@ export default function AdminActivitiesPage() {
       });
       if (response.ok) {
         setActivities((prev) => prev.filter((a) => a.id !== id));
+      }
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const startEdit = (activity: PendingActivity) => {
+    setEditingId(activity.id);
+    setEditForm({
+      category: activity.category,
+      distance: activity.distance?.toString() ?? '',
+      pace: activity.pace?.toString() ?? '',
+    });
+  };
+
+  const saveEdit = async (id: string) => {
+    setActioningId(id);
+    try {
+      const response = await fetch(`/api/admin/activities/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category: editForm.category,
+          distance: editForm.distance ? parseFloat(editForm.distance) : undefined,
+          pace: editForm.pace ? parseFloat(editForm.pace) : undefined,
+        }),
+      });
+      if (response.ok) {
+        const updated = await response.json();
+        setActivities((prev) => prev.map((a) => (a.id === id ? { ...a, ...updated } : a)));
+        setEditingId(null);
       }
     } finally {
       setActioningId(null);
@@ -143,17 +185,66 @@ export default function AdminActivitiesPage() {
             {activities.map((activity) => (
               <div key={activity.id} className="bg-white dark:bg-gray-900 rounded-lg shadow p-6">
                 <div className="flex justify-between items-start flex-wrap gap-4">
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="font-bold text-lg text-gray-900 dark:text-gray-100">{activity.user.name}</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       {activity.column.name} &middot;{' '}
-                      {new Date(activity.createdAt).toLocaleString()}
+                      {new Date(activity.occurredAt).toLocaleString()}
                     </p>
-                    <p className="mt-2 font-medium capitalize text-gray-900 dark:text-gray-100">
-                      {activity.category.replace(/_/g, ' ')}
-                      {activity.distance ? ` — ${activity.distance}${activity.category === 'SWIM' ? 'm' : 'km'}` : ''}
-                      {activity.pace ? ` @ ${activity.pace} min/km` : ''}
-                    </p>
+
+                    {editingId === activity.id ? (
+                      <div className="mt-3 flex flex-wrap gap-2 items-center">
+                        <select
+                          value={editForm.category}
+                          onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                          className="px-3 py-1.5 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
+                        >
+                          {ACTIVITY_CATEGORIES.map((cat) => (
+                            <option key={cat.value} value={cat.value}>
+                              {cat.label}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editForm.distance}
+                          onChange={(e) => setEditForm({ ...editForm, distance: e.target.value })}
+                          placeholder="Distance"
+                          className="w-28 px-3 py-1.5 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editForm.pace}
+                          onChange={(e) => setEditForm({ ...editForm, pace: e.target.value })}
+                          placeholder="Pace (min/km)"
+                          className="w-32 px-3 py-1.5 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
+                        />
+                        <button
+                          onClick={() => saveEdit(activity.id)}
+                          disabled={actioningId === activity.id}
+                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="px-3 py-1.5 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mt-2 font-medium capitalize text-gray-900 dark:text-gray-100">
+                        {activity.category.replace(/_/g, ' ')}
+                        {activity.distance
+                          ? ` — ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}`
+                          : ''}
+                        {activity.pace ? ` @ ${formatPace(activity.pace)} min/km` : ''}
+                      </p>
+                    )}
+
                     {activity.completedWithFriend && (
                       <p className="text-sm text-gray-600 dark:text-gray-400">With: {activity.companion || 'a friend'}</p>
                     )}
@@ -178,12 +269,20 @@ export default function AdminActivitiesPage() {
                           View proof
                         </a>
                       )}
+                      {activity.status === 'PENDING' && editingId !== activity.id && (
+                        <button
+                          onClick={() => startEdit(activity)}
+                          className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 underline"
+                        >
+                          <Pencil className="w-3.5 h-3.5" /> Edit
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{activity.points.toFixed(1)} pts</p>
-                    {filter === 'PENDING' && (
-                      <div className="flex gap-2 mt-3">
+                    <div className="flex gap-2 mt-3">
+                      {activity.status !== 'APPROVED' && (
                         <button
                           onClick={() => handleApprove(activity.id)}
                           disabled={actioningId === activity.id}
@@ -191,6 +290,8 @@ export default function AdminActivitiesPage() {
                         >
                           <CheckCircle className="w-4 h-4" /> Approve
                         </button>
+                      )}
+                      {activity.status !== 'REJECTED' && (
                         <button
                           onClick={() => handleReject(activity.id)}
                           disabled={actioningId === activity.id}
@@ -198,8 +299,8 @@ export default function AdminActivitiesPage() {
                         >
                           <XCircle className="w-4 h-4" /> Reject
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

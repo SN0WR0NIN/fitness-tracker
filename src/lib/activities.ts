@@ -54,6 +54,7 @@ export async function createActivity(input: CreateActivityInput) {
       stravaActivityId: input.stravaActivityId,
       points: scoring.totalPoints,
       status: 'PENDING',
+      occurredAt,
       weekStart,
       weekNumber,
     },
@@ -143,6 +144,73 @@ export async function rejectActivity(activityId: string, reviewerId: string, rea
         reviewedById: reviewerId,
         reviewedAt: new Date(),
         rejectionReason: reason,
+      },
+    });
+  });
+}
+
+interface UpdateActivityInput {
+  category?: ActivityCategory;
+  distance?: number;
+  pace?: number;
+}
+
+/**
+ * Edits an activity's category/distance/pace and recomputes its points.
+ * If the activity is currently APPROVED, the weekly score is corrected
+ * in the same transaction (reversing the old contribution, applying the new one).
+ */
+export async function updateActivity(activityId: string, input: UpdateActivityInput) {
+  return prisma.$transaction(async (tx: any) => {
+    const activity = await tx.activity.findUnique({ where: { id: activityId } });
+    if (!activity) {
+      throw new Error('Activity not found');
+    }
+
+    const newCategory = input.category ?? activity.category;
+    const newDistance = input.distance ?? activity.distance;
+    const newPace = input.pace ?? activity.pace;
+
+    const scoring = calculateActivityPoints({
+      category: newCategory,
+      distance: newDistance,
+      pace: newPace ?? undefined,
+      completedWithFriend: activity.completedWithFriend,
+    });
+
+    if (activity.status === 'APPROVED') {
+      const oldField = getCategoryScoreField(activity.category);
+      const newField = getCategoryScoreField(newCategory);
+      const pointsDelta = scoring.totalPoints - activity.points;
+
+      const weeklyScoreData: Record<string, { increment: number } | { decrement: number }> = {
+        totalPoints: { increment: pointsDelta },
+      };
+      if (oldField === newField) {
+        weeklyScoreData[oldField] = { increment: pointsDelta };
+      } else {
+        weeklyScoreData[oldField] = { decrement: activity.points };
+        weeklyScoreData[newField] = { increment: scoring.totalPoints };
+      }
+
+      await tx.weeklyScore.update({
+        where: {
+          userId_weekStart: {
+            userId: activity.userId,
+            weekStart: activity.weekStart,
+          },
+        },
+        data: weeklyScoreData,
+      });
+    }
+
+    return tx.activity.update({
+      where: { id: activityId },
+      data: {
+        category: newCategory,
+        distance: newDistance,
+        pace: newPace,
+        points: scoring.totalPoints,
       },
     });
   });

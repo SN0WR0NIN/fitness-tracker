@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Activity, TrendingUp, Users, Trophy } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import UserActivitiesModal from '@/components/UserActivitiesModal';
+import StravaIcon from '@/components/StravaIcon';
+import { formatDistance } from '@/lib/format';
 
 interface IndividualLeader {
   userId: string;
@@ -21,11 +23,22 @@ interface TeamLeader {
   averagePoints: number;
 }
 
+interface RecentActivity {
+  id: string;
+  category: string;
+  distance: number;
+  points: number;
+  proofUrl?: string;
+  stravaActivityId?: string;
+  user: { name: string };
+}
+
 const PREVIEW_COUNT = 8;
 
 export default function Home() {
   const [individualLeaders, setIndividualLeaders] = useState<IndividualLeader[]>([]);
   const [teamLeaders, setTeamLeaders] = useState<TeamLeader[]>([]);
+  const [recentApproved, setRecentApproved] = useState<RecentActivity[]>([]);
   const [loadingBoards, setLoadingBoards] = useState(true);
   const [selectedUser, setSelectedUser] = useState<IndividualLeader | null>(null);
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
@@ -34,10 +47,12 @@ export default function Home() {
     Promise.all([
       fetch('/api/leaderboard?type=individual').then((res) => res.json()),
       fetch('/api/leaderboard?type=team').then((res) => res.json()),
+      fetch('/api/activities?status=APPROVED&limit=8').then((res) => res.json()),
     ])
-      .then(([individual, team]) => {
+      .then(([individual, team, approved]) => {
         setIndividualLeaders(individual.leaderboard ?? []);
         setTeamLeaders(team.leaderboard ?? []);
+        setRecentApproved(Array.isArray(approved) ? approved : []);
       })
       .catch((error) => console.error('Error fetching leaderboards:', error))
       .finally(() => setLoadingBoards(false));
@@ -187,6 +202,52 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Recently Approved Activities */}
+        <div className="mt-20">
+          <h3 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">Recently Approved</h3>
+          {loadingBoards ? (
+            <p className="text-center text-gray-500 dark:text-gray-400">Loading...</p>
+          ) : recentApproved.length === 0 ? (
+            <p className="text-center text-gray-500 dark:text-gray-400">No approved activities yet.</p>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {recentApproved.map((activity) => (
+                <div
+                  key={activity.id}
+                  className="bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden"
+                >
+                  <div className="h-40 bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                    {activity.proofUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={activity.proofUrl}
+                        alt={`${activity.user.name}'s activity proof`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : activity.stravaActivityId ? (
+                      <StravaIcon className="w-16 h-16 text-orange-500" />
+                    ) : (
+                      <Activity className="w-16 h-16 text-gray-300 dark:text-gray-700" />
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{activity.user.name}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">
+                      {activity.category.replace(/_/g, ' ')}
+                      {activity.distance
+                        ? ` — ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}`
+                        : ''}
+                    </p>
+                    <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">
+                      {activity.points.toFixed(1)} pts
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Features */}
         <div className="grid md:grid-cols-3 gap-8 mt-20">
           <div className="bg-white dark:bg-gray-900 rounded-lg p-8 shadow-md">
@@ -214,6 +275,7 @@ export default function Home() {
 
         {/* Strava Integration */}
         <div className="mt-20 bg-white dark:bg-gray-900 rounded-lg p-12 shadow-lg">
+          <StravaIcon className="w-12 h-12 text-orange-500 mb-4" />
           <h3 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">Strava Integration</h3>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
             Connect your Strava account to automatically import your activities.
