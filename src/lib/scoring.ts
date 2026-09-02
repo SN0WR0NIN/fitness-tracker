@@ -94,7 +94,7 @@ export function calculateActivityPoints(input: ScoringInput): ScoringOutput {
   }
 
   const friendBonus = input.completedWithFriend ? 3 : 0;
-  const totalPoints = Math.ceil(basePoints + friendBonus);
+  const totalPoints = Math.floor(basePoints + friendBonus);
 
   return {
     basePoints: Math.round(basePoints * 100) / 100,
