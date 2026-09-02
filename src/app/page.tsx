@@ -30,7 +30,7 @@ interface RecentActivity {
   points: number;
   proofUrl?: string;
   stravaActivityId?: string;
-  user: { name: string };
+  user: { id: string; name: string };
 }
 
 const PREVIEW_COUNT = 8;
@@ -40,8 +40,9 @@ export default function Home() {
   const [teamLeaders, setTeamLeaders] = useState<TeamLeader[]>([]);
   const [recentApproved, setRecentApproved] = useState<RecentActivity[]>([]);
   const [loadingBoards, setLoadingBoards] = useState(true);
-  const [selectedUser, setSelectedUser] = useState<IndividualLeader | null>(null);
+  const [selectedUser, setSelectedUser] = useState<{ userId: string; userName: string } | null>(null);
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -212,9 +213,14 @@ export default function Home() {
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {recentApproved.map((activity) => (
-                <div
+                <button
                   key={activity.id}
-                  className="bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden"
+                  onClick={() =>
+                    activity.proofUrl
+                      ? setEnlargedPhoto(activity.proofUrl)
+                      : setSelectedUser({ userId: activity.user.id, userName: activity.user.name })
+                  }
+                  className="bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden text-left hover:shadow-lg hover:-translate-y-0.5 transition"
                 >
                   <div className="h-40 bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
                     {activity.proofUrl ? (
@@ -242,7 +248,7 @@ export default function Home() {
                       {activity.points.toFixed(1)} pts
                     </p>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -296,6 +302,20 @@ export default function Home() {
           userName={selectedUser.userName}
           onClose={() => setSelectedUser(null)}
         />
+      )}
+
+      {enlargedPhoto && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setEnlargedPhoto(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={enlargedPhoto}
+            alt="Activity proof enlarged"
+            className="max-w-full max-h-full rounded-lg shadow-2xl"
+          />
+        </div>
       )}
     </div>
   );
