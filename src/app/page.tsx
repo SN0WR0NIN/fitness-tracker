@@ -6,7 +6,7 @@ import { Activity, TrendingUp, Users, Trophy } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import UserActivitiesModal from '@/components/UserActivitiesModal';
 import StravaIcon from '@/components/StravaIcon';
-import { formatDistance, formatDuration } from '@/lib/format';
+import { formatDistance, formatDuration, formatPace } from '@/lib/format';
 import { getMapboxStaticMapUrl } from '@/lib/mapbox';
 
 interface IndividualLeader {
@@ -34,6 +34,7 @@ interface RecentActivity {
   mapPolyline?: string;
   elevationGain?: number;
   duration?: number;
+  pace?: number;
   user: { id: string; name: string };
 }
 
@@ -258,11 +259,15 @@ export default function Home() {
                           ? ` — ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}`
                           : ''}
                       </p>
-                      {(activity.duration || activity.elevationGain) && (
+                      {(activity.duration || activity.pace || activity.elevationGain) && (
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                          {activity.duration ? formatDuration(activity.duration) : ''}
-                          {activity.duration && activity.elevationGain ? ' · ' : ''}
-                          {activity.elevationGain ? `${Math.round(activity.elevationGain)}m elev` : ''}
+                          {[
+                            activity.duration ? formatDuration(activity.duration) : null,
+                            activity.pace ? `${formatPace(activity.pace)}/km` : null,
+                            activity.elevationGain ? `${Math.round(activity.elevationGain)}m elev` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
                         </p>
                       )}
                       <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">
