@@ -166,12 +166,14 @@ function DashboardContent() {
               {syncing ? 'Syncing...' : 'Sync Activities'}
             </button>
           ) : (
-            <Link
+            // Plain <a>, not next/link: this route redirects off-site to Strava,
+            // and Next's client-side router mishandles external redirects from a Link.
+            <a
               href="/api/auth/strava"
               className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
             >
               Connect Strava
-            </Link>
+            </a>
           )}
         </div>
 

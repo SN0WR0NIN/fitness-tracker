@@ -98,12 +98,13 @@ export default function Home() {
           <p className="text-gray-600 mb-6">
             Connect your Strava account to automatically import your activities.
           </p>
-          <Link
+          {/* Plain <a>, not next/link: this route redirects off-site to Strava */}
+          <a
             href="/api/auth/strava"
             className="inline-block px-8 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-medium"
           >
             Connect Strava
-          </Link>
+          </a>
         </div>
       </div>
     </div>
