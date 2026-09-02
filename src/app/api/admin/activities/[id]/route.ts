@@ -2,11 +2,13 @@ import { NextResponse } from 'next/server';
 import { z, ZodError } from 'zod';
 import { requireAdmin } from '@/lib/adminGuard';
 import { updateActivity } from '@/lib/activities';
+import { prisma } from '@/lib/prisma';
 
 const EditActivitySchema = z.object({
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']).optional(),
   distance: z.number().optional(),
   pace: z.number().optional(),
+  companionUserId: z.string().nullable().optional(),
 });
 
 export async function PATCH(
@@ -22,6 +24,23 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     const data = EditActivitySchema.parse(body);
+
+    if (data.companionUserId) {
+      const activity = await prisma.activity.findUnique({ where: { id }, select: { userId: true } });
+      if (!activity) {
+        return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
+      }
+      if (data.companionUserId === activity.userId) {
+        return NextResponse.json(
+          { error: "The activity owner can't be their own companion" },
+          { status: 400 }
+        );
+      }
+      const companion = await prisma.user.findUnique({ where: { id: data.companionUserId } });
+      if (!companion) {
+        return NextResponse.json({ error: 'Selected companion was not found' }, { status: 400 });
+      }
+    }
 
     const activity = await updateActivity(id, data);
     return NextResponse.json(activity);

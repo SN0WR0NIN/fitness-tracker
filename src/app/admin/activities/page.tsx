@@ -24,12 +24,18 @@ interface PendingActivity {
   points: number;
   completedWithFriend: boolean;
   companion?: string;
+  companionUserId?: string | null;
   proofUrl?: string;
   stravaActivityId?: string;
   status: string;
   occurredAt: string;
   user: { id: string; name: string; email: string };
   column: { id: string; name: string };
+}
+
+interface SelectableUser {
+  id: string;
+  name: string;
 }
 
 export default function AdminActivitiesPage() {
@@ -41,7 +47,8 @@ export default function AdminActivitiesPage() {
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ category: '', distance: '', pace: '' });
+  const [editForm, setEditForm] = useState({ category: '', distance: '', pace: '', companionUserId: '' });
+  const [users, setUsers] = useState<SelectableUser[]>([]);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -50,6 +57,10 @@ export default function AdminActivitiesPage() {
     }
     if (status === 'authenticated') {
       fetchActivities(filter);
+      fetch('/api/admin/users')
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => setUsers(data.map((u: { id: string; name: string }) => ({ id: u.id, name: u.name }))))
+        .catch(() => setUsers([]));
     }
   }, [status, filter, router]);
 
@@ -106,10 +117,11 @@ export default function AdminActivitiesPage() {
       category: activity.category,
       distance: activity.distance?.toString() ?? '',
       pace: activity.pace?.toString() ?? '',
+      companionUserId: activity.companionUserId ?? '',
     });
   };
 
-  const saveEdit = async (id: string) => {
+  const saveEdit = async (id: string, ownerId: string) => {
     setActioningId(id);
     try {
       const response = await fetch(`/api/admin/activities/${id}`, {
@@ -119,6 +131,7 @@ export default function AdminActivitiesPage() {
           category: editForm.category,
           distance: editForm.distance ? parseFloat(editForm.distance) : undefined,
           pace: editForm.pace ? parseFloat(editForm.pace) : undefined,
+          companionUserId: editForm.companionUserId || null,
         }),
       });
       if (response.ok) {
@@ -221,8 +234,22 @@ export default function AdminActivitiesPage() {
                           placeholder="Pace (min/km)"
                           className="w-32 px-3 py-1.5 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
                         />
+                        <select
+                          value={editForm.companionUserId}
+                          onChange={(e) => setEditForm({ ...editForm, companionUserId: e.target.value })}
+                          className="px-3 py-1.5 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
+                        >
+                          <option value="">No companion</option>
+                          {users
+                            .filter((u) => u.id !== activity.user.id)
+                            .map((u) => (
+                              <option key={u.id} value={u.id}>
+                                With {u.name}
+                              </option>
+                            ))}
+                        </select>
                         <button
-                          onClick={() => saveEdit(activity.id)}
+                          onClick={() => saveEdit(activity.id, activity.user.id)}
                           disabled={actioningId === activity.id}
                           className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
                         >

@@ -165,10 +165,12 @@ interface UpdateActivityInput {
   category?: ActivityCategory;
   distance?: number;
   pace?: number;
+  // undefined = leave companion unchanged, null = remove companion, string = set companion
+  companionUserId?: string | null;
 }
 
 /**
- * Edits an activity's category/distance/pace and recomputes its points.
+ * Edits an activity's category/distance/pace/companion and recomputes its points.
  * If the activity is currently APPROVED, the weekly score is corrected
  * in the same transaction (reversing the old contribution, applying the new one).
  */
@@ -184,11 +186,25 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
     const newPace = input.pace ?? activity.pace;
     const newCategory = resolveEffectiveCategory(requestedCategory, newPace ?? undefined);
 
+    let newCompanionUserId = activity.companionUserId;
+    let newCompanionName = activity.companion;
+    if (input.companionUserId !== undefined) {
+      if (input.companionUserId === null) {
+        newCompanionUserId = null;
+        newCompanionName = null;
+      } else {
+        const companionUser = await tx.user.findUnique({ where: { id: input.companionUserId } });
+        newCompanionUserId = input.companionUserId;
+        newCompanionName = companionUser?.name ?? null;
+      }
+    }
+    const newCompletedWithFriend = !!newCompanionUserId;
+
     const scoring = calculateActivityPoints({
       category: newCategory,
       distance: newDistance,
       pace: newPace ?? undefined,
-      completedWithFriend: activity.completedWithFriend,
+      completedWithFriend: newCompletedWithFriend,
     });
 
     if (activity.status === 'APPROVED') {
@@ -223,6 +239,9 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
         category: newCategory,
         distance: newDistance,
         pace: newPace,
+        completedWithFriend: newCompletedWithFriend,
+        companionUserId: newCompanionUserId,
+        companion: newCompanionName,
         points: scoring.totalPoints,
       },
     });
