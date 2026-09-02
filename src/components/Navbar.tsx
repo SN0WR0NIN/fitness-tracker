@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useSession, signOut } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
-import { Activity, ShieldCheck, Moon, Sun, Users } from 'lucide-react';
+import { ShieldCheck, Moon, Sun, Users } from 'lucide-react';
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -19,7 +20,7 @@ export default function Navbar() {
     <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
         <Link href="/" className="flex items-center gap-2">
-          <Activity className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+          <Image src="/2902.jpg" alt="KG Stay Active Challenge" width={32} height={32} className="w-8 h-8 rounded object-cover" />
           <span className="font-bold text-lg text-gray-900 dark:text-gray-100">KG Stay Active Challenge</span>
         </Link>
         <div className="flex gap-4 items-center text-sm">

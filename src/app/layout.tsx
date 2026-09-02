@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "KG Stay Active Challenge",
   description: "Track fitness activities and compete in leaderboards",
+  icons: {
+    icon: "/2902.jpg",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
