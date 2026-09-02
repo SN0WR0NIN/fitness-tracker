@@ -54,6 +54,7 @@ interface StravaSummaryActivity {
   sport_type?: string;
   distance: number; // meters
   moving_time: number; // seconds
+  total_elevation_gain?: number; // meters
   start_date: string;
   athlete_count?: number;
   map?: { summary_polyline?: string };
@@ -78,6 +79,8 @@ export interface MappedStravaActivity {
   completedWithFriend: boolean;
   occurredAt: Date;
   mapPolyline?: string;
+  elevationGain?: number;
+  durationMinutes?: number;
 }
 
 /**
@@ -126,6 +129,8 @@ export async function fetchAndMapStravaActivities(
       completedWithFriend: (activity.athlete_count ?? 1) > 1,
       occurredAt: new Date(activity.start_date),
       mapPolyline: activity.map?.summary_polyline || undefined,
+      elevationGain: activity.total_elevation_gain,
+      durationMinutes: activity.moving_time ? Math.round(activity.moving_time / 60) : undefined,
     });
   }
 

@@ -71,6 +71,8 @@ export async function POST() {
         stravaActivityId: activity.stravaActivityId,
         occurredAt: activity.occurredAt,
         mapPolyline: activity.mapPolyline,
+        elevationGain: activity.elevationGain,
+        duration: activity.durationMinutes,
       });
       imported++;
     }

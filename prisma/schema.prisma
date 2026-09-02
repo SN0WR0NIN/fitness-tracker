@@ -69,6 +69,7 @@ model Activity {
   weekNumber      Int
   stravaActivityId String?   @unique
   mapPolyline     String?    // Strava's encoded route polyline, for rendering a static map image
+  elevationGain   Float?     // meters, from Strava's total_elevation_gain
   pointsLog       PointsLog?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt

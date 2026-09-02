@@ -19,3 +19,10 @@ export function formatPace(paceMinPerKm: number): string {
   const adjustedSeconds = seconds === 60 ? 0 : seconds;
   return `${adjustedMinutes}:${adjustedSeconds.toString().padStart(2, '0')}`;
 }
+
+/** Converts a duration in minutes (e.g. 84) into Strava-style "Xh Ym" notation (e.g. "1h 24m"). */
+export function formatDuration(durationMinutes: number): string {
+  const hours = Math.floor(durationMinutes / 60);
+  const minutes = Math.round(durationMinutes % 60);
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}

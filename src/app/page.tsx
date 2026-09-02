@@ -6,7 +6,7 @@ import { Activity, TrendingUp, Users, Trophy } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import UserActivitiesModal from '@/components/UserActivitiesModal';
 import StravaIcon from '@/components/StravaIcon';
-import { formatDistance } from '@/lib/format';
+import { formatDistance, formatDuration } from '@/lib/format';
 import { getMapboxStaticMapUrl } from '@/lib/mapbox';
 
 interface IndividualLeader {
@@ -32,6 +32,8 @@ interface RecentActivity {
   proofUrl?: string;
   stravaActivityId?: string;
   mapPolyline?: string;
+  elevationGain?: number;
+  duration?: number;
   user: { id: string; name: string };
 }
 
@@ -256,6 +258,13 @@ export default function Home() {
                           ? ` — ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}`
                           : ''}
                       </p>
+                      {(activity.duration || activity.elevationGain) && (
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                          {activity.duration ? formatDuration(activity.duration) : ''}
+                          {activity.duration && activity.elevationGain ? ' · ' : ''}
+                          {activity.elevationGain ? `${Math.round(activity.elevationGain)}m elev` : ''}
+                        </p>
+                      )}
                       <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">
                         {activity.points.toFixed(1)} pts
                       </p>
