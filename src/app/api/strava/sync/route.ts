@@ -5,10 +5,14 @@ import { prisma } from '@/lib/prisma';
 import { getValidStravaToken, fetchAndMapStravaActivities, fetchActivityPhoto } from '@/lib/strava';
 import { createActivity } from '@/lib/activities';
 
-// Only import activities from this date onward (configurable without a code change)
+// Only import activities from this date onward (configurable without a code change).
+// The troop operates in Malaysia (UTC+8), so "September 1st" locally begins at
+// 2026-08-31T16:00:00Z — using a naive UTC midnight here would wrongly exclude
+// activities logged in the early hours of the local day (e.g. an evening ride
+// or a workout done just after midnight local time but still "yesterday" UTC).
 const SYNC_START_DATE = process.env.STRAVA_SYNC_START_DATE
   ? new Date(process.env.STRAVA_SYNC_START_DATE)
-  : new Date('2026-09-01T00:00:00Z');
+  : new Date('2026-08-31T16:00:00Z');
 
 export async function POST() {
   try {
