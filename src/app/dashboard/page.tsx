@@ -16,12 +16,19 @@ interface Activity {
   pace?: number;
   points: number;
   completedWithFriend: boolean;
+  companion?: string | null;
+  companionUserId?: string | null;
   status: string;
   occurredAt: string;
   stravaActivityId?: string;
   user: {
     name: string;
   };
+}
+
+interface SelectableUser {
+  id: string;
+  name: string;
 }
 
 interface CurrentUser {
@@ -42,6 +49,10 @@ function DashboardContent() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
+  const [users, setUsers] = useState<SelectableUser[]>([]);
+  const [editingCompanionId, setEditingCompanionId] = useState<string | null>(null);
+  const [companionSelect, setCompanionSelect] = useState('');
+  const [savingCompanion, setSavingCompanion] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -51,6 +62,10 @@ function DashboardContent() {
     if (status === 'authenticated' && session.user.id) {
       fetchActivities(session.user.id);
       fetchCurrentUser();
+      fetch('/api/users')
+        .then((res) => (res.ok ? res.json() : []))
+        .then(setUsers)
+        .catch(() => setUsers([]));
     }
   }, [status, session, router]);
 
@@ -110,6 +125,29 @@ function DashboardContent() {
   const approvedActivities = activities.filter((activity) => activity.status === 'APPROVED');
   const totalPoints = approvedActivities.reduce((sum, activity) => sum + activity.points, 0);
   const totalActivities = approvedActivities.length;
+
+  const startEditCompanion = (activity: Activity) => {
+    setEditingCompanionId(activity.id);
+    setCompanionSelect(activity.companionUserId ?? '');
+  };
+
+  const saveCompanion = async (id: string) => {
+    setSavingCompanion(true);
+    try {
+      const response = await fetch(`/api/activities/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companionUserId: companionSelect || null }),
+      });
+      if (response.ok) {
+        const updated = await response.json();
+        setActivities((prev) => prev.map((a) => (a.id === id ? { ...a, ...updated } : a)));
+        setEditingCompanionId(null);
+      }
+    } finally {
+      setSavingCompanion(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -254,7 +292,47 @@ function DashboardContent() {
                         {activity.points.toFixed(1)}
                       </td>
                       <td className="px-6 py-3 text-gray-700 dark:text-gray-300">
-                        {activity.completedWithFriend ? '✓' : ''}
+                        {editingCompanionId === activity.id ? (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={companionSelect}
+                              onChange={(e) => setCompanionSelect(e.target.value)}
+                              className="px-2 py-1 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded text-xs"
+                            >
+                              <option value="">No friend</option>
+                              {users.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                  {u.name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => saveCompanion(activity.id)}
+                              disabled={savingCompanion}
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingCompanionId(null)}
+                              className="text-xs text-gray-500 dark:text-gray-400 hover:underline"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span>{activity.completedWithFriend ? `✓ ${activity.companion ?? ''}` : ''}</span>
+                            {activity.status === 'PENDING' && activity.stravaActivityId && (
+                              <button
+                                onClick={() => startEditCompanion(activity)}
+                                className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-3">
                         <span
