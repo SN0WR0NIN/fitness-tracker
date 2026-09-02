@@ -48,7 +48,7 @@ function calculatePoints(category, distance, pace, completedWithFriend) {
       break;
   }
   const friendBonus = completedWithFriend ? 3 : 0;
-  return Math.floor(basePoints + friendBonus);
+  return Math.ceil((basePoints + friendBonus) * 2) / 2;
 }
 
 function categoryScoreField(category) {

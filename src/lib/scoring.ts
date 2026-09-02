@@ -8,6 +8,7 @@
  * - Walk/Hike: 1pt/km, but requires a minimum 5km distance to count at all.
  * - Troop Games: 5 points flat.
  * - Friend bonus: +3pts, only when completed with a verified registered companion.
+ * - Final totals are rounded UP to the nearest 0.5 point.
  */
 
 export type ActivityCategory = 
@@ -94,7 +95,7 @@ export function calculateActivityPoints(input: ScoringInput): ScoringOutput {
   }
 
   const friendBonus = input.completedWithFriend ? 3 : 0;
-  const totalPoints = Math.floor(basePoints + friendBonus);
+  const totalPoints = Math.ceil((basePoints + friendBonus) * 2) / 2;
 
   return {
     basePoints: Math.round(basePoints * 100) / 100,
