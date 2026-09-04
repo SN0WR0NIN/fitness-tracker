@@ -60,7 +60,9 @@ export async function createActivity(input: CreateActivityInput) {
       userId: input.userId,
       columnId: input.columnId,
       category: effectiveCategory,
-      distance: input.distance,
+      // Distance is required by the database, while Troop Games do not ask
+      // participants for one. Store zero for that distance-free category.
+      distance: effectiveCategory === 'TROOP_GAMES' ? (input.distance ?? 0) : input.distance,
       pace: input.pace,
       completedWithFriend,
       companionUserId: input.companionUserId,
@@ -309,4 +311,3 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
     });
   });
 }
-

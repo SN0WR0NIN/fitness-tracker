@@ -6,8 +6,8 @@ import { prisma } from '@/lib/prisma';
 
 const EditActivitySchema = z.object({
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']).optional(),
-  distance: z.number().optional(),
-  pace: z.number().optional(),
+  distance: z.number().positive('Distance must be greater than zero').max(100000).optional(),
+  pace: z.number().positive('Pace must be greater than zero').max(60).optional(),
   companionUserId: z.string().nullable().optional(),
   companionName: z.string().nullable().optional(),
 });
@@ -47,7 +47,7 @@ export async function PATCH(
     return NextResponse.json(activity);
   } catch (error) {
     if (error instanceof ZodError) {
-      return NextResponse.json({ error: error.issues }, { status: 400 });
+      return NextResponse.json({ error: error.issues[0]?.message || 'Invalid activity details' }, { status: 400 });
     }
     console.error('Error editing activity:', error);
     return NextResponse.json({ error: 'Failed to edit activity' }, { status: 500 });
