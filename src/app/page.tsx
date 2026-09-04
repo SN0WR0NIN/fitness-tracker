@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Activity, ArrowRight, Clock3, Flame, Medal, RefreshCw, Sparkles, Trophy, Users } from 'lucide-react';
+import { Activity, ArrowRight, Clock3, Medal, RefreshCw, Sparkles, Trophy, Users } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import HeroAtmosphere, { ActivityTicker } from '@/components/HeroAtmosphere';
 import { formatDistance, formatDuration, formatPace } from '@/lib/format';
 import { getMapboxStaticMapUrl } from '@/lib/mapbox';
 
@@ -97,39 +98,53 @@ export default function Home() {
     <div className="min-h-screen bg-slate-950 text-white">
       <Navbar />
       <main>
-        <section className="relative overflow-hidden border-b border-white/10">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.34),_transparent_40%),radial-gradient(circle_at_80%_20%,_rgba(249,115,22,0.22),_transparent_30%)]" />
-          <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-            <div className="grid items-end gap-12 lg:grid-cols-[1.25fr_0.75fr]">
+        <section className="hero-stage border-b border-white/10 bg-slate-950">
+          <HeroAtmosphere />
+          <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+            <div className="grid items-center gap-12 lg:grid-cols-[1.08fr_0.92fr]">
               <div>
-                <span className="inline-flex items-center gap-2 rounded-full border border-orange-400/30 bg-orange-400/10 px-3 py-1 text-sm font-medium text-orange-200">
-                  <Flame className="h-4 w-4" /> Kilo Golf Stay Active Challenge
+                <span className="live-pulse hero-reveal inline-flex items-center gap-2.5 rounded-full border border-lime-300/25 bg-lime-300/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-lime-200">
+                  Challenge live
                 </span>
-                <h1 className="mt-6 max-w-4xl text-4xl font-black tracking-tight sm:text-6xl lg:text-7xl">
-                  Every activity moves your <span className="text-orange-400">column forward.</span>
+                <h1 className="athletic-display hero-reveal hero-reveal-delay-1 mt-6 max-w-4xl text-5xl leading-[0.88] sm:text-7xl lg:text-[5.7rem]">
+                  Move more.<br />Climb higher.<br /><span className="text-orange-400">Win together.</span>
                 </h1>
-                <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
-                  Log your effort, climb the ranks, and help your column take the lead. Standings update automatically throughout the day.
+                <p className="hero-reveal hero-reveal-delay-2 mt-7 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
+                  Every approved effort moves you and your column up the live standings. Run, ride, swim, hike—or rally the whole troop.
                 </p>
-                <div className="mt-8 flex flex-wrap gap-3">
-                  <Link href="/activities/new" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-6 py-3 font-bold shadow-lg shadow-orange-500/20 transition hover:-translate-y-0.5 hover:bg-orange-400">
+                <div className="hero-reveal hero-reveal-delay-3 mt-8 flex flex-wrap gap-3">
+                  <Link href="/activities/new" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-6 py-3 font-bold shadow-lg shadow-orange-500/25 transition hover:-translate-y-0.5 hover:bg-orange-400">
                     Log activity <ArrowRight className="h-4 w-4" />
                   </Link>
-                  <Link href="/leaderboard" className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-6 py-3 font-bold transition hover:bg-white/10">
-                    Full leaderboard <Trophy className="h-4 w-4 text-yellow-400" />
+                  <Link href="/leaderboard" className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-6 py-3 font-bold backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/10">
+                    Watch the race <Trophy className="h-4 w-4 text-lime-300" />
                   </Link>
                 </div>
               </div>
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-                <div className="flex items-center justify-between">
-                  <div><p className="text-sm text-slate-400">Competition leader</p><p className="mt-1 text-2xl font-black">{stats.leadingColumn}</p></div>
-                  <div className="rounded-2xl bg-yellow-400/15 p-3 text-yellow-300"><Trophy className="h-7 w-7" /></div>
+
+              <div className="hero-reveal hero-reveal-delay-2 relative rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-7">
+                <div className="flex items-center justify-between gap-4">
+                  <div><p className="text-xs font-black uppercase tracking-[0.18em] text-lime-300">Live column race</p><p className="mt-2 text-2xl font-black">{stats.leadingColumn}</p></div>
+                  <span className="rounded-2xl bg-lime-300 p-3 text-slate-950"><Trophy className="h-6 w-6" /></span>
                 </div>
-                <div className="mt-6 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full w-full rounded-full bg-gradient-to-r from-yellow-400 to-orange-500" /></div>
-                <div className="mt-5 flex items-center justify-between text-sm"><span className="text-slate-400">Top athlete</span><span className="font-semibold text-orange-300">{stats.leadingMember}</span></div>
+                <div className="mt-8 space-y-5">
+                  {(loading ? [null, null, null] : teams.slice(0, 3)).map((team, index) => {
+                    const score = team?.totalPoints ?? 0;
+                    const width = team ? Math.max(16, score / maxTeam * 100) : 36 + index * 18;
+                    return <div key={team?.columnId ?? index}>
+                      <div className="mb-2 flex items-end justify-between gap-3"><span className="truncate text-sm font-bold text-slate-200">{team ? `${index + 1}. ${team.columnName}` : 'Loading column…'}</span><span className="text-sm font-black text-orange-300">{team ? score.toFixed(1) : '—'}</span></div>
+                      <div className="h-2 overflow-hidden rounded-full bg-white/5"><div className={`h-full rounded-full ${index === 0 ? 'bg-gradient-to-r from-lime-300 to-yellow-300' : 'bg-gradient-to-r from-sky-500 to-cyan-300'} transition-[width] duration-700`} style={{ width: `${width}%` }} /></div>
+                    </div>;
+                  })}
+                </div>
+                <div className="mt-7 grid grid-cols-2 gap-3 border-t border-white/10 pt-5">
+                  <div><p className="text-xs text-slate-500">Top athlete</p><p className="mt-1 truncate font-black text-orange-200">{stats.leadingMember}</p></div>
+                  <div className="text-right"><p className="text-xs text-slate-500">Points in play</p><p className="mt-1 font-black text-lime-300">{loading ? '—' : stats.totalPoints.toFixed(1)}</p></div>
+                </div>
               </div>
             </div>
           </div>
+          <ActivityTicker />
         </section>
 
         <div className="mx-auto max-w-7xl space-y-12 px-4 py-10 sm:px-6 lg:px-8">
