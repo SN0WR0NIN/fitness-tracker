@@ -112,7 +112,28 @@ export async function getParticipantProfile(userId: string) {
 
   if (!user) return null;
 
-  const totalPoints = user.weeklyScores.reduce((sum, week) => sum + week.totalPoints, 0);
+  // Older activities stored the time of day on weekStart, which could create
+  // more than one WeeklyScore row for the same participant and week. Combine
+  // those rows here so profiles always show one accurate bar per week.
+  const weeklyScoresByNumber = new Map<number, ProfileWeekScore>();
+  for (const week of user.weeklyScores) {
+    const existing = weeklyScoresByNumber.get(week.weekNumber);
+    if (existing) {
+      existing.totalPoints += week.totalPoints;
+      existing.runPoints += week.runPoints;
+      existing.cyclePoints += week.cyclePoints;
+      existing.swimPoints += week.swimPoints;
+      existing.hikePoints += week.hikePoints;
+      existing.troopGamePoints += week.troopGamePoints;
+    } else {
+      weeklyScoresByNumber.set(week.weekNumber, { ...week });
+    }
+  }
+  const weeklyScores = Array.from(weeklyScoresByNumber.values()).sort(
+    (a, b) => a.weekNumber - b.weekNumber
+  );
+
+  const totalPoints = weeklyScores.reduce((sum, week) => sum + week.totalPoints, 0);
   const rankIndex = rankedScores.findIndex((entry) => entry.userId === user.id);
   const categories = (Object.keys(CATEGORY_DETAILS) as ActivityCategory[]).map((key) => {
     const details = CATEGORY_DETAILS[key];
@@ -123,7 +144,7 @@ export async function getParticipantProfile(userId: string) {
   });
   const activeCategories = categories.filter((category) => category.points > 0).length;
   const friendActivities = user.activities.filter((activity) => activity.completedWithFriend).length;
-  const bestWeek = user.weeklyScores.reduce<ProfileWeekScore | null>(
+  const bestWeek = weeklyScores.reduce<ProfileWeekScore | null>(
     (best, week) => (!best || week.totalPoints > best.totalPoints ? week : best),
     null
   );
@@ -156,8 +177,8 @@ export async function getParticipantProfile(userId: string) {
     {
       name: 'Consistency',
       description: 'Record activity across 3 different weeks',
-      unlocked: user.weeklyScores.length >= 3,
-      progress: Math.min(user.weeklyScores.length / 3, 1),
+      unlocked: weeklyScores.length >= 3,
+      progress: Math.min(weeklyScores.length / 3, 1),
     },
     {
       name: 'Century Club',
@@ -169,6 +190,7 @@ export async function getParticipantProfile(userId: string) {
 
   return {
     ...user,
+    weeklyScores,
     totalPoints,
     rank: rankIndex >= 0 ? rankIndex + 1 : null,
     participantCount: rankedScores.length,

@@ -1,6 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+type WeeklyScoreRow = {
+  userId: string;
+  totalPoints: number;
+  runPoints: number;
+  cyclePoints: number;
+  swimPoints: number;
+  hikePoints: number;
+  troopGamePoints: number;
+  user: {
+    name: string;
+    email: string;
+    column: { name: string } | null;
+  } | null;
+};
+
+type TeamColumn = {
+  id: string;
+  name: string;
+  members: Array<{ activities: Array<{ points: number }> }>;
+};
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -28,7 +49,7 @@ export async function GET(request: NextRequest) {
 
 async function getIndividualLeaderboard(weekNumber: string | null) {
   // Build the where clause
-  const where: Record<string, any> = {};
+  const where: { weekNumber?: number } = {};
   if (weekNumber) {
     where.weekNumber = parseInt(weekNumber);
   }
@@ -42,81 +63,60 @@ async function getIndividualLeaderboard(weekNumber: string | null) {
       },
     },
     orderBy: { totalPoints: 'desc' },
-  });
+  }) as WeeklyScoreRow[];
 
-  // Group by user to get all-time totals if no week specified
-  if (!weekNumber) {
-    const userScores = new Map<
-      string,
-      {
-        userId: string;
-        userName: string;
-        userEmail: string;
-        columnName: string;
-        totalPoints: number;
-        runPoints: number;
-        cyclePoints: number;
-        swimPoints: number;
-        hikePoints: number;
-        troopGamePoints: number;
-      }
-    >();
-
-    for (const score of weeklyScores) {
-      const userId = score.userId;
-      const existing = userScores.get(userId);
-
-      if (existing) {
-        existing.totalPoints += score.totalPoints;
-        existing.runPoints += score.runPoints;
-        existing.cyclePoints += score.cyclePoints;
-        existing.swimPoints += score.swimPoints;
-        existing.hikePoints += score.hikePoints;
-        existing.troopGamePoints += score.troopGamePoints;
-      } else {
-        userScores.set(userId, {
-          userId,
-          userName: score.user?.name || '',
-          userEmail: score.user?.email || '',
-          columnName: score.user?.column?.name || 'Unknown',
-          totalPoints: score.totalPoints,
-          runPoints: score.runPoints,
-          cyclePoints: score.cyclePoints,
-          swimPoints: score.swimPoints,
-          hikePoints: score.hikePoints,
-          troopGamePoints: score.troopGamePoints,
-        });
-      }
+  // Group every result by user. Historical weekStart values could include a
+  // time of day, leaving multiple WeeklyScore rows for one athlete in a week.
+  const userScores = new Map<
+    string,
+    {
+      userId: string;
+      userName: string;
+      userEmail: string;
+      columnName: string;
+      totalPoints: number;
+      runPoints: number;
+      cyclePoints: number;
+      swimPoints: number;
+      hikePoints: number;
+      troopGamePoints: number;
     }
+  >();
 
-    const leaderboard = Array.from(userScores.values()).sort(
-      (a, b) => b.totalPoints - a.totalPoints
-    );
+  for (const score of weeklyScores) {
+    const userId = score.userId;
+    const existing = userScores.get(userId);
 
-    return NextResponse.json({
-      type: 'individual',
-      weekNumber: null,
-      leaderboard,
-    });
+    if (existing) {
+      existing.totalPoints += score.totalPoints;
+      existing.runPoints += score.runPoints;
+      existing.cyclePoints += score.cyclePoints;
+      existing.swimPoints += score.swimPoints;
+      existing.hikePoints += score.hikePoints;
+      existing.troopGamePoints += score.troopGamePoints;
+    } else {
+      userScores.set(userId, {
+        userId,
+        userName: score.user?.name || '',
+        userEmail: score.user?.email || '',
+        columnName: score.user?.column?.name || 'Unknown',
+        totalPoints: score.totalPoints,
+        runPoints: score.runPoints,
+        cyclePoints: score.cyclePoints,
+        swimPoints: score.swimPoints,
+        hikePoints: score.hikePoints,
+        troopGamePoints: score.troopGamePoints,
+      });
+    }
   }
 
-  // Format weekly leaderboard
-  const leaderboard = weeklyScores.map((score: any) => ({
-    userId: score.userId,
-    userName: score.user?.name || '',
-    userEmail: score.user?.email || '',
-    columnName: score.user?.column?.name || 'Unknown',
-    totalPoints: score.totalPoints,
-    runPoints: score.runPoints,
-    cyclePoints: score.cyclePoints,
-    swimPoints: score.swimPoints,
-    hikePoints: score.hikePoints,
-    troopGamePoints: score.troopGamePoints,
-  }));
+  const leaderboard = Array.from(userScores.values()).sort(
+    (a, b) => b.totalPoints - a.totalPoints
+  );
 
   return NextResponse.json({
     type: 'individual',
-    weekNumber: parseInt(weekNumber || '0'),
+    weekNumber: weekNumber ? parseInt(weekNumber) : null,
     leaderboard,
   });
 }
@@ -136,14 +136,14 @@ async function getTeamLeaderboard(weekNumber: string | null) {
         },
       },
     },
-  });
+  }) as TeamColumn[];
 
   // Calculate team scores
-  const teamScores = columns.map((column: any) => {
+  const teamScores = columns.map((column) => {
     const totalPoints = column.members.reduce(
-      (sum: number, member: any) =>
+      (sum, member) =>
         sum +
-        member.activities.reduce((actSum: number, activity: any) => actSum + activity.points, 0),
+        member.activities.reduce((actSum, activity) => actSum + activity.points, 0),
       0
     );
 
@@ -162,6 +162,6 @@ async function getTeamLeaderboard(weekNumber: string | null) {
   return NextResponse.json({
     type: 'team',
     weekNumber: weekNumber ? parseInt(weekNumber) : null,
-    leaderboard: teamScores.sort((a: any, b: any) => b.totalPoints - a.totalPoints),
+    leaderboard: teamScores.sort((a, b) => b.totalPoints - a.totalPoints),
   });
 }
