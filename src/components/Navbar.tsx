@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import { useState, useSyncExternalStore } from 'react';
-import { BookOpen, Home, Menu, Moon, Settings, ShieldCheck, Sun, Trophy, Users, X } from 'lucide-react';
+import { BarChart3, BookOpen, Home, Menu, Moon, Plus, Settings, ShieldCheck, Sun, Trophy, Users, X } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import AnnouncementBanner from '@/components/AnnouncementBanner';
 import AppStatusBanner from '@/components/AppStatusBanner';
@@ -14,6 +15,7 @@ import SiteBrandName from '@/components/SiteBrandName';
 const emptySubscribe = () => () => {};
 
 export default function Navbar() {
+  const pathname = usePathname();
   const { data: session, status } = useSession();
   const { resolvedTheme, setTheme } = useTheme();
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
@@ -21,6 +23,7 @@ export default function Navbar() {
   const isAdmin = session?.user?.role === 'ADMIN';
   const closeMenu = () => setMenuOpen(false);
   const toggleTheme = () => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+  const showMobileDock = !pathname.startsWith('/admin') && !pathname.startsWith('/auth');
 
   return (
     <>
@@ -60,8 +63,40 @@ export default function Navbar() {
       </nav>
       <AppStatusBanner />
       <AnnouncementBanner />
+      {showMobileDock ? <MobileDock pathname={pathname} authenticated={status === 'authenticated'} /> : null}
     </>
   );
+}
+
+function MobileDock({ pathname, authenticated }: { pathname: string; authenticated: boolean }) {
+  const statsHref = authenticated ? '/dashboard' : '/auth/login';
+  const isActive = (href: string) => href === '/' ? pathname === '/' : pathname.startsWith(href);
+  const links = [
+    { href: '/', label: 'Home', icon: Home },
+    { href: '/leaderboard', label: 'Board', icon: Trophy },
+    { href: statsHref, activeHref: '/dashboard', label: 'Stats', icon: BarChart3 },
+    { href: '/rules', label: 'Rules', icon: BookOpen },
+  ];
+
+  return (
+    <>
+      <div aria-hidden="true" className="h-24 md:hidden" />
+      <nav aria-label="Mobile primary navigation" className="mobile-dock-safe fixed inset-x-3 z-50 mx-auto max-w-md rounded-2xl border border-white/10 bg-slate-950/95 px-2 pb-2 pt-2 shadow-2xl shadow-black/60 backdrop-blur-xl md:hidden">
+        <div className="grid grid-cols-5 items-end">
+          {links.slice(0, 2).map((item) => <DockLink key={item.label} href={item.href} label={item.label} icon={item.icon} active={isActive(item.activeHref ?? item.href)} />)}
+          <Link href="/activities/new" aria-label="Log a new activity" aria-current={pathname.startsWith('/activities/new') ? 'page' : undefined} className="group -mt-7 flex flex-col items-center gap-1 text-[0.65rem] font-black text-lime-300">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-lime-300 text-slate-950 shadow-lg shadow-lime-300/25 transition group-active:scale-95"><Plus className="h-7 w-7" /></span>
+            <span>Log</span>
+          </Link>
+          {links.slice(2).map((item) => <DockLink key={item.label} href={item.href} label={item.label} icon={item.icon} active={isActive(item.activeHref ?? item.href)} />)}
+        </div>
+      </nav>
+    </>
+  );
+}
+
+function DockLink({ href, label, icon: Icon, active }: { href: string; label: string; icon: React.ComponentType<{ className?: string }>; active: boolean }) {
+  return <Link href={href} aria-current={active ? 'page' : undefined} className={`flex min-w-0 flex-col items-center gap-1 rounded-xl py-2 text-[0.65rem] font-bold transition ${active ? 'text-lime-300' : 'text-slate-500 hover:text-slate-200'}`}><Icon className="h-5 w-5" /><span className="truncate">{label}</span>{active ? <span className="h-1 w-1 rounded-full bg-lime-300 shadow-[0_0_8px_rgba(163,230,53,0.9)]" /> : <span className="h-1 w-1" />}</Link>;
 }
 
 function DesktopLinks({ authenticated, isAdmin }: { authenticated: boolean; isAdmin: boolean }) {

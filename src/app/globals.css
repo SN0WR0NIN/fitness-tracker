@@ -25,6 +25,10 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.mobile-dock-safe {
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
 @keyframes hero-grid-drift {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(40px, 40px, 0); }
