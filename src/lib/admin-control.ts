@@ -8,6 +8,8 @@ export type ChallengeSettings = {
   startDate: Date;
   endDate: Date;
   weeklyGoal: number;
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
   scoringRules: ScoringRules;
   updatedAt: Date;
 };
@@ -23,6 +25,8 @@ export function ensureAdminControlSchema() {
     schemaReady = (async () => {
       await prisma.$executeRawUnsafe('ALTER TABLE "Column" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true');
       await prisma.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS "ChallengeSetting" ("id" TEXT PRIMARY KEY, "challengeName" TEXT NOT NULL, "startDate" TIMESTAMP(3) NOT NULL, "endDate" TIMESTAMP(3) NOT NULL, "weeklyGoal" DOUBLE PRECISION NOT NULL DEFAULT 25, "scoringRules" JSONB NOT NULL, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)');
+      await prisma.$executeRawUnsafe('ALTER TABLE "ChallengeSetting" ADD COLUMN IF NOT EXISTS "maintenanceMode" BOOLEAN NOT NULL DEFAULT false');
+      await prisma.$executeRawUnsafe(`ALTER TABLE "ChallengeSetting" ADD COLUMN IF NOT EXISTS "maintenanceMessage" TEXT NOT NULL DEFAULT 'New activity submissions are temporarily paused.'`);
       await prisma.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS "Announcement" ("id" TEXT PRIMARY KEY, "title" TEXT NOT NULL, "message" TEXT NOT NULL, "isActive" BOOLEAN NOT NULL DEFAULT true, "createdById" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)');
       await prisma.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS "AdminAudit" ("id" TEXT PRIMARY KEY, "actorId" TEXT NOT NULL, "actorName" TEXT NOT NULL, "action" TEXT NOT NULL, "target" TEXT NOT NULL, "details" JSONB, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)');
       await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "AdminAudit_createdAt_idx" ON "AdminAudit"("createdAt")');
@@ -34,7 +38,7 @@ export function ensureAdminControlSchema() {
 export async function getChallengeSettings(): Promise<ChallengeSettings> {
   await ensureAdminControlSchema();
   const rows = await prisma.$queryRawUnsafe('SELECT * FROM "ChallengeSetting" WHERE "id" = $1 LIMIT 1', 'primary') as ChallengeSettings[];
-  if (rows[0]) return { ...rows[0], scoringRules: { ...DEFAULT_SCORING_RULES, ...rows[0].scoringRules } };
+  if (rows[0]) return { ...rows[0], maintenanceMode: Boolean(rows[0].maintenanceMode), maintenanceMessage: rows[0].maintenanceMessage || 'New activity submissions are temporarily paused.', scoringRules: { ...DEFAULT_SCORING_RULES, ...rows[0].scoringRules } };
   await prisma.$executeRawUnsafe('INSERT INTO "ChallengeSetting" ("id", "challengeName", "startDate", "endDate", "weeklyGoal", "scoringRules") VALUES ($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING', 'primary', 'Kilo Golf Stay Active Challenge', new Date('2026-08-16T00:00:00Z'), new Date('2026-12-31T23:59:59Z'), 25, JSON.stringify(DEFAULT_SCORING_RULES));
   return getChallengeSettings();
 }

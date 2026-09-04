@@ -20,5 +20,5 @@ export default async function NewActivityPage() {
   ]);
   const users = usersResult as SelectableUser[];
 
-  return <NewActivityForm users={users} scoringRules={settings.scoringRules} />;
+  return <NewActivityForm userId={userId} users={users} scoringRules={settings.scoringRules} maintenanceMode={settings.maintenanceMode} maintenanceMessage={settings.maintenanceMessage} />;
 }

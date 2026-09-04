@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { createActivity } from '@/lib/activities';
 import { z, ZodError } from 'zod';
 import type { Prisma } from '@prisma/client';
+import { getChallengeSettings } from '@/lib/admin-control';
+import { requestLog } from '@/lib/telemetry';
 
 // Validation schema for activity submission
 const ActivitySchema = z.object({
@@ -20,11 +22,19 @@ const ActivitySchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const log = requestLog(request, '/api/activities');
   try {
     const session = await getServerSession(authOptions);
     const sessionUserId = session?.user?.id;
     if (!sessionUserId) {
+      log.success({ status: 401 });
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const settings = await getChallengeSettings();
+    if (settings.maintenanceMode && session.user.role !== 'ADMIN') {
+      log.success({ status: 503, maintenanceMode: true });
+      return NextResponse.json({ error: settings.maintenanceMessage }, { status: 503 });
     }
 
     const body = await request.json();
@@ -63,9 +73,10 @@ export async function POST(request: NextRequest) {
       proofUrl: validatedData.proofUrl,
     });
 
+    log.success({ status: 201, activityId: activity.id });
     return NextResponse.json(activity, { status: 201 });
   } catch (error) {
-    console.error('Error creating activity:', error);
+    log.failure(error);
     if (error instanceof ZodError) {
       return NextResponse.json({ error: error.issues[0]?.message || 'Invalid activity details' }, { status: 400 });
     }

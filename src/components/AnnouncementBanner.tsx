@@ -9,12 +9,28 @@ export default function AnnouncementBanner() {
   const [items, setItems] = useState<Announcement[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
   useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/announcements', { cache: 'no-store', signal: controller.signal })
-      .then((response) => response.ok ? response.json() : [])
-      .then((data) => setItems(Array.isArray(data) ? data : []))
-      .catch((error) => { if (error instanceof Error && error.name !== 'AbortError') console.error('Unable to load announcements:', error); });
-    return () => controller.abort();
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await fetch('/api/announcements', { cache: 'no-store' });
+        const data = response.ok ? await response.json() : [];
+        if (!active) return;
+        const nextItems = Array.isArray(data) ? data as Announcement[] : [];
+        const knownValue = window.localStorage.getItem('kg-announcements-known');
+        const knownIds = new Set<string>(knownValue ? JSON.parse(knownValue) : []);
+        if (knownValue && window.localStorage.getItem('kg-browser-alerts') === 'true' && 'Notification' in window && window.Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+          const registration = await navigator.serviceWorker.ready;
+          await Promise.all(nextItems.filter((announcement) => !knownIds.has(announcement.id)).map((announcement) => registration.showNotification(announcement.title, { body: announcement.message, icon: '/app-icon.svg', tag: `announcement-${announcement.id}`, data: { url: '/' } })));
+        }
+        window.localStorage.setItem('kg-announcements-known', JSON.stringify(nextItems.map((announcement) => announcement.id)));
+        setItems(nextItems);
+      } catch (error) {
+        if (active) console.error('Unable to load announcements:', error);
+      }
+    };
+    void load();
+    const interval = window.setInterval(load, 60000);
+    return () => { active = false; window.clearInterval(interval); };
   }, []);
   const item = items.find((announcement) => !dismissed.has(announcement.id));
   if (!item) return null;

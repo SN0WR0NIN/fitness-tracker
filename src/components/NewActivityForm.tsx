@@ -3,12 +3,14 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle2, ImagePlus, Info, Sparkles, Upload, Users, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Camera, CheckCircle2, CloudOff, ImagePlus, Info, Save, Sparkles, Upload, Users, X } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { calculateActivityPoints, resolveEffectiveCategory, type ActivityCategory, type ScoringRules } from '@/lib/scoring';
 
 type SelectableUser = { id: string; name: string };
+type ActivityDraft = { category: ActivityCategory; distance: string; pace: string; withFriend: boolean; companionUserId: string; proofUrl: string };
+type ActivityPayload = { category: ActivityCategory; distance?: number; pace?: number; companionUserId?: string; proofUrl?: string };
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const ACTIVITY_CATEGORIES: Array<{ value: ActivityCategory; label: string; icon: string }> = [
@@ -40,7 +42,7 @@ function parsePace(value: string): number | undefined {
   return Number.isFinite(decimalPace) ? decimalPace : undefined;
 }
 
-export default function NewActivityForm({ users, scoringRules }: { users: SelectableUser[]; scoringRules: ScoringRules }) {
+export default function NewActivityForm({ userId, users, scoringRules, maintenanceMode, maintenanceMessage }: { userId: string; users: SelectableUser[]; scoringRules: ScoringRules; maintenanceMode: boolean; maintenanceMessage: string }) {
   const router = useRouter();
   const [category, setCategory] = useState<ActivityCategory>('RUN');
   const [distance, setDistance] = useState('');
@@ -52,6 +54,76 @@ export default function NewActivityForm({ users, scoringRules }: { users: Select
   const [submitting, setSubmitting] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [online, setOnline] = useState(true);
+  const [draftReady, setDraftReady] = useState(false);
+  const [queued, setQueued] = useState(false);
+  const [draftStatus, setDraftStatus] = useState('');
+  const draftKey = `kg-activity-draft:${userId}`;
+  const queueKey = `kg-activity-queue:${userId}`;
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setOnline(window.navigator.onLine);
+      try {
+        const saved = window.localStorage.getItem(draftKey);
+        if (saved) {
+          const draft = JSON.parse(saved) as Partial<ActivityDraft>;
+          if (draft.category) setCategory(draft.category);
+          setDistance(draft.distance || '');
+          setPace(draft.pace || '');
+          setWithFriend(Boolean(draft.withFriend));
+          setCompanionUserId(draft.companionUserId || '');
+          setProofUrl(draft.proofUrl || '');
+          setDraftStatus('Saved draft restored from this device.');
+        }
+        setQueued(Boolean(window.localStorage.getItem(queueKey)));
+      } catch {
+        window.localStorage.removeItem(draftKey);
+        window.localStorage.removeItem(queueKey);
+      }
+      setDraftReady(true);
+    });
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, [draftKey, queueKey]);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    const draft: ActivityDraft = { category, distance, pace, withFriend, companionUserId, proofUrl };
+    window.localStorage.setItem(draftKey, JSON.stringify(draft));
+  }, [category, companionUserId, distance, draftKey, draftReady, pace, proofUrl, withFriend]);
+
+  useEffect(() => {
+    if (!online || !queued || !draftReady || maintenanceMode) return;
+    const pending = window.localStorage.getItem(queueKey);
+    if (!pending) { queueMicrotask(() => setQueued(false)); return; }
+    queueMicrotask(() => {
+      setSubmitting(true);
+      setSubmitError('Connection restored. Submitting your queued activity…');
+      fetch('/api/activities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: pending })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Queued activity could not be submitted.');
+        window.localStorage.removeItem(queueKey);
+        window.localStorage.removeItem(draftKey);
+        setQueued(false);
+        router.push('/dashboard?activitySubmitted=true');
+        router.refresh();
+      })
+      .catch((error) => {
+        window.localStorage.removeItem(queueKey);
+        setQueued(false);
+        setSubmitError(`${error instanceof Error ? error.message : 'Queued activity could not be submitted.'} Your draft is still saved.`);
+      })
+      .finally(() => setSubmitting(false));
+    });
+  }, [draftKey, draftReady, maintenanceMode, online, queueKey, queued, router]);
 
   const distanceNumber = distance ? Number(distance) : undefined;
   const paceNumber = parsePace(pace);
@@ -88,6 +160,11 @@ export default function NewActivityForm({ users, scoringRules }: { users: Select
       return;
     }
 
+    if (!online) {
+      setUploadError('Reconnect before uploading a proof image. Your activity details are still saved.');
+      event.target.value = '';
+      return;
+    }
     setUploading(true);
     try {
       const body = new FormData();
@@ -111,28 +188,45 @@ export default function NewActivityForm({ users, scoringRules }: { users: Select
       return;
     }
 
+    const payload: ActivityPayload = {
+      category,
+      distance: category === 'TROOP_GAMES' ? undefined : distanceNumber,
+      pace: category === 'RUN' ? paceNumber : undefined,
+      companionUserId: withFriend ? companionUserId : undefined,
+      proofUrl: proofUrl || undefined,
+    };
+    if (!online) {
+      window.localStorage.setItem(queueKey, JSON.stringify(payload));
+      setQueued(true);
+      setSubmitError('Activity queued on this device. It will submit once your connection returns.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const response = await fetch('/api/activities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category,
-          distance: category === 'TROOP_GAMES' ? undefined : distanceNumber,
-          pace: category === 'RUN' ? paceNumber : undefined,
-          companionUserId: withFriend ? companionUserId : undefined,
-          proofUrl: proofUrl || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Failed to submit activity.');
+      window.localStorage.removeItem(queueKey);
+      window.localStorage.removeItem(draftKey);
       router.push('/dashboard?activitySubmitted=true');
       router.refresh();
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'Failed to submit activity.');
+      setSubmitError(`${error instanceof Error ? error.message : 'Failed to submit activity.'} Your draft remains saved on this device.`);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const clearDraft = () => {
+    setCategory('RUN'); setDistance(''); setPace(''); setWithFriend(false); setCompanionUserId(''); setProofUrl(''); setQueued(false);
+    window.localStorage.removeItem(queueKey);
+    window.localStorage.removeItem(draftKey);
+    setDraftStatus('Draft cleared.');
   };
 
   return (
@@ -142,7 +236,7 @@ export default function NewActivityForm({ users, scoringRules }: { users: Select
         <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-400 transition hover:text-white"><ArrowLeft className="h-4 w-4" />Back to athlete hub</Link>
         <div className="mt-6 grid items-start gap-6 lg:grid-cols-[1fr_22rem]">
           <form onSubmit={handleSubmit} className="space-y-6 rounded-3xl border border-white/10 bg-white/[0.04] p-5 sm:p-8">
-            <header><p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-400">New submission</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Log an activity</h1><p className="mt-3 text-slate-400">Add the details below. Your activity enters the admin review queue before points are awarded.</p></header>
+            <header><p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-400">New submission</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Log an activity</h1><p className="mt-3 text-slate-400">Add the details below. Your activity enters the admin review queue before points are awarded.</p>{maintenanceMode ? <div role="alert" className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100"><strong>Submissions paused:</strong> {maintenanceMessage}</div> : null}<div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs"><span className="inline-flex items-center gap-2 text-slate-500">{online ? <Save className="h-4 w-4 text-emerald-300" /> : <CloudOff className="h-4 w-4 text-amber-300" />}{queued ? 'Waiting to submit after reconnect.' : draftStatus || (draftReady ? 'Draft saved automatically on this device.' : 'Preparing secure local draft…')}</span><button type="button" onClick={clearDraft} className="font-bold text-slate-500 transition hover:text-white">Clear draft</button></div></header>
 
             <FormSection number="1" title="Choose an activity" subtitle="Scoring changes based on the activity type.">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -170,13 +264,13 @@ export default function NewActivityForm({ users, scoringRules }: { users: Select
               {proofUrl ? (
                 <div className="relative h-60 overflow-hidden rounded-2xl border border-white/10 bg-black/20"><Image src={proofUrl} alt="Uploaded activity proof" fill unoptimized sizes="(max-width: 1024px) 100vw, 700px" className="object-contain" /><button type="button" onClick={() => setProofUrl('')} aria-label="Remove proof image" className="absolute right-3 top-3 rounded-full bg-rose-500 p-2 text-white shadow-lg transition hover:bg-rose-400"><X className="h-4 w-4" /></button></div>
               ) : (
-                <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-black/10 px-5 text-center transition hover:border-orange-400/50 hover:bg-orange-400/5"><ImagePlus className="h-8 w-8 text-slate-500" /><span className="mt-3 font-bold text-slate-300">{uploading ? 'Uploading proof…' : 'Choose proof screenshot'}</span><span className="mt-1 text-xs text-slate-500">JPEG, PNG, WebP or GIF · maximum 4MB</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFileChange} disabled={uploading} className="hidden" /></label>
+                <div className="grid gap-3 sm:grid-cols-2"><label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-black/10 px-5 text-center transition hover:border-orange-400/50 hover:bg-orange-400/5"><Camera className="h-8 w-8 text-slate-500" /><span className="mt-3 font-bold text-slate-300">{uploading ? 'Uploading proof…' : 'Take a proof photo'}</span><span className="mt-1 text-xs text-slate-500">Open your phone&apos;s rear camera</span><input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={handleFileChange} disabled={uploading || !online || maintenanceMode} className="hidden" /></label><label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-black/10 px-5 text-center transition hover:border-sky-400/50 hover:bg-sky-400/5"><ImagePlus className="h-8 w-8 text-slate-500" /><span className="mt-3 font-bold text-slate-300">Choose screenshot</span><span className="mt-1 text-xs text-slate-500">JPEG, PNG, WebP or GIF · maximum 4MB</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFileChange} disabled={uploading || !online || maintenanceMode} className="hidden" /></label></div>
               )}
               {uploadError ? <p className="mt-3 text-sm text-rose-300">{uploadError}</p> : null}
             </FormSection>
 
             {submitError ? <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-200">{submitError}</div> : null}
-            <div className="flex flex-col-reverse gap-3 border-t border-white/10 pt-6 sm:flex-row sm:justify-end"><Link href="/dashboard" className="rounded-xl border border-white/10 px-5 py-3 text-center text-sm font-bold text-slate-300 transition hover:bg-white/5">Cancel</Link><button type="submit" disabled={submitting || uploading || Boolean(validationMessage)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-6 py-3 text-sm font-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-40"><CheckCircle2 className="h-4 w-4" />{submitting ? 'Submitting…' : 'Submit for review'}</button></div>
+            <div className="flex flex-col-reverse gap-3 border-t border-white/10 pt-6 sm:flex-row sm:justify-end"><Link href="/dashboard" className="rounded-xl border border-white/10 px-5 py-3 text-center text-sm font-bold text-slate-300 transition hover:bg-white/5">Cancel</Link><button type="submit" disabled={submitting || uploading || Boolean(validationMessage) || maintenanceMode} className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-6 py-3 text-sm font-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-40"><CheckCircle2 className="h-4 w-4" />{submitting ? 'Submitting…' : !online ? 'Queue until online' : 'Submit for review'}</button></div>
           </form>
 
           <aside className="space-y-4 lg:sticky lg:top-6">
