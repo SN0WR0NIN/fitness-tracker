@@ -23,6 +23,7 @@ import {
   Waves,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import HeroAtmosphere from '@/components/HeroAtmosphere';
 import ShareProfileButton from '@/components/ShareProfileButton';
 import StravaIcon from '@/components/StravaIcon';
 import { formatDistance, formatDuration, formatPace } from '@/lib/format';
@@ -183,30 +184,39 @@ export default function AthleteDashboard({
     <div className="min-h-screen bg-slate-950 text-white">
       <Navbar />
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-        <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-8">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(249,115,22,0.2),_transparent_40%),radial-gradient(circle_at_85%_15%,_rgba(37,99,235,0.24),_transparent_34%)]" />
-          <div className="relative">
-            <div className="flex flex-wrap items-start justify-between gap-5">
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-orange-400 to-orange-600 text-2xl font-black shadow-xl shadow-orange-500/20">{initials}</div>
+        <section className="hero-stage rounded-3xl border border-white/10 bg-slate-950 p-6 shadow-2xl shadow-black/20 sm:p-8">
+          <HeroAtmosphere />
+          <div className="grid items-center gap-8 lg:grid-cols-[1fr_auto]">
+            <div>
+              <div className="hero-reveal flex flex-col gap-5 sm:flex-row sm:items-center">
+                <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-lime-300 via-yellow-300 to-orange-500 text-2xl font-black text-slate-950 shadow-xl shadow-orange-500/20">
+                  {initials}<span className="absolute -right-1 -top-1 h-4 w-4 rounded-full border-4 border-slate-950 bg-lime-300" />
+                </div>
                 <div>
-                  <p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-300">My athlete hub</p>
-                  <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">{profile.name}</h1>
+                  <p className="live-pulse inline-flex items-center gap-2.5 text-xs font-black uppercase tracking-[0.2em] text-lime-300">My live season</p>
+                  <h1 className="athletic-display mt-3 text-4xl leading-none sm:text-6xl">{profile.name}</h1>
                   <p className="mt-2 flex items-center gap-2 text-sm text-slate-300"><Users className="h-4 w-4 text-sky-300" />{profile.column?.name ?? 'No column assigned'}</p>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="hero-reveal hero-reveal-delay-2 mt-7 flex flex-wrap gap-3">
                 <ShareProfileButton participantName={profile.name} profilePath={`/participants/${profile.id}`} />
-                <Link href="/activities/new" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold shadow-lg shadow-orange-500/20 transition hover:bg-orange-400"><Plus className="h-4 w-4" />Log activity</Link>
+                <Link href="/activities/new" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold shadow-lg shadow-orange-500/20 transition hover:-translate-y-0.5 hover:bg-orange-400"><Plus className="h-4 w-4" />Log activity</Link>
               </div>
             </div>
 
-            <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <HeroStat label="Overall rank" value={profile.rank ? `#${profile.rank}` : '—'} detail={`of ${profile.participantCount} athletes`} />
-              <HeroStat label="Total points" value={profile.totalPoints.toFixed(1)} detail="approved score" />
-              <HeroStat label="Activities" value={approvedCount.toString()} detail={`${pendingCount} pending review`} />
-              <HeroStat label="Achievements" value={unlockedCount.toString()} detail={`of ${profile.achievements.length} unlocked`} />
+            <div className="hero-reveal hero-reveal-delay-1 min-w-56 rounded-3xl border border-lime-300/20 bg-lime-300/[0.07] p-6 text-left backdrop-blur sm:text-right">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Season score</p>
+              <p className="athletic-display mt-2 text-6xl leading-none text-lime-300 sm:text-7xl">{profile.totalPoints.toFixed(1)}</p>
+              <p className="mt-2 text-sm font-bold text-slate-300">Rank {profile.rank ? `#${profile.rank}` : 'pending'} of {profile.participantCount}</p>
+              <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-lime-300 to-orange-400 transition-[width] duration-700" style={{ width: `${profile.rank ? Math.max(8, (profile.participantCount - profile.rank + 1) / Math.max(profile.participantCount, 1) * 100) : 8}%` }} /></div>
             </div>
+          </div>
+
+          <div className="hero-reveal hero-reveal-delay-3 mt-8 grid grid-cols-2 gap-3 border-t border-white/10 pt-5 lg:grid-cols-4">
+            <HeroStat label="Overall rank" value={profile.rank ? `#${profile.rank}` : '—'} detail={`of ${profile.participantCount} athletes`} />
+            <HeroStat label="Weekly target" value={`${Math.round(goalProgress)}%`} detail={`${engagement.currentWeekPoints.toFixed(1)} of ${engagement.weeklyGoal.toFixed(0)} pts`} />
+            <HeroStat label="Activities" value={approvedCount.toString()} detail={`${pendingCount} pending review`} />
+            <HeroStat label="Achievements" value={unlockedCount.toString()} detail={`of ${profile.achievements.length} unlocked`} />
           </div>
         </section>
 

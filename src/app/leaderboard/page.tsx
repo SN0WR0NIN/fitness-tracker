@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Activity, Bike, Footprints, RefreshCw, Search, Trophy, Users, Waves } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import HeroAtmosphere from '@/components/HeroAtmosphere';
 
 interface IndividualLeader {
   userId: string;
@@ -94,39 +95,46 @@ export default function LeaderboardPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <Navbar />
-      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-400">Live competition</p>
-            <h1 className="mt-2 text-4xl font-black sm:text-5xl">Leaderboard</h1>
-            <p className="mt-3 text-slate-400">Explore every ranking and see who is setting the pace.</p>
-          </div>
-          <button onClick={() => loadLeaderboard(true)} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-300 transition hover:bg-white/10 disabled:opacity-50">
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            {updatedAt ? `Updated ${updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Refresh'}
-          </button>
-        </div>
+      <main>
+        <section className="hero-stage border-b border-white/10 bg-slate-950">
+          <HeroAtmosphere />
+          <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[0.82fr_1.18fr] lg:px-8 lg:py-20">
+            <div>
+              <p className="live-pulse hero-reveal inline-flex items-center gap-2.5 text-xs font-black uppercase tracking-[0.22em] text-lime-300">Live competition</p>
+              <h1 className="athletic-display hero-reveal hero-reveal-delay-1 mt-5 text-6xl leading-[0.9] sm:text-8xl">The race<br /><span className="text-orange-400">right now.</span></h1>
+              <p className="hero-reveal hero-reveal-delay-2 mt-6 max-w-md leading-7 text-slate-400">Rankings update every minute. Switch the activity, week, or team view to see who owns the moment.</p>
+              <button onClick={() => loadLeaderboard(true)} disabled={refreshing} className="hero-reveal hero-reveal-delay-3 mt-7 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-300 backdrop-blur transition hover:bg-white/10 disabled:opacity-50">
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                {updatedAt ? `Updated ${updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Refresh standings'}
+              </button>
+            </div>
 
-        {!loading && podium.length > 0 && (
-          <div className="mt-10 grid gap-4 sm:grid-cols-3">
-            {podium.map((entry, index) => {
-              const isPerson = 'userId' in entry;
-              const score = isPerson ? entry[category] : entry[teamMetric];
-              const className = `rounded-2xl border p-5 text-left transition hover:-translate-y-1 ${index === 0 ? 'border-yellow-400/30 bg-yellow-400/10 sm:order-2' : 'border-white/10 bg-white/[0.04]'} ${index === 1 ? 'sm:order-1' : index === 2 ? 'sm:order-3' : ''}`;
-              const content = <>
-                  <span className="text-3xl">{rankLabel(index)}</span>
-                  <p className="mt-4 truncate text-lg font-black">{isPerson ? entry.userName : entry.columnName}</p>
-                  <p className="text-sm text-slate-400">{isPerson ? entry.columnName : `${entry.memberCount} members`}</p>
-                  <p className="mt-4 text-2xl font-black text-orange-300">{score.toFixed(1)} <span className="text-xs font-medium text-slate-500">{!isPerson && teamMetric === 'averagePoints' ? 'avg pts' : 'pts'}</span></p>
-                </>;
-              return isPerson
-                ? <Link key={entry.userId} href={`/participants/${entry.userId}`} className={className}>{content}</Link>
-                : <div key={entry.columnId} className={className}>{content}</div>;
-            })}
+            <div className="hero-reveal hero-reveal-delay-2 rounded-3xl border border-white/10 bg-slate-900/75 p-4 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-6">
+              <div className="mb-5 flex items-center justify-between gap-3"><p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Top three · {week === 'all' ? 'All time' : `Week ${week}`}</p><Trophy className="h-5 w-5 text-lime-300" /></div>
+              {loading ? <div className="h-64 animate-pulse rounded-2xl bg-white/5" /> : podium.length ? (
+                <div className="grid min-h-64 grid-cols-3 items-end gap-2 sm:gap-3">
+                  {podium.map((entry, index) => {
+                    const isPerson = 'userId' in entry;
+                    const score = isPerson ? entry[category] : entry[teamMetric];
+                    const height = index === 0 ? 'h-48' : index === 1 ? 'h-40' : 'h-32';
+                    const order = index === 0 ? 'order-2' : index === 1 ? 'order-1' : 'order-3';
+                    const content = <>
+                      <span className="text-2xl">{rankLabel(index)}</span>
+                      <span className="mt-3 block max-w-full truncate text-sm font-black sm:text-base">{isPerson ? entry.userName : entry.columnName}</span>
+                      <span className="mt-1 block truncate text-[0.65rem] text-slate-500 sm:text-xs">{isPerson ? entry.columnName : `${entry.memberCount} members`}</span>
+                      <span className="mt-auto block text-lg font-black text-orange-300 sm:text-2xl">{score.toFixed(1)}</span>
+                    </>;
+                    const className = `hero-podium-bar ${height} ${order} flex min-w-0 flex-col rounded-t-2xl border p-3 text-center transition hover:-translate-y-1 sm:p-4 ${index === 0 ? 'border-lime-300/30 bg-gradient-to-t from-lime-300/10 to-yellow-300/15 [animation-delay:100ms]' : 'border-white/10 bg-white/[0.04]'} ${index === 2 ? '[animation-delay:200ms]' : ''}`;
+                    return isPerson ? <Link key={entry.userId} href={`/participants/${entry.userId}`} className={className}>{content}</Link> : <div key={entry.columnId} className={className}>{content}</div>;
+                  })}
+                </div>
+              ) : <div className="flex h-64 items-center justify-center text-sm text-slate-500">No scores yet. Be first on the podium.</div>}
+            </div>
           </div>
-        )}
+        </section>
 
-        <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex rounded-xl bg-black/20 p-1">
               <button onClick={() => setView('individual')} className={`flex-1 rounded-lg px-5 py-2 text-sm font-bold transition ${view === 'individual' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-white'}`}>Individual</button>
@@ -167,6 +175,7 @@ export default function LeaderboardPage() {
               <span className="font-black text-sky-300">{team[teamMetric].toFixed(1)} {teamMetric === 'averagePoints' ? 'avg' : 'pts'}</span>
             </div>;
           }) : <Empty />}
+        </div>
         </div>
       </main>
     </div>
