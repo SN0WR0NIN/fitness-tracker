@@ -3,11 +3,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { Activity, Bike, Crown, Footprints, RefreshCw, Search, Trophy, Users, Waves } from 'lucide-react';
+import { Activity, Bike, Crown, Footprints, Minus, RefreshCw, Search, TrendingDown, TrendingUp, Trophy, Users, Waves } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import HeroAtmosphere from '@/components/HeroAtmosphere';
 
-interface IndividualLeader {
+type RankingMeta = {
+  rank: number;
+  previousRank: number | null;
+  rankChange: number | null;
+  isNew: boolean;
+  pointsToNext: number;
+  history: Array<{ date: string; rank: number; points: number }>;
+};
+
+interface IndividualLeader extends RankingMeta {
   userId: string;
   userName: string;
   columnName: string;
@@ -19,7 +28,7 @@ interface IndividualLeader {
   troopGamePoints: number;
 }
 
-interface TeamLeader {
+interface TeamLeader extends RankingMeta {
   columnId: string;
   columnName: string;
   memberCount: number;
@@ -134,7 +143,7 @@ export default function LeaderboardPage() {
                     const className = `standing-row-enter ${order} relative min-w-0 rounded-2xl border p-3 text-center transition hover:-translate-y-1 sm:p-4 ${index === 0 ? 'min-h-64 border-lime-300/30 bg-gradient-to-b from-lime-300/15 to-lime-300/[0.04] shadow-xl shadow-lime-300/5 [animation-delay:100ms]' : 'min-h-56 border-white/10 bg-white/[0.04]'} ${index === 2 ? '[animation-delay:200ms]' : ''}`;
                     const rankMark = index === 0 ? <Crown className="h-5 w-5" /> : <span>{rankLabel(index)}</span>;
                     const wrappedContent = <>{<span className={`absolute left-1/2 top-0 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full px-2.5 py-1 text-sm font-black ${index === 0 ? 'bg-lime-300 text-slate-950' : 'border border-white/10 bg-slate-950 text-white'}`}>{rankMark}</span>}{content}</>;
-                    return isPerson ? <Link key={entry.userId} href={`/participants/${entry.userId}`} className={className}>{wrappedContent}</Link> : <div key={entry.columnId} className={className}>{wrappedContent}</div>;
+                    return isPerson ? <Link key={entry.userId} href={`/participants/${entry.userId}`} className={className}>{wrappedContent}</Link> : <Link key={entry.columnId} href={`/columns/${entry.columnId}`} className={className}>{wrappedContent}</Link>;
                   })}
                 </div>
               ) : <div className="flex h-64 items-center justify-center text-sm text-slate-500">No scores yet. Be first on the podium.</div>}
@@ -171,22 +180,26 @@ export default function LeaderboardPage() {
               const actualIndex = individualRankMap.get(person.userId) ?? 0;
               const max = rankedIndividuals[0]?.[category] || 1;
               const isCurrentUser = person.userId === session?.user?.id;
+              const previousScore = actualIndex > 0 ? rankedIndividuals[actualIndex - 1][category] : null;
+              const pointsToNext = previousScore === null ? 0 : Math.floor(Math.max(0, previousScore - person[category]) * 2) / 2 + 0.5;
               return <Link key={person.userId} href={`/participants/${person.userId}`} style={{ animationDelay: `${Math.min(actualIndex, 10) * 45}ms` }} className={`standing-row-enter group grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl border px-3 py-3.5 text-left transition hover:-translate-y-0.5 sm:grid-cols-[auto_auto_1fr_auto] sm:gap-4 sm:px-5 ${isCurrentUser ? 'border-lime-300/30 bg-lime-300/[0.08] shadow-lg shadow-lime-300/5' : 'border-white/[0.07] bg-white/[0.035] hover:border-white/15 hover:bg-white/[0.06]'}`}>
                 <span className={`flex h-9 w-9 items-center justify-center rounded-xl text-sm font-black ${actualIndex < 3 ? 'bg-white/10' : 'text-slate-500'}`}>{rankLabel(actualIndex)}</span>
                 <span className={`hidden h-11 w-11 items-center justify-center rounded-full border text-sm font-black sm:flex ${isCurrentUser ? 'border-lime-300/30 bg-lime-300 text-slate-950' : 'border-white/10 bg-slate-900 text-slate-300'}`}>{initials(person.userName)}</span>
-                <span className="min-w-0"><span className="flex items-center gap-2"><span className="block truncate font-black">{person.userName}</span>{isCurrentUser ? <span className="rounded-full bg-lime-300 px-2 py-0.5 text-[0.6rem] font-black uppercase tracking-wider text-slate-950">You</span> : null}</span><span className="block text-xs text-slate-500">{person.columnName}</span><span className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-white/5"><span className="block h-full rounded-full bg-gradient-to-r from-orange-500 via-orange-400 to-yellow-300 transition-[width] duration-700" style={{ width: `${Math.max(3, person[category] / max * 100)}%` }} /></span></span>
+                <span className="min-w-0"><span className="flex items-center gap-2"><span className="block truncate font-black">{person.userName}</span>{isCurrentUser ? <span className="rounded-full bg-lime-300 px-2 py-0.5 text-[0.6rem] font-black uppercase tracking-wider text-slate-950">You</span> : null}<RankMovement change={person.rankChange} isNew={person.isNew} /></span><span className="block text-xs text-slate-500">{person.columnName}{actualIndex > 0 ? ` · ${pointsToNext.toFixed(1)} pts to overtake` : ' · Defending the lead'}</span><span className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-white/5"><span className="block h-full rounded-full bg-gradient-to-r from-orange-500 via-orange-400 to-yellow-300 transition-[width] duration-700" style={{ width: `${Math.max(3, person[category] / max * 100)}%` }} /></span></span>
                 <span className="rounded-xl bg-orange-400/10 px-3 py-2 text-right"><span className="block font-black text-orange-300">{person[category].toFixed(1)}</span><span className="block text-[0.6rem] font-bold uppercase tracking-wider text-slate-500">{category === 'totalPoints' ? 'points' : categories.find((item) => item.key === category)?.label}</span></span>
               </Link>;
             }) : <Empty />
           ) : teamResults.length ? teamResults.map((team) => {
             const actualIndex = teamRankMap.get(team.columnId) ?? 0;
             const max = rankedTeams[0]?.[teamMetric] || 1;
-            return <div key={team.columnId} style={{ animationDelay: `${Math.min(actualIndex, 10) * 45}ms` }} className="standing-row-enter grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-3 py-3.5 sm:grid-cols-[auto_auto_1fr_auto] sm:gap-4 sm:px-5">
+            const previousScore = actualIndex > 0 ? rankedTeams[actualIndex - 1][teamMetric] : null;
+            const pointsToNext = previousScore === null ? 0 : Math.floor(Math.max(0, previousScore - team[teamMetric]) * 2) / 2 + 0.5;
+            return <Link href={`/columns/${team.columnId}`} key={team.columnId} style={{ animationDelay: `${Math.min(actualIndex, 10) * 45}ms` }} className="standing-row-enter grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-3 py-3.5 transition hover:-translate-y-0.5 hover:border-cyan-300/20 hover:bg-cyan-300/[0.04] sm:grid-cols-[auto_auto_1fr_auto] sm:gap-4 sm:px-5">
               <span className={`flex h-9 w-9 items-center justify-center rounded-xl text-sm font-black ${actualIndex < 3 ? 'bg-white/10' : 'text-slate-500'}`}>{rankLabel(actualIndex)}</span>
               <span className="hidden h-11 w-11 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-300/10 text-sm font-black text-cyan-200 sm:flex">{initials(team.columnName)}</span>
-              <span className="min-w-0"><span className="block truncate font-black">{team.columnName}</span><span className="block text-xs text-slate-500">{team.memberCount} members · {team.averagePoints.toFixed(1)} average</span><span className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-white/5"><span className="block h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-300 transition-[width] duration-700" style={{ width: `${Math.max(3, team[teamMetric] / max * 100)}%` }} /></span></span>
+              <span className="min-w-0"><span className="flex items-center gap-2"><span className="block truncate font-black">{team.columnName}</span><RankMovement change={team.rankChange} isNew={team.isNew} /></span><span className="block text-xs text-slate-500">{team.memberCount} members · {team.averagePoints.toFixed(1)} average{actualIndex > 0 ? ` · ${pointsToNext.toFixed(1)} pts to overtake` : ' · Defending the lead'}</span><span className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-white/5"><span className="block h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-300 transition-[width] duration-700" style={{ width: `${Math.max(3, team[teamMetric] / max * 100)}%` }} /></span></span>
               <span className="rounded-xl bg-cyan-300/10 px-3 py-2 text-right"><span className="block font-black text-cyan-300">{team[teamMetric].toFixed(1)}</span><span className="block text-[0.6rem] font-bold uppercase tracking-wider text-slate-500">{teamMetric === 'averagePoints' ? 'avg pts' : 'points'}</span></span>
-            </div>;
+            </Link>;
           }) : <Empty />}
         </div>
         </div>
@@ -202,4 +215,11 @@ function LoadingRows() {
 
 function Empty() {
   return <div className="p-12 text-center text-slate-500">No results found for this view.</div>;
+}
+
+function RankMovement({ change, isNew }: { change: number | null; isNew: boolean }) {
+  if (isNew) return <span className="rounded-full bg-violet-400/10 px-2 py-0.5 text-[0.6rem] font-black uppercase text-violet-300">New</span>;
+  if (change === null || change === 0) return <span title="Rank unchanged" className="inline-flex items-center gap-0.5 text-[0.65rem] font-black text-slate-600"><Minus className="h-3 w-3" /></span>;
+  if (change > 0) return <span title={`Up ${change} places`} className="inline-flex items-center gap-0.5 text-[0.65rem] font-black text-emerald-300"><TrendingUp className="h-3 w-3" />{change}</span>;
+  return <span title={`Down ${Math.abs(change)} places`} className="inline-flex items-center gap-0.5 text-[0.65rem] font-black text-rose-300"><TrendingDown className="h-3 w-3" />{Math.abs(change)}</span>;
 }

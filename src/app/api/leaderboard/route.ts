@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActiveColumnIds } from '@/lib/admin-control';
+import { captureRankingSnapshot, getRankingDynamics } from '@/lib/ranking-dynamics';
 
 type WeeklyScoreRow = {
   userId: string;
@@ -20,8 +21,20 @@ type WeeklyScoreRow = {
 type TeamColumn = {
   id: string;
   name: string;
-  members: Array<{ activities: Array<{ points: number }> }>;
+  _count: { members: number };
 };
+
+type TeamActivityTotal = { columnId: string; _sum: { points: number | null } };
+
+function scheduleRankingCapture(scope: string, periodKey: string, entities: Array<{ id: string; points: number }>) {
+  after(async () => {
+    try {
+      await captureRankingSnapshot(scope, periodKey, entities);
+    } catch (error) {
+      console.error('Failed to capture ranking snapshot:', error);
+    }
+  });
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -114,57 +127,59 @@ async function getIndividualLeaderboard(weekNumber: string | null) {
   const leaderboard = Array.from(userScores.values()).sort(
     (a, b) => b.totalPoints - a.totalPoints
   );
+  const periodKey = weekNumber ? `week:${parseInt(weekNumber)}` : 'all-time';
+  const rankedEntities = leaderboard.map((entry) => ({ id: entry.userId, points: entry.totalPoints }));
+  const dynamics = await getRankingDynamics('individual', periodKey, rankedEntities);
+  scheduleRankingCapture('individual', periodKey, rankedEntities);
 
   return NextResponse.json({
     type: 'individual',
     weekNumber: weekNumber ? parseInt(weekNumber) : null,
-    leaderboard,
+    leaderboard: leaderboard.map((entry) => ({ ...entry, ...dynamics.get(entry.userId) })),
   });
 }
 
 async function getTeamLeaderboard(weekNumber: string | null) {
   const activeColumnIds = await getActiveColumnIds();
-  // Get all columns with their members
-  const columns = await prisma.column.findMany({
-    where: { id: { in: activeColumnIds } },
-    include: {
-      members: {
-        include: {
-          activities: {
-            where: {
-              status: 'APPROVED',
-              ...(weekNumber ? { weekNumber: parseInt(weekNumber) } : {}),
-            },
-          },
-        },
-      },
-    },
-  }) as TeamColumn[];
+  const [columnsResult, totalsResult] = await Promise.all([
+    prisma.column.findMany({
+      where: { id: { in: activeColumnIds } },
+      select: { id: true, name: true, _count: { select: { members: true } } },
+    }),
+    prisma.activity.groupBy({
+      by: ['columnId'],
+      where: { status: 'APPROVED', columnId: { in: activeColumnIds }, ...(weekNumber ? { weekNumber: parseInt(weekNumber) } : {}) },
+      _sum: { points: true },
+    }),
+  ]);
+  const columns = columnsResult as TeamColumn[];
+  const totals = totalsResult as TeamActivityTotal[];
+  const totalsByColumn = new Map(totals.map((row) => [row.columnId, row._sum.points ?? 0]));
 
   // Calculate team scores
   const teamScores = columns.map((column) => {
-    const totalPoints = column.members.reduce(
-      (sum, member) =>
-        sum +
-        member.activities.reduce((actSum, activity) => actSum + activity.points, 0),
-      0
-    );
-
-    const averagePoints =
-      column.members.length > 0 ? totalPoints / column.members.length : 0;
+    const totalPoints = totalsByColumn.get(column.id) ?? 0;
+    const memberCount = column._count.members;
+    const averagePoints = memberCount > 0 ? totalPoints / memberCount : 0;
 
     return {
       columnId: column.id,
       columnName: column.name,
-      memberCount: column.members.length,
+      memberCount,
       totalPoints: Math.round(totalPoints * 100) / 100,
       averagePoints: Math.round(averagePoints * 100) / 100,
     };
   });
 
+  const leaderboard = teamScores.sort((a, b) => b.totalPoints - a.totalPoints);
+  const periodKey = weekNumber ? `week:${parseInt(weekNumber)}` : 'all-time';
+  const rankedEntities = leaderboard.map((entry) => ({ id: entry.columnId, points: entry.totalPoints }));
+  const dynamics = await getRankingDynamics('column', periodKey, rankedEntities);
+  scheduleRankingCapture('column', periodKey, rankedEntities);
+
   return NextResponse.json({
     type: 'team',
     weekNumber: weekNumber ? parseInt(weekNumber) : null,
-    leaderboard: teamScores.sort((a, b) => b.totalPoints - a.totalPoints),
+    leaderboard: leaderboard.map((entry) => ({ ...entry, ...dynamics.get(entry.columnId) })),
   });
 }
