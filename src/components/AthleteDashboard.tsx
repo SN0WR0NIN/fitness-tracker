@@ -13,6 +13,7 @@ import {
   Flame,
   Footprints,
   Medal,
+  Pencil,
   PartyPopper,
   Plus,
   Sparkles,
@@ -45,6 +46,8 @@ type DashboardProfile = {
 
 type CurrentUser = {
   stravaConnected: boolean;
+  email: string;
+  hasCustomWeeklyGoal: boolean;
 };
 
 type DashboardActivity = {
@@ -128,6 +131,11 @@ export default function AthleteDashboard({
   const [editingCompanionId, setEditingCompanionId] = useState<string | null>(null);
   const [companionSelect, setCompanionSelect] = useState('');
   const [savingCompanion, setSavingCompanion] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileName, setProfileName] = useState(profile.name);
+  const [weeklyGoal, setWeeklyGoal] = useState(engagement.weeklyGoal.toString());
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
   const activitySubmitted = searchParams.get('activitySubmitted') === 'true';
 
   const initials = profile.name.split(/\s+/).map((name) => name[0]).join('').slice(0, 2).toUpperCase();
@@ -180,6 +188,37 @@ export default function AthleteDashboard({
     }
   };
 
+  const saveProfile = async () => {
+    setSavingProfile(true);
+    setProfileMessage('');
+    try {
+      const response = await fetch('/api/user/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: profileName, weeklyGoal: Number(weeklyGoal) }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setProfileMessage(data.error || 'Unable to update your profile.');
+        return;
+      }
+      setEditingProfile(false);
+      router.refresh();
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      setProfileMessage('Unable to update your profile.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const openProfileEditor = () => {
+    setProfileName(profile.name);
+    setWeeklyGoal(engagement.weeklyGoal.toString());
+    setProfileMessage('');
+    setEditingProfile(true);
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <Navbar />
@@ -199,6 +238,7 @@ export default function AthleteDashboard({
                 </div>
               </div>
               <div className="hero-reveal hero-reveal-delay-2 mt-7 flex flex-wrap gap-3">
+                <button type="button" onClick={openProfileEditor} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-bold transition hover:-translate-y-0.5 hover:border-lime-300/30 hover:bg-lime-300/10"><Pencil className="h-4 w-4" />Edit profile</button>
                 <ShareProfileButton participantName={profile.name} profilePath={`/participants/${profile.id}`} />
                 <Link href="/activities/new" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold shadow-lg shadow-orange-500/20 transition hover:-translate-y-0.5 hover:bg-orange-400"><Plus className="h-4 w-4" />Log activity</Link>
               </div>
@@ -246,7 +286,7 @@ export default function AthleteDashboard({
             <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full p-2" style={{ background: `conic-gradient(#f97316 ${goalProgress * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}>
               <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-slate-950"><span className="text-2xl font-black">{Math.round(goalProgress)}%</span><span className="text-[0.65rem] text-slate-500">complete</span></div>
             </div>
-            <div><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-orange-300"><Target className="h-4 w-4" />Weekly target</p><p className="mt-3 text-3xl font-black">{engagement.currentWeekPoints.toFixed(1)} <span className="text-base text-slate-500">/ {engagement.weeklyGoal.toFixed(0)} pts</span></p><p className="mt-2 text-sm text-slate-400">{goalProgress >= 100 ? 'Goal complete — keep building the lead.' : `${Math.max(0, engagement.weeklyGoal - engagement.currentWeekPoints).toFixed(1)} points to reach your personalised target.`}</p></div>
+            <div><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-orange-300"><Target className="h-4 w-4" />Weekly target</p><p className="mt-3 text-3xl font-black">{engagement.currentWeekPoints.toFixed(1)} <span className="text-base text-slate-500">/ {engagement.weeklyGoal.toFixed(0)} pts</span></p><p className="mt-2 text-sm text-slate-400">{goalProgress >= 100 ? 'Goal complete — keep building the lead.' : `${Math.max(0, engagement.weeklyGoal - engagement.currentWeekPoints).toFixed(1)} points to reach your ${currentUser.hasCustomWeeklyGoal ? 'chosen' : 'personalised'} target.`}</p><button type="button" onClick={openProfileEditor} className="mt-3 text-xs font-black text-orange-300 hover:text-orange-200">Change target</button></div>
           </div>
           <EngagementCard icon={<Flame className="h-6 w-6" />} tone="text-orange-300 bg-orange-400/10" label="Active streak" value={`${engagement.weeklyStreak} ${engagement.weeklyStreak === 1 ? 'week' : 'weeks'}`} detail={engagement.weeklyStreak ? 'Log this week to keep it alive.' : 'Your first approved week starts it.'} />
           <EngagementCard icon={<TrendingUp className="h-6 w-6" />} tone="text-sky-300 bg-sky-400/10" label="Column momentum" value={engagement.columnRank ? `#${engagement.columnRank} of ${engagement.columnCount}` : 'Not ranked'} detail={engagement.columnRank === 1 ? 'Your column leads the challenge.' : engagement.columnRank ? `${engagement.gapToNext.toFixed(1)} points to the next place.` : 'Earn points to enter the standings.'} />
@@ -343,6 +383,21 @@ export default function AthleteDashboard({
             </div>
           ) : <Empty message="No activities yet. Log your first activity to begin." />}
         </section>
+
+        {editingProfile ? (
+          <div role="dialog" aria-modal="true" aria-labelledby="profile-settings-title" className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
+            <section className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl sm:p-8">
+              <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-lime-300">Personal settings</p><h2 id="profile-settings-title" className="mt-2 text-2xl font-black">Edit your profile</h2><p className="mt-2 text-sm text-slate-400">Your name appears across rankings, activities, and Column pages.</p></div><button type="button" onClick={() => setEditingProfile(false)} aria-label="Close profile settings" className="rounded-xl border border-white/10 px-3 py-2 text-sm font-bold text-slate-400 hover:text-white">Close</button></div>
+              <div className="mt-7 space-y-5">
+                <label className="block"><span className="text-sm font-bold text-slate-300">Display name</span><input value={profileName} onChange={(event) => setProfileName(event.target.value)} minLength={2} maxLength={60} autoComplete="name" className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 outline-none transition focus:border-lime-300" /></label>
+                <label className="block"><span className="text-sm font-bold text-slate-300">Weekly points target</span><input type="number" min="5" max="500" step="5" value={weeklyGoal} onChange={(event) => setWeeklyGoal(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 outline-none transition focus:border-orange-400" /><span className="mt-2 block text-xs text-slate-500">Choose between 5 and 500 points. You can change it whenever your training plan changes.</span></label>
+                <div className="grid gap-3 rounded-2xl border border-white/5 bg-black/15 p-4 text-sm sm:grid-cols-2"><div><span className="block text-xs text-slate-500">Login email</span><span className="mt-1 block truncate font-bold text-slate-300">{currentUser.email}</span></div><div><span className="block text-xs text-slate-500">Assigned Column</span><span className="mt-1 block font-bold text-slate-300">{profile.column?.name ?? 'Not assigned'}</span></div></div>
+              </div>
+              {profileMessage ? <p role="alert" className="mt-4 text-sm font-semibold text-rose-300">{profileMessage}</p> : null}
+              <div className="mt-7 flex justify-end gap-3"><button type="button" onClick={() => setEditingProfile(false)} className="rounded-xl border border-white/10 px-5 py-2.5 text-sm font-bold text-slate-300">Cancel</button><button type="button" onClick={saveProfile} disabled={savingProfile || profileName.trim().length < 2 || Number(weeklyGoal) < 5 || Number(weeklyGoal) > 500} className="rounded-xl bg-lime-300 px-5 py-2.5 text-sm font-black text-slate-950 transition hover:bg-lime-200 disabled:opacity-40">{savingProfile ? 'Saving…' : 'Save profile'}</button></div>
+            </section>
+          </div>
+        ) : null}
       </main>
     </div>
   );
