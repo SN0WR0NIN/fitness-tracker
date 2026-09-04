@@ -3,14 +3,15 @@
 import { useState } from 'react';
 import { Check, Share2 } from 'lucide-react';
 
-export default function ShareProfileButton({ participantName }: { participantName: string }) {
+export default function ShareProfileButton({ participantName, profilePath }: { participantName: string; profilePath?: string }) {
   const [copied, setCopied] = useState(false);
 
   const shareProfile = async () => {
+    const profileUrl = profilePath ? new URL(profilePath, window.location.origin).href : window.location.href;
     const shareData = {
       title: `${participantName} · KG Stay Active Challenge`,
       text: `See ${participantName}'s progress in the KG Stay Active Challenge.`,
-      url: window.location.href,
+      url: profileUrl,
     };
 
     if (navigator.share) {
@@ -22,7 +23,7 @@ export default function ShareProfileButton({ participantName }: { participantNam
       }
     }
 
-    await navigator.clipboard.writeText(window.location.href);
+    await navigator.clipboard.writeText(profileUrl);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   };
