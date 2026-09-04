@@ -4,15 +4,16 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useSession, signOut } from 'next-auth/react';
 import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { ShieldCheck, Moon, Sun, Users } from 'lucide-react';
+import NotificationBell from '@/components/NotificationBell';
+
+const emptySubscribe = () => () => {};
 
 export default function Navbar() {
   const { data: session, status } = useSession();
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   const isAdmin = session?.user?.role === 'ADMIN';
 
@@ -54,6 +55,7 @@ export default function Navbar() {
               >
                 Log Out
               </button>
+              <NotificationBell userId={session.user.id} />
             </>
           ) : (
             <>
