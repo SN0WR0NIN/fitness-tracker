@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { getParticipantProfile } from '@/lib/participant-profile';
 import { prisma } from '@/lib/prisma';
 import { getCurrentWeekPoints, getSuggestedWeeklyGoal, getWeeklyStreak } from '@/lib/engagement';
+import { getActiveColumnIds, getChallengeSettings } from '@/lib/admin-control';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,7 +48,7 @@ export default async function DashboardPage() {
   const userId = session?.user?.id;
   if (!userId) redirect('/auth/login');
 
-  const [profile, userResult, activitiesResult, usersResult, communityResult, columnScoresResult] = await Promise.all([
+  const [profile, userResult, activitiesResult, usersResult, communityResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
     getParticipantProfile(userId),
     prisma.user.findUnique({
       where: { id: userId },
@@ -97,18 +98,22 @@ export default async function DashboardPage() {
       by: ['columnId'],
       _sum: { totalPoints: true },
     }),
+    getChallengeSettings(),
+    getActiveColumnIds(),
   ]);
 
   const user = userResult as DashboardUser | null;
   const activities = activitiesResult as DashboardActivity[];
   const users = usersResult as SelectableUser[];
   const communityActivities = communityResult as CommunityActivity[];
+  const activeColumns = new Set(activeColumnIds);
   const columnScores = (columnScoresResult as ColumnScore[])
+    .filter((column) => activeColumns.has(column.columnId))
     .map((column) => ({ columnId: column.columnId, totalPoints: column._sum.totalPoints ?? 0 }))
     .sort((a, b) => b.totalPoints - a.totalPoints);
   if (!profile || !user) redirect('/auth/login');
 
-  const weeklyGoal = getSuggestedWeeklyGoal(profile.weeklyScores);
+  const weeklyGoal = getSuggestedWeeklyGoal(profile.weeklyScores, settings.weeklyGoal);
   const currentWeekPoints = getCurrentWeekPoints(profile.weeklyScores);
   const columnRankIndex = profile.column ? columnScores.findIndex((column) => column.columnId === profile.column?.id) : -1;
   const gapToNext = columnRankIndex > 0

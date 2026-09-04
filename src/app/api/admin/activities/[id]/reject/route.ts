@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z, ZodError } from 'zod';
 import { requireAdmin } from '@/lib/adminGuard';
 import { rejectActivity } from '@/lib/activities';
+import { recordAdminAudit } from '@/lib/admin-control';
 
 const RejectActivitySchema = z.object({
   reason: z.string().trim().min(3, 'Please provide a clear rejection reason').max(300, 'Rejection reason is too long'),
@@ -22,6 +23,7 @@ export async function POST(
     const { reason } = RejectActivitySchema.parse(body);
 
     const activity = await rejectActivity(id, guard.userId, reason);
+    await recordAdminAudit(guard.userId, 'Rejected activity', id, { reason });
     return NextResponse.json(activity);
   } catch (error) {
     if (error instanceof ZodError) {

@@ -5,8 +5,10 @@ import Image from 'next/image';
 import { useSession, signOut } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import { useSyncExternalStore } from 'react';
-import { ShieldCheck, Moon, Sun, Users } from 'lucide-react';
+import { Settings, ShieldCheck, Moon, Sun, Users } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
+import AnnouncementBanner from '@/components/AnnouncementBanner';
+import SiteBrandName from '@/components/SiteBrandName';
 
 const emptySubscribe = () => () => {};
 
@@ -18,11 +20,11 @@ export default function Navbar() {
   const isAdmin = session?.user?.role === 'ADMIN';
 
   return (
-    <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 transition-colors">
+    <><nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
         <Link href="/" className="flex items-center gap-2">
           <Image src="/2902.jpg" alt="KG Stay Active Challenge" width={32} height={32} className="w-8 h-8 rounded object-cover" />
-          <span className="font-bold text-lg text-gray-900 dark:text-gray-100">KG Stay Active Challenge</span>
+          <SiteBrandName />
         </Link>
         <div className="flex gap-4 items-center text-sm">
           {status === 'authenticated' ? (
@@ -35,6 +37,7 @@ export default function Navbar() {
               </Link>
               {isAdmin && (
                 <>
+                  <Link href="/admin" className="flex items-center gap-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"><Settings className="h-4 w-4" /> Control</Link>
                   <Link
                     href="/admin/activities"
                     className="flex items-center gap-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
@@ -76,6 +79,6 @@ export default function Navbar() {
           </button>
         </div>
       </div>
-    </nav>
+    </nav><AnnouncementBanner /></>
   );
 }

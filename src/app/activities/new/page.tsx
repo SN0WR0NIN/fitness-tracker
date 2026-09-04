@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import NewActivityForm from '@/components/NewActivityForm';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getChallengeSettings } from '@/lib/admin-control';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,11 +14,11 @@ export default async function NewActivityPage() {
   const userId = session?.user?.id;
   if (!userId) redirect('/auth/login');
 
-  const users = await prisma.user.findMany({
-    where: { id: { not: userId } },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  }) as SelectableUser[];
+  const [usersResult, settings] = await Promise.all([
+    prisma.user.findMany({ where: { id: { not: userId } }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    getChallengeSettings(),
+  ]);
+  const users = usersResult as SelectableUser[];
 
-  return <NewActivityForm users={users} />;
+  return <NewActivityForm users={users} scoringRules={settings.scoringRules} />;
 }
