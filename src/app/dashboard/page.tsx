@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
@@ -48,36 +48,19 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('');
+  const [syncMessage, setSyncMessage] = useState(() => {
+    if (searchParams.get('stravaConnected') === 'true') {
+      return 'Strava connected! Click "Sync Activities" to import your workouts.';
+    }
+    const stravaError = searchParams.get('stravaError');
+    return stravaError ? `Strava connection failed: ${stravaError}` : '';
+  });
   const [users, setUsers] = useState<SelectableUser[]>([]);
   const [editingCompanionId, setEditingCompanionId] = useState<string | null>(null);
   const [companionSelect, setCompanionSelect] = useState('');
   const [savingCompanion, setSavingCompanion] = useState(false);
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/auth/login');
-      return;
-    }
-    if (status === 'authenticated' && session.user.id) {
-      fetchActivities(session.user.id);
-      fetchCurrentUser();
-      fetch('/api/users')
-        .then((res) => (res.ok ? res.json() : []))
-        .then(setUsers)
-        .catch(() => setUsers([]));
-    }
-  }, [status, session, router]);
-
-  useEffect(() => {
-    if (searchParams.get('stravaConnected') === 'true') {
-      setSyncMessage('Strava connected! Click "Sync Activities" to import your workouts.');
-    } else if (searchParams.get('stravaError')) {
-      setSyncMessage(`Strava connection failed: ${searchParams.get('stravaError')}`);
-    }
-  }, [searchParams]);
-
-  const fetchActivities = async (userId: string) => {
+  const fetchActivities = useCallback(async (userId: string) => {
     try {
       const response = await fetch(`/api/activities?userId=${userId}`);
       if (response.ok) {
@@ -89,9 +72,9 @@ function DashboardContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchCurrentUser = async () => {
+  const fetchCurrentUser = useCallback(async () => {
     try {
       const response = await fetch('/api/user/me');
       if (response.ok) {
@@ -100,7 +83,26 @@ function DashboardContent() {
     } catch (error) {
       console.error('Error fetching current user:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/login');
+      return;
+    }
+    if (status === 'authenticated' && session.user.id) {
+      const userId = session.user.id;
+      const initialLoad = window.setTimeout(() => {
+        fetchActivities(userId);
+        fetchCurrentUser();
+        fetch('/api/users')
+          .then((res) => (res.ok ? res.json() : []))
+          .then(setUsers)
+          .catch(() => setUsers([]));
+      }, 0);
+      return () => window.clearTimeout(initialLoad);
+    }
+  }, [status, session, router, fetchActivities, fetchCurrentUser]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -156,14 +158,24 @@ function DashboardContent() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-12">
         {/* Header */}
-        <div className="flex justify-between items-center mb-12">
+        <div className="flex flex-wrap justify-between items-center gap-3 mb-12">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
-          <Link
-            href="/activities/new"
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          >
-            Log Activity
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            {currentUser && (
+              <Link
+                href={`/participants/${currentUser.id}`}
+                className="px-6 py-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+              >
+                View Profile
+              </Link>
+            )}
+            <Link
+              href="/activities/new"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              Log Activity
+            </Link>
+          </div>
         </div>
 
         {/* Strava Connection */}
@@ -186,6 +198,7 @@ function DashboardContent() {
           ) : (
             // Plain <a>, not next/link: this route redirects off-site to Strava,
             // and Next's client-side router mishandles external redirects from a Link.
+            // eslint-disable-next-line @next/next/no-html-link-for-pages
             <a
               href="/api/auth/strava"
               className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"

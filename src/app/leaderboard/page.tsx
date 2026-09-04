@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Activity, Bike, Footprints, RefreshCw, Search, Trophy, Users, Waves } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import UserActivitiesModal from '@/components/UserActivitiesModal';
 
 interface IndividualLeader {
   userId: string;
@@ -49,7 +49,6 @@ export default function LeaderboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
-  const [selectedUser, setSelectedUser] = useState<IndividualLeader | null>(null);
 
   const loadLeaderboard = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true);
@@ -113,14 +112,16 @@ export default function LeaderboardPage() {
             {podium.map((entry, index) => {
               const isPerson = 'userId' in entry;
               const score = isPerson ? entry[category] : entry[teamMetric];
-              return (
-                <button key={isPerson ? entry.userId : entry.columnId} onClick={() => isPerson && setSelectedUser(entry)} className={`rounded-2xl border p-5 text-left transition hover:-translate-y-1 ${index === 0 ? 'border-yellow-400/30 bg-yellow-400/10 sm:order-2' : 'border-white/10 bg-white/[0.04]'} ${index === 1 ? 'sm:order-1' : index === 2 ? 'sm:order-3' : ''}`}>
+              const className = `rounded-2xl border p-5 text-left transition hover:-translate-y-1 ${index === 0 ? 'border-yellow-400/30 bg-yellow-400/10 sm:order-2' : 'border-white/10 bg-white/[0.04]'} ${index === 1 ? 'sm:order-1' : index === 2 ? 'sm:order-3' : ''}`;
+              const content = <>
                   <span className="text-3xl">{rankLabel(index)}</span>
                   <p className="mt-4 truncate text-lg font-black">{isPerson ? entry.userName : entry.columnName}</p>
                   <p className="text-sm text-slate-400">{isPerson ? entry.columnName : `${entry.memberCount} members`}</p>
                   <p className="mt-4 text-2xl font-black text-orange-300">{score.toFixed(1)} <span className="text-xs font-medium text-slate-500">{!isPerson && teamMetric === 'averagePoints' ? 'avg pts' : 'pts'}</span></p>
-                </button>
-              );
+                </>;
+              return isPerson
+                ? <Link key={entry.userId} href={`/participants/${entry.userId}`} className={className}>{content}</Link>
+                : <div key={entry.columnId} className={className}>{content}</div>;
             })}
           </div>
         )}
@@ -150,12 +151,12 @@ export default function LeaderboardPage() {
           {loading ? <LoadingRows /> : view === 'individual' ? (
             individualResults.length ? individualResults.map((person, index) => {
               const max = individualResults[0]?.[category] || 1;
-              return <button key={person.userId} onClick={() => setSelectedUser(person)} className="grid w-full grid-cols-[3rem_1fr_auto] items-center gap-3 border-b border-white/5 px-4 py-4 text-left transition last:border-0 hover:bg-white/5 sm:grid-cols-[4rem_1fr_8rem_auto]">
+              return <Link key={person.userId} href={`/participants/${person.userId}`} className="grid w-full grid-cols-[3rem_1fr_auto] items-center gap-3 border-b border-white/5 px-4 py-4 text-left transition last:border-0 hover:bg-white/5 sm:grid-cols-[4rem_1fr_8rem_auto]">
                 <span className="text-center text-lg font-black">{rankLabel(index)}</span>
                 <span className="min-w-0"><span className="block truncate font-bold">{person.userName}</span><span className="block text-xs text-slate-500">{person.columnName}</span><span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-white/5"><span className="block h-full rounded-full bg-gradient-to-r from-orange-500 to-yellow-400" style={{ width: `${Math.max(3, person[category] / max * 100)}%` }} /></span></span>
                 <span className="hidden text-right text-sm text-slate-500 sm:block">{category === 'totalPoints' ? 'Overall' : categories.find((item) => item.key === category)?.label}</span>
                 <span className="font-black text-orange-300">{person[category].toFixed(1)} pts</span>
-              </button>;
+              </Link>;
             }) : <Empty />
           ) : teamResults.length ? teamResults.map((team, index) => {
             const max = teamResults[0]?.[teamMetric] || 1;
@@ -168,7 +169,6 @@ export default function LeaderboardPage() {
           }) : <Empty />}
         </div>
       </main>
-      {selectedUser && <UserActivitiesModal userId={selectedUser.userId} userName={selectedUser.userName} onClose={() => setSelectedUser(null)} />}
     </div>
   );
 }
