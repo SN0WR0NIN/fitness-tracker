@@ -5,8 +5,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Activity, ArrowRight, Clock3, Flame, Medal, RefreshCw, Sparkles, Trophy, Users } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import UserActivitiesModal from '@/components/UserActivitiesModal';
-import StravaIcon from '@/components/StravaIcon';
 import { formatDistance, formatDuration, formatPace } from '@/lib/format';
 import { getMapboxStaticMapUrl } from '@/lib/mapbox';
 
@@ -51,7 +49,6 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
-  const [selectedUser, setSelectedUser] = useState<{ userId: string; userName: string } | null>(null);
   const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null);
 
   const loadDashboard = useCallback(async (silent = false) => {
@@ -153,7 +150,7 @@ export default function Home() {
             <div className="grid gap-5 lg:grid-cols-2">
               <Board title="Individual leaders" icon={<Trophy className="h-5 w-5 text-yellow-300" />} href="/leaderboard">
                 {loading ? <Skeleton /> : individuals.length ? individuals.slice(0, 6).map((person, index) => (
-                  <button key={person.userId} onClick={() => setSelectedUser(person)} className="grid w-full grid-cols-[2.5rem_1fr_auto] items-center gap-3 border-t border-white/5 px-5 py-3.5 text-left transition hover:bg-white/5">
+                  <Link key={person.userId} href={`/participants/${person.userId}`} className="grid w-full grid-cols-[2.5rem_1fr_auto] items-center gap-3 border-t border-white/5 px-5 py-3.5 text-left transition hover:bg-white/5">
                     <span className="text-center font-black text-slate-300">{rankLabel(index)}</span>
                     <span className="min-w-0">
                       <span className="block truncate font-semibold">{person.userName}</span>
@@ -161,7 +158,7 @@ export default function Home() {
                       <Progress value={person.totalPoints / maxIndividual * 100} colour="bg-orange-400" />
                     </span>
                     <span className="font-black text-orange-300">{person.totalPoints.toFixed(1)}</span>
-                  </button>
+                  </Link>
                 )) : <Empty />}
               </Board>
               <Board title="Column standings" icon={<Users className="h-5 w-5 text-sky-300" />} href="/leaderboard?view=team">
@@ -188,17 +185,17 @@ export default function Home() {
                   const mapUrl = getMapboxStaticMapUrl(activity.mapPolyline, { width: 400, height: 300 });
                   const preview = activity.proofUrl || mapUrl;
                   return (
-                    <button key={activity.id} onClick={() => preview ? setEnlargedPhoto(preview) : setSelectedUser({ userId: activity.user.id, userName: activity.user.name })} className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] text-left transition hover:-translate-y-1 hover:border-white/20">
-                      <div className="relative flex h-36 items-center justify-center overflow-hidden bg-slate-900">
-                        {preview ? <Image src={preview} alt={`${activity.user.name}'s activity`} fill unoptimized sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" className="object-cover transition duration-500 group-hover:scale-105" /> : activity.stravaActivityId ? <StravaIcon className="h-14 w-14 text-orange-500" /> : <Activity className="h-14 w-14 text-slate-700" />}
+                    <div key={activity.id} className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] text-left transition hover:-translate-y-1 hover:border-white/20">
+                      {preview ? <button type="button" onClick={() => setEnlargedPhoto(preview)} aria-label={`Enlarge ${activity.user.name}'s activity proof`} className="relative flex h-36 w-full items-center justify-center overflow-hidden bg-slate-900">
+                        <Image src={preview} alt={`${activity.user.name}'s activity`} fill unoptimized sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" className="object-cover transition duration-500 group-hover:scale-105" />
                         <span className="absolute right-3 top-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-bold text-orange-300 backdrop-blur">+{activity.points.toFixed(1)} pts</span>
-                      </div>
+                      </button> : <Link href={`/participants/${activity.user.id}`} className="relative flex h-36 items-center justify-center overflow-hidden bg-slate-900"><Activity className="h-14 w-14 text-slate-700" /><span className="absolute right-3 top-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-bold text-orange-300 backdrop-blur">+{activity.points.toFixed(1)} pts</span></Link>}
                       <div className="p-4">
-                        <p className="font-bold">{activity.user.name}</p>
+                        <Link href={`/participants/${activity.user.id}`} className="font-bold transition hover:text-orange-300">{activity.user.name}</Link>
                         <p className="mt-1 text-sm text-slate-400">{activityLabel(activity.category)}{activity.distance ? ` · ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}` : ''}</p>
                         {(activity.duration || activity.pace || activity.elevationGain) && <p className="mt-2 text-xs text-slate-500">{[activity.duration ? formatDuration(activity.duration) : null, activity.pace ? `${formatPace(activity.pace)}/km` : null, activity.elevationGain ? `${Math.round(activity.elevationGain)}m elev` : null].filter(Boolean).join(' · ')}</p>}
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -207,7 +204,6 @@ export default function Home() {
         </div>
       </main>
 
-      {selectedUser && <UserActivitiesModal userId={selectedUser.userId} userName={selectedUser.userName} onClose={() => setSelectedUser(null)} />}
       {enlargedPhoto && <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setEnlargedPhoto(null)}><div className="relative h-full w-full"><Image src={enlargedPhoto} alt="Activity proof enlarged" fill unoptimized sizes="100vw" className="rounded-xl object-contain shadow-2xl" /></div></div>}
     </div>
   );
