@@ -3,15 +3,25 @@ import { randomUUID } from 'crypto';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { ensureProofBucketExists, uploadProofImage } from '@/lib/storage';
+import { getChallengeSettings } from '@/lib/admin-control';
+import { requestLog } from '@/lib/telemetry';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_SIZE_BYTES = 4 * 1024 * 1024; // 4MB — stays under serverless function payload limits
 
 export async function POST(request: NextRequest) {
+  const log = requestLog(request, '/api/upload');
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
+      log.success({ status: 401 });
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const settings = await getChallengeSettings();
+    if (settings.maintenanceMode && session.user.role !== 'ADMIN') {
+      log.success({ status: 503, maintenanceMode: true });
+      return NextResponse.json({ error: settings.maintenanceMessage }, { status: 503 });
     }
 
     const formData = await request.formData();
@@ -40,9 +50,10 @@ export async function POST(request: NextRequest) {
 
     const url = await uploadProofImage(buffer, fileName, file.type);
 
+    log.success({ status: 200, contentType: file.type, bytes: file.size });
     return NextResponse.json({ url });
   } catch (error) {
-    console.error('Error uploading proof image:', error);
+    log.failure(error);
     return NextResponse.json({ error: 'Failed to upload file' }, { status: 500 });
   }
 }

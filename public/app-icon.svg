@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="KG Stay Active">
+  <rect width="512" height="512" rx="112" fill="#07122f"/>
+  <path d="M58 115h396v282H58z" fill="#132554"/>
+  <path d="M58 315 214 159l73 73 67-67 100 100v132H58z" fill="#2353b8"/>
+  <circle cx="388" cy="122" r="48" fill="#fb923c"/>
+  <path d="M166 144h44v91l76-91h56l-91 101 97 123h-57l-71-91-10 11v80h-44V144z" fill="#fff"/>
+  <path d="M349 304h-43v-37h84v101c-23 9-49 14-76 14-70 0-116-48-116-124 0-75 49-127 121-127 28 0 51 6 70 17l-15 36c-16-9-33-13-52-13-45 0-76 33-76 84 0 53 28 88 73 88 12 0 22-1 30-4v-35z" fill="#ffd12a" opacity=".94"/>
+</svg>
