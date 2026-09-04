@@ -99,6 +99,7 @@ export default function AthleteDashboard({
   const [editingCompanionId, setEditingCompanionId] = useState<string | null>(null);
   const [companionSelect, setCompanionSelect] = useState('');
   const [savingCompanion, setSavingCompanion] = useState(false);
+  const activitySubmitted = searchParams.get('activitySubmitted') === 'true';
 
   const initials = profile.name.split(/\s+/).map((name) => name[0]).join('').slice(0, 2).toUpperCase();
   const approvedCount = activities.filter((activity) => activity.status === 'APPROVED').length;
@@ -178,6 +179,13 @@ export default function AthleteDashboard({
             </div>
           </div>
         </section>
+
+        {activitySubmitted ? (
+          <section role="status" className="flex items-start gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-emerald-100">
+            <Check className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+            <div><p className="font-black">Activity submitted</p><p className="mt-1 text-sm text-emerald-100/70">It is now in the review queue. Your points will count after an admin approves it.</p></div>
+          </section>
+        ) : null}
 
         <section className="flex flex-col gap-4 rounded-2xl border border-orange-400/20 bg-gradient-to-r from-orange-500/10 to-white/[0.03] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex items-center gap-4">

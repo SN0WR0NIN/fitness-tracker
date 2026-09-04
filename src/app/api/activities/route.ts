@@ -4,14 +4,19 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createActivity } from '@/lib/activities';
 import { z, ZodError } from 'zod';
+import type { Prisma } from '@prisma/client';
 
 // Validation schema for activity submission
 const ActivitySchema = z.object({
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']),
-  distance: z.number().optional(),
-  pace: z.number().optional(),
+  distance: z.number().positive('Distance must be greater than zero').max(100000, 'Distance is too large').optional(),
+  pace: z.number().positive('Pace must be greater than zero').max(60, 'Pace is too large').optional(),
   companionUserId: z.string().optional(),
   proofUrl: z.preprocess((val) => (val === '' ? undefined : val), z.string().url().optional()),
+}).superRefine((data, context) => {
+  if (data.category !== 'TROOP_GAMES' && data.distance === undefined) {
+    context.addIssue({ code: 'custom', path: ['distance'], message: 'Distance is required for this activity' });
+  }
 });
 
 export async function POST(request: NextRequest) {
@@ -62,7 +67,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating activity:', error);
     if (error instanceof ZodError) {
-      return NextResponse.json({ error: error.issues }, { status: 400 });
+      return NextResponse.json({ error: error.issues[0]?.message || 'Invalid activity details' }, { status: 400 });
     }
     return NextResponse.json(
       { error: 'Failed to create activity' },
@@ -80,11 +85,13 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const limit = searchParams.get('limit');
 
-    const where: any = {};
+    const where: Prisma.ActivityWhereInput = {};
     if (userId) where.userId = userId;
     if (columnId) where.columnId = columnId;
     if (weekNumber) where.weekNumber = parseInt(weekNumber);
-    if (status) where.status = status;
+    if (status === 'PENDING' || status === 'APPROVED' || status === 'REJECTED') {
+      where.status = status;
+    }
 
     const activities = await prisma.activity.findMany({
       where,
