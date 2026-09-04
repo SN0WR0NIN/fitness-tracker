@@ -6,11 +6,13 @@ import { getParticipantProfile } from '@/lib/participant-profile';
 import { prisma } from '@/lib/prisma';
 import { getCurrentWeekPoints, getSuggestedWeeklyGoal, getWeeklyStreak } from '@/lib/engagement';
 import { getActiveColumnIds, getChallengeSettings } from '@/lib/admin-control';
+import { getUserProfileSettings } from '@/lib/user-profile-settings';
 
 export const dynamic = 'force-dynamic';
 
 type DashboardUser = {
   stravaAthleteId: string | null;
+  email: string;
 };
 
 type DashboardActivity = {
@@ -48,14 +50,16 @@ export default async function DashboardPage() {
   const userId = session?.user?.id;
   if (!userId) redirect('/auth/login');
 
-  const [profile, userResult, activitiesResult, usersResult, communityResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
+  const [profile, userResult, profileSettings, activitiesResult, usersResult, communityResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
     getParticipantProfile(userId),
     prisma.user.findUnique({
       where: { id: userId },
       select: {
         stravaAthleteId: true,
+        email: true,
       },
     }),
+    getUserProfileSettings(userId),
     prisma.activity.findMany({
       where: { userId },
       orderBy: { occurredAt: 'desc' },
@@ -113,7 +117,8 @@ export default async function DashboardPage() {
     .sort((a, b) => b.totalPoints - a.totalPoints);
   if (!profile || !user) redirect('/auth/login');
 
-  const weeklyGoal = getSuggestedWeeklyGoal(profile.weeklyScores, settings.weeklyGoal);
+  const suggestedWeeklyGoal = getSuggestedWeeklyGoal(profile.weeklyScores, settings.weeklyGoal);
+  const weeklyGoal = profileSettings?.weeklyGoal ?? suggestedWeeklyGoal;
   const currentWeekPoints = getCurrentWeekPoints(profile.weeklyScores);
   const columnRankIndex = profile.column ? columnScores.findIndex((column) => column.columnId === profile.column?.id) : -1;
   const gapToNext = columnRankIndex > 0
@@ -142,6 +147,8 @@ export default async function DashboardPage() {
       }}
       currentUser={{
         stravaConnected: Boolean(user.stravaAthleteId),
+        email: user.email,
+        hasCustomWeeklyGoal: Boolean(profileSettings),
       }}
       engagement={{
         weeklyGoal,
