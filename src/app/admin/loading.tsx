@@ -1,0 +1,2 @@
+import Navbar from '@/components/Navbar';
+export default function AdminLoading() { return <div className="min-h-screen bg-slate-950 text-white"><Navbar /><main className="mx-auto max-w-7xl animate-pulse space-y-5 px-4 py-10"><div className="h-36 rounded-3xl bg-white/5" /><div className="grid gap-4 sm:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <div key={index} className="h-28 rounded-2xl bg-white/5" />)}</div><div className="h-96 rounded-2xl bg-white/5" /></main></div>; }

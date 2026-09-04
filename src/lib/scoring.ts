@@ -21,6 +21,38 @@ export type ActivityCategory =
 export const RUN_SLOW_PACE_THRESHOLD_MIN_PER_KM = 9; // runs slower than this are recategorized as a walk
 export const WALK_MIN_DISTANCE_KM = 5; // minimum distance for a Walk/Hike entry to count
 
+export type ScoringRules = {
+  runBasePerKm: number;
+  runFastBonusPerKm: number;
+  runMediumBonusPerKm: number;
+  runStandardBonusPerKm: number;
+  runFastPaceThreshold: number;
+  runMediumPaceThreshold: number;
+  runSlowPaceThreshold: number;
+  cycleKmPerPoint: number;
+  swimMetersPerPoint: number;
+  walkPointsPerKm: number;
+  walkMinimumKm: number;
+  troopGamePoints: number;
+  friendBonus: number;
+};
+
+export const DEFAULT_SCORING_RULES: ScoringRules = {
+  runBasePerKm: 1,
+  runFastBonusPerKm: 1.5,
+  runMediumBonusPerKm: 1,
+  runStandardBonusPerKm: 0.5,
+  runFastPaceThreshold: 5,
+  runMediumPaceThreshold: 6,
+  runSlowPaceThreshold: 9,
+  cycleKmPerPoint: 3,
+  swimMetersPerPoint: 100,
+  walkPointsPerKm: 1,
+  walkMinimumKm: 5,
+  troopGamePoints: 5,
+  friendBonus: 3,
+};
+
 interface ScoringInput {
   category: ActivityCategory;
   distance?: number; // km for run/cycle/hike, meters for swim
@@ -41,18 +73,19 @@ interface ScoringOutput {
  */
 export function resolveEffectiveCategory(
   category: ActivityCategory,
-  pace?: number
+  pace?: number,
+  rules: ScoringRules = DEFAULT_SCORING_RULES
 ): ActivityCategory {
-  if (category === 'RUN' && pace !== undefined && pace > RUN_SLOW_PACE_THRESHOLD_MIN_PER_KM) {
+  if (category === 'RUN' && pace !== undefined && pace > rules.runSlowPaceThreshold) {
     return 'WALK_OR_HIKE';
   }
   return category;
 }
 
-function runPaceBonusPerKm(pace: number): number {
-  if (pace < 5) return 1.5;
-  if (pace < 6) return 1.0;
-  return 0.5; // pace >= 6 (includes exactly 6:00/km)
+function runPaceBonusPerKm(pace: number, rules: ScoringRules): number {
+  if (pace < rules.runFastPaceThreshold) return rules.runFastBonusPerKm;
+  if (pace < rules.runMediumPaceThreshold) return rules.runMediumBonusPerKm;
+  return rules.runStandardBonusPerKm;
 }
 
 /**
@@ -60,41 +93,41 @@ function runPaceBonusPerKm(pace: number): number {
  * NOTE: callers should pass the category returned by resolveEffectiveCategory(),
  * not the raw user-selected category, so slow "runs" score as walks.
  */
-export function calculateActivityPoints(input: ScoringInput): ScoringOutput {
+export function calculateActivityPoints(input: ScoringInput, rules: ScoringRules = DEFAULT_SCORING_RULES): ScoringOutput {
   let basePoints = 0;
 
   switch (input.category) {
     case 'RUN':
       if (input.distance) {
-        const bonusPerKm = input.pace !== undefined ? runPaceBonusPerKm(input.pace) : 0;
-        basePoints = input.distance * (1 + bonusPerKm);
+        const bonusPerKm = input.pace !== undefined ? runPaceBonusPerKm(input.pace, rules) : 0;
+        basePoints = input.distance * (rules.runBasePerKm + bonusPerKm);
       }
       break;
 
     case 'CYCLE':
       if (input.distance) {
-        basePoints = input.distance / 3;
+        basePoints = input.distance / rules.cycleKmPerPoint;
       }
       break;
 
     case 'SWIM':
       if (input.distance) {
-        basePoints = input.distance / 100;
+        basePoints = input.distance / rules.swimMetersPerPoint;
       }
       break;
 
     case 'WALK_OR_HIKE':
-      if (input.distance && input.distance >= WALK_MIN_DISTANCE_KM) {
-        basePoints = input.distance;
+      if (input.distance && input.distance >= rules.walkMinimumKm) {
+        basePoints = input.distance * rules.walkPointsPerKm;
       }
       break;
 
     case 'TROOP_GAMES':
-      basePoints = 5;
+      basePoints = rules.troopGamePoints;
       break;
   }
 
-  const friendBonus = input.completedWithFriend ? 3 : 0;
+  const friendBonus = input.completedWithFriend ? rules.friendBonus : 0;
   const totalPoints = Math.ceil((basePoints + friendBonus) * 2) / 2;
 
   return {

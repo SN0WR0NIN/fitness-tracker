@@ -7,14 +7,14 @@ type WeekScore = {
 
 export const DEFAULT_WEEKLY_GOAL = 25;
 
-export function getSuggestedWeeklyGoal(weeks: WeekScore[]): number {
+export function getSuggestedWeeklyGoal(weeks: WeekScore[], minimumGoal = DEFAULT_WEEKLY_GOAL): number {
   const completedWeeks = weeks
     .filter((week) => week.weekStart.getTime() < getWeekStart(new Date()).getTime() && week.totalPoints > 0)
     .slice(-3);
 
-  if (!completedWeeks.length) return DEFAULT_WEEKLY_GOAL;
+  if (!completedWeeks.length) return minimumGoal;
   const average = completedWeeks.reduce((sum, week) => sum + week.totalPoints, 0) / completedWeeks.length;
-  return Math.max(DEFAULT_WEEKLY_GOAL, Math.ceil(average / 5) * 5);
+  return Math.max(minimumGoal, Math.ceil(average / 5) * 5);
 }
 
 export function getCurrentWeekPoints(weeks: WeekScore[], now = new Date()): number {

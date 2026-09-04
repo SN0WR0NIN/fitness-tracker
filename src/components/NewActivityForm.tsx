@@ -6,18 +6,26 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { ArrowLeft, CheckCircle2, ImagePlus, Info, Sparkles, Upload, Users, X } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import { calculateActivityPoints, resolveEffectiveCategory, type ActivityCategory } from '@/lib/scoring';
+import { calculateActivityPoints, resolveEffectiveCategory, type ActivityCategory, type ScoringRules } from '@/lib/scoring';
 
 type SelectableUser = { id: string; name: string };
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
-const ACTIVITY_CATEGORIES: Array<{ value: ActivityCategory; label: string; icon: string; description: string }> = [
-  { value: 'RUN', label: 'Run', icon: '🏃', description: 'Distance with a pace bonus' },
-  { value: 'CYCLE', label: 'Cycle', icon: '🚴', description: '1 point for every 3km' },
-  { value: 'SWIM', label: 'Swim', icon: '🏊', description: '1 point for every 100m' },
-  { value: 'WALK_OR_HIKE', label: 'Walk / Hike', icon: '🥾', description: 'Minimum 5km to score' },
-  { value: 'TROOP_GAMES', label: 'Troop Games', icon: '🎯', description: '5 points per session' },
+const ACTIVITY_CATEGORIES: Array<{ value: ActivityCategory; label: string; icon: string }> = [
+  { value: 'RUN', label: 'Run', icon: '🏃' },
+  { value: 'CYCLE', label: 'Cycle', icon: '🚴' },
+  { value: 'SWIM', label: 'Swim', icon: '🏊' },
+  { value: 'WALK_OR_HIKE', label: 'Walk / Hike', icon: '🥾' },
+  { value: 'TROOP_GAMES', label: 'Troop Games', icon: '🎯' },
 ];
+
+function scoringDescription(category: ActivityCategory, rules: ScoringRules) {
+  if (category === 'RUN') return `${rules.runBasePerKm} point/km plus pace bonus`;
+  if (category === 'CYCLE') return `1 point for every ${rules.cycleKmPerPoint}km`;
+  if (category === 'SWIM') return `1 point for every ${rules.swimMetersPerPoint}m`;
+  if (category === 'WALK_OR_HIKE') return `${rules.walkPointsPerKm} point/km · minimum ${rules.walkMinimumKm}km`;
+  return `${rules.troopGamePoints} points per session`;
+}
 
 function parsePace(value: string): number | undefined {
   if (!value.trim()) return undefined;
@@ -32,7 +40,7 @@ function parsePace(value: string): number | undefined {
   return Number.isFinite(decimalPace) ? decimalPace : undefined;
 }
 
-export default function NewActivityForm({ users }: { users: SelectableUser[] }) {
+export default function NewActivityForm({ users, scoringRules }: { users: SelectableUser[]; scoringRules: ScoringRules }) {
   const router = useRouter();
   const [category, setCategory] = useState<ActivityCategory>('RUN');
   const [distance, setDistance] = useState('');
@@ -47,21 +55,21 @@ export default function NewActivityForm({ users }: { users: SelectableUser[] }) 
 
   const distanceNumber = distance ? Number(distance) : undefined;
   const paceNumber = parsePace(pace);
-  const effectiveCategory = resolveEffectiveCategory(category, paceNumber);
+  const effectiveCategory = resolveEffectiveCategory(category, paceNumber, scoringRules);
   const preview = useMemo(() => calculateActivityPoints({
     category: effectiveCategory,
     distance: distanceNumber,
     pace: paceNumber,
     completedWithFriend: withFriend && Boolean(companionUserId),
-  }), [effectiveCategory, distanceNumber, paceNumber, withFriend, companionUserId]);
+  }, scoringRules), [effectiveCategory, distanceNumber, paceNumber, withFriend, companionUserId, scoringRules]);
 
   const validationMessage = useMemo(() => {
     if (category !== 'TROOP_GAMES' && (!distanceNumber || distanceNumber <= 0)) return 'Enter a distance greater than zero.';
-    if (category === 'WALK_OR_HIKE' && distanceNumber && distanceNumber < 5) return 'Walks under 5km do not earn points.';
+    if (category === 'WALK_OR_HIKE' && distanceNumber && distanceNumber < scoringRules.walkMinimumKm) return `Walks under ${scoringRules.walkMinimumKm}km do not earn points.`;
     if (category === 'RUN' && pace && (paceNumber === undefined || paceNumber <= 0)) return 'Use a positive pace such as 6:30 or 6.5.';
     if (withFriend && !companionUserId) return 'Select the registered friend who joined you.';
     return '';
-  }, [category, distanceNumber, pace, paceNumber, withFriend, companionUserId]);
+  }, [category, distanceNumber, pace, paceNumber, withFriend, companionUserId, scoringRules.walkMinimumKm]);
 
   const chooseCategory = (nextCategory: ActivityCategory) => {
     setCategory(nextCategory);
@@ -140,7 +148,7 @@ export default function NewActivityForm({ users }: { users: SelectableUser[] }) 
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 {ACTIVITY_CATEGORIES.map((item) => (
                   <button key={item.value} type="button" onClick={() => chooseCategory(item.value)} aria-pressed={category === item.value} className={`rounded-2xl border p-4 text-left transition ${category === item.value ? 'border-orange-400 bg-orange-400/10 ring-1 ring-orange-400/30' : 'border-white/10 bg-black/10 hover:bg-white/5'}`}>
-                    <span className="text-2xl">{item.icon}</span><span className="mt-3 block text-sm font-black">{item.label}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{item.description}</span>
+                    <span className="text-2xl">{item.icon}</span><span className="mt-3 block text-sm font-black">{item.label}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{scoringDescription(item.value, scoringRules)}</span>
                   </button>
                 ))}
               </div>
@@ -148,12 +156,12 @@ export default function NewActivityForm({ users }: { users: SelectableUser[] }) 
 
             <FormSection number="2" title="Enter your result" subtitle="Use the figures shown in your fitness app or screenshot.">
               <div className="grid gap-4 sm:grid-cols-2">
-                {category !== 'TROOP_GAMES' ? <label className="block"><span className="text-sm font-semibold text-slate-300">Distance ({category === 'SWIM' ? 'metres' : 'km'})</span><input type="number" min="0" step={category === 'SWIM' ? '1' : '0.01'} required value={distance} onChange={(event) => setDistance(event.target.value)} placeholder={category === 'SWIM' ? 'e.g. 1000' : 'e.g. 5.00'} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-orange-400" /></label> : <div className="rounded-xl border border-violet-400/20 bg-violet-400/10 p-4 text-sm text-violet-200 sm:col-span-2"><Info className="mb-2 h-5 w-5" />Troop Games earn 5 points per approved session. No distance is required.</div>}
-                {category === 'RUN' ? <label className="block"><span className="text-sm font-semibold text-slate-300">Average pace (min/km)</span><input type="text" inputMode="decimal" value={pace} onChange={(event) => setPace(event.target.value)} placeholder="e.g. 6:30" className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-orange-400" /><span className="mt-2 block text-xs text-slate-500">You may enter 6:30 or 6.5. Above 9:00/km is scored as Walk / Hike.</span></label> : null}
+                {category !== 'TROOP_GAMES' ? <label className="block"><span className="text-sm font-semibold text-slate-300">Distance ({category === 'SWIM' ? 'metres' : 'km'})</span><input type="number" min="0" step={category === 'SWIM' ? '1' : '0.01'} required value={distance} onChange={(event) => setDistance(event.target.value)} placeholder={category === 'SWIM' ? 'e.g. 1000' : 'e.g. 5.00'} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-orange-400" /></label> : <div className="rounded-xl border border-violet-400/20 bg-violet-400/10 p-4 text-sm text-violet-200 sm:col-span-2"><Info className="mb-2 h-5 w-5" />Troop Games earn {scoringRules.troopGamePoints} points per approved session. No distance is required.</div>}
+                {category === 'RUN' ? <label className="block"><span className="text-sm font-semibold text-slate-300">Average pace (min/km)</span><input type="text" inputMode="decimal" value={pace} onChange={(event) => setPace(event.target.value)} placeholder="e.g. 6:30" className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-orange-400" /><span className="mt-2 block text-xs text-slate-500">You may enter 6:30 or 6.5. Above {scoringRules.runSlowPaceThreshold}:00/km is scored as Walk / Hike.</span></label> : null}
               </div>
             </FormSection>
 
-            <FormSection number="3" title="Add a teammate" subtitle="A registered companion adds the official 3-point friend bonus.">
+            <FormSection number="3" title="Add a teammate" subtitle={`A registered companion adds the official ${scoringRules.friendBonus}-point friend bonus.`}>
               <label className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition ${withFriend ? 'border-sky-400/30 bg-sky-400/10' : 'border-white/10 bg-black/10'}`}><input type="checkbox" checked={withFriend} onChange={(event) => { setWithFriend(event.target.checked); if (!event.target.checked) setCompanionUserId(''); }} className="h-4 w-4 accent-sky-400" /><Users className="h-5 w-5 text-sky-300" /><span className="text-sm font-bold">I completed this with a registered participant</span></label>
               {withFriend ? <label className="mt-4 block"><span className="text-sm font-semibold text-slate-300">Companion</span><select required value={companionUserId} onChange={(event) => setCompanionUserId(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-sky-400"><option value="">Select a participant…</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label> : null}
             </FormSection>

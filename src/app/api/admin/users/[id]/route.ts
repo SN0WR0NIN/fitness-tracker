@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z, ZodError } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/adminGuard';
+import { recordAdminAudit } from '@/lib/admin-control';
 
 const UpdateUserSchema = z.object({
   role: z.enum(['MEMBER', 'ADMIN']).optional(),
@@ -53,6 +54,8 @@ export async function PATCH(
       },
     });
 
+    await recordAdminAudit(guard.userId, 'Updated participant', updated.name, data);
+
     return NextResponse.json(updated);
   } catch (error) {
     if (error instanceof ZodError) {
@@ -99,6 +102,8 @@ export async function DELETE(
 
     // Activities and weekly scores cascade-delete automatically via the schema's onDelete: Cascade
     await prisma.user.delete({ where: { id } });
+
+    await recordAdminAudit(guard.userId, 'Deleted participant', target.name, { id });
 
     return NextResponse.json({ success: true });
   } catch (error) {

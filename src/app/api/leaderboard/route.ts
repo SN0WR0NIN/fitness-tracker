@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActiveColumnIds } from '@/lib/admin-control';
 
 type WeeklyScoreRow = {
   userId: string;
@@ -122,8 +123,10 @@ async function getIndividualLeaderboard(weekNumber: string | null) {
 }
 
 async function getTeamLeaderboard(weekNumber: string | null) {
+  const activeColumnIds = await getActiveColumnIds();
   // Get all columns with their members
   const columns = await prisma.column.findMany({
+    where: { id: { in: activeColumnIds } },
     include: {
       members: {
         include: {

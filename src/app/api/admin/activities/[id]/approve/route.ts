@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminGuard';
 import { approveActivity } from '@/lib/activities';
+import { recordAdminAudit } from '@/lib/admin-control';
 
 export async function POST(
   request: Request,
@@ -14,6 +15,7 @@ export async function POST(
   try {
     const { id } = await params;
     const activity = await approveActivity(id, guard.userId);
+    await recordAdminAudit(guard.userId, 'Approved activity', id, { points: activity.points });
     return NextResponse.json(activity);
   } catch (error) {
     console.error('Error approving activity:', error);

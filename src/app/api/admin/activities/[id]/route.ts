@@ -3,6 +3,7 @@ import { z, ZodError } from 'zod';
 import { requireAdmin } from '@/lib/adminGuard';
 import { updateActivity } from '@/lib/activities';
 import { prisma } from '@/lib/prisma';
+import { recordAdminAudit } from '@/lib/admin-control';
 
 const EditActivitySchema = z.object({
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']).optional(),
@@ -44,6 +45,7 @@ export async function PATCH(
     }
 
     const activity = await updateActivity(id, data);
+    await recordAdminAudit(guard.userId, 'Corrected activity', id, data);
     return NextResponse.json(activity);
   } catch (error) {
     if (error instanceof ZodError) {
