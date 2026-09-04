@@ -4,6 +4,7 @@ import AthleteDashboard from '@/components/AthleteDashboard';
 import { authOptions } from '@/lib/auth';
 import { getParticipantProfile } from '@/lib/participant-profile';
 import { prisma } from '@/lib/prisma';
+import { getCurrentWeekPoints, getSuggestedWeeklyGoal, getWeeklyStreak } from '@/lib/engagement';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,12 +30,24 @@ type DashboardActivity = {
 
 type SelectableUser = { id: string; name: string };
 
+type CommunityActivity = {
+  id: string;
+  category: 'RUN' | 'CYCLE' | 'SWIM' | 'WALK_OR_HIKE' | 'TROOP_GAMES';
+  distance: number;
+  points: number;
+  occurredAt: Date;
+  user: { id: string; name: string };
+  column: { name: string };
+};
+
+type ColumnScore = { columnId: string; _sum: { totalPoints: number | null } };
+
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id;
   if (!userId) redirect('/auth/login');
 
-  const [profile, userResult, activitiesResult, usersResult] = await Promise.all([
+  const [profile, userResult, activitiesResult, usersResult, communityResult, columnScoresResult] = await Promise.all([
     getParticipantProfile(userId),
     prisma.user.findUnique({
       where: { id: userId },
@@ -66,12 +79,41 @@ export default async function DashboardPage() {
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
+    prisma.activity.findMany({
+      where: { status: 'APPROVED' },
+      orderBy: { reviewedAt: 'desc' },
+      take: 6,
+      select: {
+        id: true,
+        category: true,
+        distance: true,
+        points: true,
+        occurredAt: true,
+        user: { select: { id: true, name: true } },
+        column: { select: { name: true } },
+      },
+    }),
+    prisma.weeklyScore.groupBy({
+      by: ['columnId'],
+      _sum: { totalPoints: true },
+    }),
   ]);
 
   const user = userResult as DashboardUser | null;
   const activities = activitiesResult as DashboardActivity[];
   const users = usersResult as SelectableUser[];
+  const communityActivities = communityResult as CommunityActivity[];
+  const columnScores = (columnScoresResult as ColumnScore[])
+    .map((column) => ({ columnId: column.columnId, totalPoints: column._sum.totalPoints ?? 0 }))
+    .sort((a, b) => b.totalPoints - a.totalPoints);
   if (!profile || !user) redirect('/auth/login');
+
+  const weeklyGoal = getSuggestedWeeklyGoal(profile.weeklyScores);
+  const currentWeekPoints = getCurrentWeekPoints(profile.weeklyScores);
+  const columnRankIndex = profile.column ? columnScores.findIndex((column) => column.columnId === profile.column?.id) : -1;
+  const gapToNext = columnRankIndex > 0
+    ? Math.max(0, columnScores[columnRankIndex - 1].totalPoints - columnScores[columnRankIndex].totalPoints)
+    : 0;
 
   return (
     <AthleteDashboard
@@ -96,6 +138,18 @@ export default async function DashboardPage() {
       currentUser={{
         stravaConnected: Boolean(user.stravaAthleteId),
       }}
+      engagement={{
+        weeklyGoal,
+        currentWeekPoints,
+        weeklyStreak: getWeeklyStreak(profile.weeklyScores),
+        columnRank: columnRankIndex >= 0 ? columnRankIndex + 1 : null,
+        columnCount: columnScores.length,
+        gapToNext,
+      }}
+      communityActivities={communityActivities.map((activity) => ({
+        ...activity,
+        occurredAt: activity.occurredAt.toISOString(),
+      }))}
       activities={activities.map((activity) => ({
         ...activity,
         occurredAt: activity.occurredAt.toISOString(),

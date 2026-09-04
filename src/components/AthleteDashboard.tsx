@@ -8,11 +8,16 @@ import {
   Award,
   Bike,
   Check,
+  Clock3,
   ExternalLink,
+  Flame,
   Footprints,
   Medal,
+  PartyPopper,
   Plus,
   Sparkles,
+  Target,
+  TrendingUp,
   Trophy,
   Users,
   Waves,
@@ -59,6 +64,25 @@ type DashboardActivity = {
 
 type SelectableUser = { id: string; name: string };
 
+type Engagement = {
+  weeklyGoal: number;
+  currentWeekPoints: number;
+  weeklyStreak: number;
+  columnRank: number | null;
+  columnCount: number;
+  gapToNext: number;
+};
+
+type CommunityActivity = {
+  id: string;
+  category: ActivityCategory;
+  distance: number;
+  points: number;
+  occurredAt: string;
+  user: { id: string; name: string };
+  column: { name: string };
+};
+
 const categoryIcons = {
   RUN: Footprints,
   CYCLE: Bike,
@@ -80,11 +104,15 @@ export default function AthleteDashboard({
   currentUser,
   activities,
   users,
+  engagement,
+  communityActivities,
 }: {
   profile: DashboardProfile;
   currentUser: CurrentUser;
   activities: DashboardActivity[];
   users: SelectableUser[];
+  engagement: Engagement;
+  communityActivities: CommunityActivity[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -106,6 +134,8 @@ export default function AthleteDashboard({
   const pendingCount = activities.filter((activity) => activity.status === 'PENDING').length;
   const unlockedCount = profile.achievements.filter((achievement) => achievement.unlocked).length;
   const maxWeekPoints = Math.max(...profile.weeklyScores.map((week) => week.totalPoints), 1);
+  const goalProgress = Math.min(100, engagement.currentWeekPoints / engagement.weeklyGoal * 100);
+  const latestUnlockedAchievement = [...profile.achievements].reverse().find((achievement) => achievement.unlocked);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -201,6 +231,17 @@ export default function AthleteDashboard({
           )}
         </section>
 
+        <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr]">
+          <div className="flex items-center gap-5 rounded-2xl border border-orange-400/20 bg-gradient-to-br from-orange-400/10 to-white/[0.04] p-5 sm:p-6">
+            <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full p-2" style={{ background: `conic-gradient(#f97316 ${goalProgress * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}>
+              <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-slate-950"><span className="text-2xl font-black">{Math.round(goalProgress)}%</span><span className="text-[0.65rem] text-slate-500">complete</span></div>
+            </div>
+            <div><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-orange-300"><Target className="h-4 w-4" />Weekly target</p><p className="mt-3 text-3xl font-black">{engagement.currentWeekPoints.toFixed(1)} <span className="text-base text-slate-500">/ {engagement.weeklyGoal.toFixed(0)} pts</span></p><p className="mt-2 text-sm text-slate-400">{goalProgress >= 100 ? 'Goal complete — keep building the lead.' : `${Math.max(0, engagement.weeklyGoal - engagement.currentWeekPoints).toFixed(1)} points to reach your personalised target.`}</p></div>
+          </div>
+          <EngagementCard icon={<Flame className="h-6 w-6" />} tone="text-orange-300 bg-orange-400/10" label="Active streak" value={`${engagement.weeklyStreak} ${engagement.weeklyStreak === 1 ? 'week' : 'weeks'}`} detail={engagement.weeklyStreak ? 'Log this week to keep it alive.' : 'Your first approved week starts it.'} />
+          <EngagementCard icon={<TrendingUp className="h-6 w-6" />} tone="text-sky-300 bg-sky-400/10" label="Column momentum" value={engagement.columnRank ? `#${engagement.columnRank} of ${engagement.columnCount}` : 'Not ranked'} detail={engagement.columnRank === 1 ? 'Your column leads the challenge.' : engagement.columnRank ? `${engagement.gapToNext.toFixed(1)} points to the next place.` : 'Earn points to enter the standings.'} />
+        </section>
+
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
             <SectionTitle icon={<Trophy className="h-5 w-5 text-yellow-300" />} title="Weekly progress" subtitle="Your approved points by week" />
@@ -233,6 +274,7 @@ export default function AthleteDashboard({
 
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <SectionTitle icon={<Award className="h-5 w-5 text-yellow-300" />} title="Achievements" subtitle={`${unlockedCount} unlocked · keep moving for the rest`} />
+          {latestUnlockedAchievement ? <div className="mt-5 flex items-start gap-3 rounded-2xl border border-yellow-300/20 bg-gradient-to-r from-yellow-300/10 to-orange-400/5 p-4"><span className="rounded-xl bg-yellow-300 p-2.5 text-slate-950"><PartyPopper className="h-5 w-5" /></span><div><p className="text-xs font-black uppercase tracking-wider text-yellow-300">Latest badge unlocked</p><p className="mt-1 font-black text-yellow-100">{latestUnlockedAchievement.name}</p><p className="mt-1 text-sm text-slate-400">{latestUnlockedAchievement.description}</p></div></div> : null}
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {profile.achievements.map((achievement) => (
               <div key={achievement.name} className={`rounded-xl border p-4 ${achievement.unlocked ? 'border-yellow-400/20 bg-yellow-400/10' : 'border-white/5 bg-black/10'}`}>
@@ -245,6 +287,14 @@ export default function AthleteDashboard({
           </div>
         </section>
 
+        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
+          <SectionTitle icon={<Clock3 className="h-5 w-5 text-emerald-300" />} title="Live activity feed" subtitle="Recently approved efforts from across Kilo Golf" />
+          {communityActivities.length ? <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{communityActivities.map((activity) => {
+            const Icon = categoryIcons[activity.category];
+            return <Link key={activity.id} href={`/participants/${activity.user.id}`} className="group rounded-xl border border-white/5 bg-black/10 p-4 transition hover:border-emerald-400/20 hover:bg-emerald-400/5"><div className="flex items-start justify-between gap-3"><span className="rounded-xl bg-emerald-400/10 p-2 text-emerald-300"><Icon className="h-5 w-5" /></span><span className="font-black text-emerald-300">+{activity.points.toFixed(1)}</span></div><p className="mt-4 font-black transition group-hover:text-emerald-200">{activity.user.name}</p><p className="mt-1 text-xs text-slate-500">{activity.column.name} · {categoryLabels[activity.category]}{activity.distance ? ` · ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}` : ''}</p><p className="mt-2 text-[0.65rem] text-slate-600">{new Date(activity.occurredAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' })}</p></Link>;
+          })}</div> : <Empty message="Approved activities from the team will appear here." />}
+        </section>
+
         <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
           <div className="flex flex-wrap items-end justify-between gap-3 p-5 sm:p-6">
             <SectionTitle icon={<Activity className="h-5 w-5 text-emerald-300" />} title="My activities" subtitle="Track approvals and manage synced workouts" />
@@ -255,7 +305,7 @@ export default function AthleteDashboard({
               {activities.map((activity) => {
                 const Icon = categoryIcons[activity.category];
                 return (
-                  <div key={activity.id} className="grid gap-4 border-t border-white/5 px-5 py-4 sm:px-6 lg:grid-cols-[auto_1fr_auto_auto] lg:items-center">
+                  <div id={`activity-${activity.id}`} key={activity.id} className="grid scroll-mt-24 gap-4 border-t border-white/5 px-5 py-4 sm:px-6 lg:grid-cols-[auto_1fr_auto_auto] lg:items-center">
                     <span className="hidden rounded-xl bg-white/5 p-2.5 text-slate-300 lg:block"><Icon className="h-5 w-5" /></span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2"><p className="font-bold">{categoryLabels[activity.category]}</p><Status status={activity.status} /></div>
@@ -290,6 +340,10 @@ export default function AthleteDashboard({
 
 function HeroStat({ label, value, detail }: { label: string; value: string; detail: string }) {
   return <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"><p className="text-xs text-slate-400">{label}</p><p className="mt-2 text-2xl font-black">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>;
+}
+
+function EngagementCard({ icon, tone, label, value, detail }: { icon: React.ReactNode; tone: string; label: string; value: string; detail: string }) {
+  return <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><span className={`inline-flex rounded-xl p-2.5 ${tone}`}>{icon}</span><p className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-2 text-2xl font-black">{value}</p><p className="mt-2 text-xs leading-5 text-slate-500">{detail}</p></div>;
 }
 
 function SectionTitle({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
