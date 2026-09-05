@@ -32,9 +32,10 @@ const uniqueIds = (rows, name) => {
   }
   return seen;
 };
+const pick = (row, camel, snake) => row?.[camel] ?? row?.[snake];
 
 assert(backup?.format === 'kg-stay-active-operational-backup', 'Unexpected backup format');
-assert([1, 2, 3].includes(backup?.version), 'Unsupported backup version');
+assert([1, 2, 3, 4].includes(backup?.version), 'Unsupported backup version');
 assert(typeof backup?.exportedAt === 'string' && Number.isFinite(Date.parse(backup.exportedAt)), 'exportedAt must be an ISO date');
 assert(backup?.challenge && typeof backup.challenge === 'object', 'challenge settings are missing');
 
@@ -46,6 +47,8 @@ const profileSettings = optionalArray(backup?.profileSettings, 'profileSettings'
 const weeklyGoals = optionalArray(backup?.weeklyGoals, 'weeklyGoals');
 const rankingSnapshots = optionalArray(backup?.rankingSnapshots, 'rankingSnapshots');
 const duplicateReviews = optionalArray(backup?.duplicateReviews, 'duplicateReviews');
+const weeklyResults = optionalArray(backup?.weeklyResults, 'weeklyResults');
+const notifications = optionalArray(backup?.notifications, 'notifications');
 array(backup?.announcements, 'announcements');
 array(backup?.audit, 'audit');
 
@@ -101,12 +104,12 @@ for (const row of weeklyGoals) {
 
 const reviewKeys = new Set();
 for (const review of duplicateReviews) {
-  const pairKey = review?.pair_key ?? review?.pairKey;
-  const activityAId = review?.activity_a_id ?? review?.activityAId;
-  const activityBId = review?.activity_b_id ?? review?.activityBId;
+  const pairKey = pick(review, 'pairKey', 'pair_key');
+  const activityAId = pick(review, 'activityAId', 'activity_a_id');
+  const activityBId = pick(review, 'activityBId', 'activity_b_id');
   const status = review?.status;
-  const duplicateActivityId = review?.duplicate_activity_id ?? review?.duplicateActivityId ?? null;
-  const keptActivityId = review?.kept_activity_id ?? review?.keptActivityId ?? null;
+  const duplicateActivityId = pick(review, 'duplicateActivityId', 'duplicate_activity_id') ?? null;
+  const keptActivityId = pick(review, 'keptActivityId', 'kept_activity_id') ?? null;
   assert(typeof pairKey === 'string' && pairKey.length > 0, 'Duplicate review is missing pair key');
   if (typeof pairKey === 'string') {
     assert(!reviewKeys.has(pairKey), `Duplicate review contains duplicate pair key ${pairKey}`);
@@ -120,6 +123,41 @@ for (const review of duplicateReviews) {
     assert([activityAId, activityBId].includes(keptActivityId), `Duplicate review ${pairKey} has invalid kept activity`);
     assert(duplicateActivityId !== keptActivityId, `Duplicate review ${pairKey} cannot keep and reject the same activity`);
   }
+}
+
+const resultKeys = new Set();
+for (const result of weeklyResults) {
+  const seasonKey = pick(result, 'seasonKey', 'season_key');
+  const weekNumber = pick(result, 'weekNumber', 'week_number');
+  const key = `${seasonKey}|${weekNumber}`;
+  assert(typeof seasonKey === 'string' && seasonKey.length > 0, 'Weekly result is missing season key');
+  assert(Number.isInteger(weekNumber) && weekNumber > 0, `Weekly result ${key} has invalid week number`);
+  assert(!resultKeys.has(key), `Weekly results contain duplicate week ${key}`);
+  resultKeys.add(key);
+  const awards = result?.awards;
+  const athleteStandings = pick(result, 'athleteStandings', 'athlete_standings');
+  const columnStandings = pick(result, 'columnStandings', 'column_standings');
+  assert(Array.isArray(awards), `Weekly result ${key} awards must be an array`);
+  assert(Array.isArray(athleteStandings), `Weekly result ${key} athlete standings must be an array`);
+  assert(Array.isArray(columnStandings), `Weekly result ${key} column standings must be an array`);
+  for (const award of Array.isArray(awards) ? awards : []) {
+    assert(typeof award?.type === 'string' && typeof award?.entityId === 'string', `Weekly result ${key} contains an invalid award`);
+    if (award?.entityType === 'USER') assert(userIds.has(award.entityId), `Weekly result ${key} award references missing user ${award.entityId}`);
+    if (award?.entityType === 'COLUMN') assert(columnIds.has(award.entityId), `Weekly result ${key} award references missing column ${award.entityId}`);
+  }
+}
+
+const notificationIds = new Set();
+const notificationKeys = new Set();
+for (const notification of notifications) {
+  const id = String(notification?.id ?? '');
+  const userId = pick(notification, 'userId', 'user_id');
+  const dedupeKey = pick(notification, 'dedupeKey', 'dedupe_key');
+  assert(id.length > 0, 'Notification is missing id');
+  if (id) { assert(!notificationIds.has(id), `Duplicate notification id ${id}`); notificationIds.add(id); }
+  assert(userIds.has(userId), `Notification ${id} references missing user ${userId}`);
+  assert(typeof dedupeKey === 'string' && dedupeKey.length > 0, `Notification ${id} is missing dedupe key`);
+  if (typeof dedupeKey === 'string') { assert(!notificationKeys.has(dedupeKey), `Duplicate notification dedupe key ${dedupeKey}`); notificationKeys.add(dedupeKey); }
 }
 
 if (errors.length) {
@@ -140,5 +178,7 @@ console.log(JSON.stringify({
   weeklyGoals: weeklyGoals.length,
   rankingSnapshots: rankingSnapshots.length,
   duplicateReviews: duplicateReviews.length,
+  weeklyResults: weeklyResults.length,
+  notifications: notifications.length,
   excludes: backup.excludes || [],
 }, null, 2));
