@@ -1,4 +1,5 @@
 'use client';
+import WeeklyProgressChart from '@/components/WeeklyProgressChart';
 import ApprovedActivityDateEditor from '@/components/ApprovedActivityDateEditor';
 
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -11,7 +12,6 @@ import {
   Bike,
   Camera,
   Check,
-  CheckCircle2,
   Clock3,
   Download,
   ExternalLink,
@@ -25,7 +25,6 @@ import {
   Share2,
   Target,
   TrendingUp,
-  Trophy,
   Trash2,
   Users,
   Waves,
@@ -94,7 +93,7 @@ type Engagement = {
   remainingPoints: number;
   goalCompletionStreak: number;
   milestone: 0 | 50 | 80 | 100;
-  goalHistory: Array<{ weekNumber: number; points: number; target: number; achieved: boolean; current: boolean }>;
+  goalHistory: Array<{ weekNumber: number; dateRange: string; points: number; target: number; achieved: boolean; current: boolean }>;
 };
 
 type CommunityActivity = {
@@ -187,9 +186,7 @@ export default function AthleteDashboard({
   const approvedCount = activities.filter((activity) => activity.status === 'APPROVED').length;
   const pendingCount = activities.filter((activity) => activity.status === 'PENDING').length;
   const unlockedCount = profile.achievements.filter((achievement) => achievement.unlocked).length;
-  const maxWeekPoints = Math.max(...profile.weeklyScores.map((week) => week.totalPoints), 1);
   const goalProgress = Math.min(100, engagement.currentWeekPoints / engagement.weeklyGoal * 100);
-  const maxGoalHistory = Math.max(...engagement.goalHistory.flatMap((week) => [week.points, week.target]), 1);
   const goalStatusLabel = engagement.goalStatus === 'achieved' ? 'Goal achieved' : engagement.goalStatus === 'on-track' ? 'On track' : 'At risk';
   const goalStatusStyle = engagement.goalStatus === 'achieved' ? 'bg-emerald-400/10 text-emerald-300' : engagement.goalStatus === 'on-track' ? 'bg-sky-400/10 text-sky-300' : 'bg-rose-400/10 text-rose-300';
   const latestUnlockedAchievement = [...profile.achievements].reverse().find((achievement) => achievement.unlocked);
@@ -381,39 +378,9 @@ export default function AthleteDashboard({
           <EngagementCard icon={<TrendingUp className="h-6 w-6" />} tone="text-sky-300 bg-sky-400/10" label="Column momentum" value={engagement.columnRank ? `#${engagement.columnRank} of ${engagement.columnCount}` : 'Not ranked'} detail={engagement.columnRank === 1 ? 'Your column leads the challenge.' : engagement.columnRank ? `${engagement.gapToNext.toFixed(1)} points to the next place.` : 'Earn points to enter the standings.'} />
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
-          <SectionTitle icon={<Target className="h-5 w-5 text-lime-300" />} title="Goal history" subtitle="Your points against the target saved for each week" />
-          <div className="mt-7 grid grid-cols-7 gap-2 sm:gap-3">
-            {engagement.goalHistory.map((week, index) => (
-              <div key={`${week.weekNumber}-${index}`} className={`rounded-xl border p-2 text-center sm:p-3 ${week.current ? 'border-lime-300/30 bg-lime-300/[0.07]' : 'border-white/5 bg-black/10'}`}>
-                <div className="relative mx-auto flex h-28 max-w-12 items-end overflow-hidden rounded-lg bg-white/5">
-                  <div className={`w-full rounded-t-md transition-[height] duration-700 ${week.achieved ? 'bg-gradient-to-t from-emerald-500 to-lime-300' : 'bg-gradient-to-t from-orange-600 to-orange-300'}`} style={{ height: `${Math.max(4, week.points / maxGoalHistory * 100)}%` }} />
-                  <span className="absolute inset-x-0 border-t border-dashed border-white/70" style={{ bottom: `${Math.min(100, week.target / maxGoalHistory * 100)}%` }} />
-                </div>
-                <p className="mt-2 text-xs font-black">W{week.weekNumber}</p><p className={`mt-1 text-[0.65rem] font-bold ${week.achieved ? 'text-emerald-300' : 'text-slate-500'}`}>{week.points.toFixed(0)}/{week.target.toFixed(0)}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-slate-500"><span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-orange-400" />Points earned</span><span className="inline-flex items-center gap-2"><span className="w-4 border-t border-dashed border-slate-300" />Weekly target</span><span className="inline-flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />Green means achieved</span></div>
-        </section>
+        <WeeklyProgressChart weeks={engagement.goalHistory} />
 
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
-            <SectionTitle icon={<Trophy className="h-5 w-5 text-yellow-300" />} title="Weekly progress" subtitle="Your approved points by week" />
-            {profile.weeklyScores.length ? (
-              <div className="mt-8 flex h-56 items-end gap-3 overflow-x-auto border-b border-white/10 px-2 pb-1">
-                {profile.weeklyScores.map((week) => (
-                  <div key={week.weekNumber} className="flex h-full min-w-14 flex-1 flex-col justify-end text-center">
-                    <span className="mb-2 text-xs font-bold text-orange-300">{week.totalPoints.toFixed(1)}</span>
-                    <div className="mx-auto w-full max-w-16 rounded-t-lg bg-gradient-to-t from-orange-600 to-yellow-300" style={{ height: `${Math.max(8, week.totalPoints / maxWeekPoints * 78)}%` }} />
-                    <span className="mt-2 text-xs text-slate-500">W{week.weekNumber}</span>
-                  </div>
-                ))}
-              </div>
-            ) : <Empty message="Your weekly progress will appear after an activity is approved." />}
-            {profile.bestWeek ? <div className="mt-5 rounded-xl bg-orange-400/10 p-4 text-sm text-orange-200">Personal best: <strong>Week {profile.bestWeek.weekNumber} · {profile.bestWeek.totalPoints.toFixed(1)} points</strong></div> : null}
-          </section>
-
+        <div>
           <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
             <SectionTitle icon={<Sparkles className="h-5 w-5 text-violet-300" />} title="Performance mix" subtitle="Where your points come from" />
             <div className="mt-6 space-y-5">

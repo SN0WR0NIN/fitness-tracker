@@ -1,4 +1,4 @@
-import { getWeekStart } from '@/lib/scoring';
+import { getWeekStart, getWeekNumber } from '@/lib/scoring';
 
 type WeekScore = {
   weekNumber?: number;
@@ -15,7 +15,7 @@ export type WeeklyGoalIntelligence = {
   remainingPoints: number;
   completionStreak: number;
   milestone: 0 | 50 | 80 | 100;
-  history: Array<{ weekNumber: number; points: number; target: number; achieved: boolean; current: boolean }>;
+  history: Array<{ weekNumber: number; dateRange: string; points: number; target: number; achieved: boolean; current: boolean }>;
   badges: Array<{ name: string; description: string; unlocked: boolean; progress: number }>;
 };
 
@@ -58,11 +58,11 @@ export function getWeeklyStreak(weeks: WeekScore[], now = new Date()): number {
   return streak;
 }
 
-export function getWeeklyGoalIntelligence(weeks: WeekScore[], goalRecords: GoalRecord[], weeklyGoal: number, now = new Date()): WeeklyGoalIntelligence {
+export function getWeeklyGoalIntelligence(weeks: WeekScore[], goalRecords: GoalRecord[], weeklyGoal: number, now = new Date(), challengeStart = new Date('2026-09-01T00:00:00Z')): WeeklyGoalIntelligence {
   const weekStart = getWeekStart(now);
   const weekMs = 7 * 24 * 60 * 60 * 1000;
   const dayMs = 24 * 60 * 60 * 1000;
-  const weekEnd = new Date(weekStart.getTime() + weekMs);
+  const weekEnd = new Date(weekStart.getTime() + weekMs - 8 * 3600000);
   const remainingMs = Math.max(0, weekEnd.getTime() - now.getTime());
   const targetByWeek = new Map(goalRecords.map((record) => [getWeekStart(record.weekStart).getTime(), record.target]));
   const scoreByWeek = new Map<number, { points: number; weekNumber: number }>();
@@ -77,21 +77,21 @@ export function getWeeklyGoalIntelligence(weeks: WeekScore[], goalRecords: GoalR
   }
 
   const currentKey = weekStart.getTime();
-  const latestScoredWeek = Array.from(scoreByWeek.entries()).sort((a, b) => b[0] - a[0])[0];
-  const currentWeekNumber = latestScoredWeek
-    ? latestScoredWeek[1].weekNumber + Math.round((currentKey - latestScoredWeek[0]) / weekMs)
-    : 1;
+  const currentWeekNumber = getWeekNumber(now, challengeStart);
   const currentPoints = scoreByWeek.get(currentKey)?.points ?? 0;
   const progress = weeklyGoal > 0 ? currentPoints / weeklyGoal : 0;
-  const elapsed = Math.min(1, Math.max(0, (now.getTime() - currentKey) / weekMs));
+  const elapsed = Math.min(1, Math.max(0, (now.getTime() - Math.max(currentKey - 8 * 3600000, challengeStart.getTime() - 8 * 3600000)) / (weekEnd.getTime() - Math.max(currentKey - 8 * 3600000, challengeStart.getTime() - 8 * 3600000))));
   const status = progress >= 1 ? 'achieved' : progress >= elapsed * 0.9 ? 'on-track' : 'at-risk';
   const milestone = progress >= 1 ? 100 : progress >= 0.8 ? 80 : progress >= 0.5 ? 50 : 0;
-  const history = Array.from({ length: 7 }, (_, offset) => {
-    const key = currentKey - (6 - offset) * weekMs;
+  const count = Math.min(7, Math.max(0, currentWeekNumber));
+  const history = Array.from({ length: count }, (_, offset) => {
+    const key = currentKey - (count - 1 - offset) * weekMs;
+    const labelDate = (value: number) => new Date(value).toLocaleDateString('en-SG', { timeZone: 'UTC', day: 'numeric', month: 'short' });
     const score = scoreByWeek.get(key);
     const target = targetByWeek.get(key) ?? weeklyGoal;
     return {
-      weekNumber: score?.weekNumber ?? Math.max(1, currentWeekNumber - (6 - offset)),
+      weekNumber: currentWeekNumber - (count - 1 - offset),
+      dateRange: `${labelDate(Math.max(key, challengeStart.getTime()))} – ${labelDate(key + 6 * dayMs)}`,
       points: score?.points ?? 0,
       target,
       achieved: (score?.points ?? 0) >= target,
@@ -101,7 +101,7 @@ export function getWeeklyGoalIntelligence(weeks: WeekScore[], goalRecords: GoalR
 
   let completionStreak = 0;
   let index = history.length - 1;
-  if (!history[index].achieved) index -= 1;
+  if (history[index] && !history[index].achieved) index -= 1;
   while (index >= 0 && history[index].achieved) {
     completionStreak += 1;
     index -= 1;
