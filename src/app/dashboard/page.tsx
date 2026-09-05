@@ -6,13 +6,18 @@ import { authOptions } from '@/lib/auth';
 import { getParticipantProfile } from '@/lib/participant-profile';
 import { prisma } from '@/lib/prisma';
 import { getCurrentWeekPoints, getSuggestedWeeklyGoal, getWeeklyGoalIntelligence, getWeeklyStreak } from '@/lib/engagement';
-import { getChallengeSettings } from '@/lib/admin-control';
-import { captureWeeklyGoal, getWeeklyGoalRecords } from '@/lib/user-profile-settings';
+import { getActiveColumnIds, getChallengeSettings } from '@/lib/admin-control';
+import { captureWeeklyGoal, getUserProfileSettings, getWeeklyGoalRecords } from '@/lib/user-profile-settings';
 import { getWeekStart } from '@/lib/scoring';
 import { STRAVA_INTEGRATION_ENABLED } from '@/lib/features';
 import { performanceLog, timed } from '@/lib/telemetry';
 
 export const dynamic = 'force-dynamic';
+
+type DashboardUser = {
+  stravaAthleteId: string | null;
+  email: string;
+};
 
 type DashboardActivity = {
   id: string;
@@ -32,7 +37,7 @@ type DashboardActivity = {
 };
 
 type SelectableUser = { id: string; name: string };
-type ColumnScore = { columnId: string; totalPoints: number };
+type ColumnScore = { columnId: string; _sum: { totalPoints: number | null } };
 
 export default async function DashboardPage() {
   const pageStartedAt = Date.now();
@@ -41,8 +46,16 @@ export default async function DashboardPage() {
   if (!userId) redirect('/auth/login');
 
   const dataStartedAt = Date.now();
-  const [profile, goalRecords, activitiesResult, columnScoresResult, settings] = await Promise.all([
+  const [profile, userResult, profileSettings, goalRecords, activitiesResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
     timed('perf.dashboard.participant_profile', () => getParticipantProfile(userId, { includeActivities: false }), { route: '/dashboard' }),
+    timed('perf.dashboard.user', () => prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        stravaAthleteId: true,
+        email: true,
+      },
+    }), { route: '/dashboard' }),
+    timed('perf.dashboard.profile_settings', () => getUserProfileSettings(userId), { route: '/dashboard' }),
     timed('perf.dashboard.goal_records', () => getWeeklyGoalRecords(userId), { route: '/dashboard' }),
     timed('perf.dashboard.activities', () => prisma.activity.findMany({
       where: { userId },
@@ -64,26 +77,18 @@ export default async function DashboardPage() {
         stravaActivityId: true,
       },
     }), { route: '/dashboard' }),
-    timed(
-      'perf.dashboard.column_scores',
-      () => prisma.$queryRawUnsafe(
-        `SELECT
-          c."id" AS "columnId",
-          COALESCE(SUM(ws."totalPoints"), 0)::float8 AS "totalPoints"
-         FROM "Column" c
-         LEFT JOIN "WeeklyScore" ws ON ws."columnId" = c."id"
-         WHERE c."isActive" = true
-         GROUP BY c."id"
-         ORDER BY "totalPoints" DESC`,
-      ) as Promise<ColumnScore[]>,
-      { route: '/dashboard' },
-    ),
+    timed('perf.dashboard.column_scores', () => prisma.weeklyScore.groupBy({
+      by: ['columnId'],
+      _sum: { totalPoints: true },
+    }), { route: '/dashboard' }),
     timed('perf.dashboard.challenge_settings', () => getChallengeSettings(), { route: '/dashboard' }),
+    timed('perf.dashboard.active_columns', () => getActiveColumnIds(), { route: '/dashboard' }),
   ]);
   performanceLog('perf.dashboard.parallel_data', Date.now() - dataStartedAt, { route: '/dashboard' });
 
+  const user = userResult as DashboardUser | null;
   const activities = activitiesResult as DashboardActivity[];
-  if (!profile) redirect('/auth/login');
+  if (!profile || !user) redirect('/auth/login');
 
   const users = activities.some((activity) => activity.status === 'PENDING')
     ? await timed('perf.dashboard.participant_options', () => prisma.user.findMany({
@@ -93,11 +98,14 @@ export default async function DashboardPage() {
       }), { route: '/dashboard' }) as SelectableUser[]
     : [];
 
+  const activeColumns = new Set(activeColumnIds);
   const columnScores = (columnScoresResult as ColumnScore[])
+    .filter((column) => activeColumns.has(column.columnId))
+    .map((column) => ({ columnId: column.columnId, totalPoints: column._sum.totalPoints ?? 0 }))
     .sort((a, b) => b.totalPoints - a.totalPoints);
 
   const suggestedWeeklyGoal = getSuggestedWeeklyGoal(profile.weeklyScores, settings.weeklyGoal);
-  const weeklyGoal = profile.weeklyGoal ?? suggestedWeeklyGoal;
+  const weeklyGoal = profileSettings?.weeklyGoal ?? suggestedWeeklyGoal;
   const currentWeekPoints = getCurrentWeekPoints(profile.weeklyScores);
   const goalIntelligence = getWeeklyGoalIntelligence(profile.weeklyScores, goalRecords, weeklyGoal, new Date(), settings.startDate);
   after(async () => {
@@ -145,9 +153,9 @@ export default async function DashboardPage() {
       }}
       currentUser={{
         stravaEnabled: STRAVA_INTEGRATION_ENABLED,
-        stravaConnected: Boolean(profile.stravaAthleteId),
-        email: profile.email,
-        hasCustomWeeklyGoal: profile.hasCustomWeeklyGoal,
+        stravaConnected: Boolean(user.stravaAthleteId),
+        email: user.email,
+        hasCustomWeeklyGoal: Boolean(profileSettings),
       }}
       engagement={{
         weeklyGoal,
