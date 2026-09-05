@@ -34,7 +34,7 @@ const uniqueIds = (rows, name) => {
 };
 
 assert(backup?.format === 'kg-stay-active-operational-backup', 'Unexpected backup format');
-assert(backup?.version === 1, 'Unsupported backup version');
+assert([1, 2, 3].includes(backup?.version), 'Unsupported backup version');
 assert(typeof backup?.exportedAt === 'string' && Number.isFinite(Date.parse(backup.exportedAt)), 'exportedAt must be an ISO date');
 assert(backup?.challenge && typeof backup.challenge === 'object', 'challenge settings are missing');
 
@@ -45,12 +45,13 @@ const weeklyScores = array(backup?.weeklyScores, 'weeklyScores');
 const profileSettings = optionalArray(backup?.profileSettings, 'profileSettings');
 const weeklyGoals = optionalArray(backup?.weeklyGoals, 'weeklyGoals');
 const rankingSnapshots = optionalArray(backup?.rankingSnapshots, 'rankingSnapshots');
+const duplicateReviews = optionalArray(backup?.duplicateReviews, 'duplicateReviews');
 array(backup?.announcements, 'announcements');
 array(backup?.audit, 'audit');
 
 const columnIds = uniqueIds(columns, 'columns');
 const userIds = uniqueIds(users, 'users');
-uniqueIds(activities, 'activities');
+const activityIds = uniqueIds(activities, 'activities');
 uniqueIds(weeklyScores, 'weeklyScores');
 uniqueIds(rankingSnapshots, 'rankingSnapshots');
 
@@ -98,6 +99,29 @@ for (const row of weeklyGoals) {
   assert(typeof row?.target === 'number' && Number.isFinite(row.target) && row.target > 0, `Weekly goal ${key} has invalid target`);
 }
 
+const reviewKeys = new Set();
+for (const review of duplicateReviews) {
+  const pairKey = review?.pair_key ?? review?.pairKey;
+  const activityAId = review?.activity_a_id ?? review?.activityAId;
+  const activityBId = review?.activity_b_id ?? review?.activityBId;
+  const status = review?.status;
+  const duplicateActivityId = review?.duplicate_activity_id ?? review?.duplicateActivityId ?? null;
+  const keptActivityId = review?.kept_activity_id ?? review?.keptActivityId ?? null;
+  assert(typeof pairKey === 'string' && pairKey.length > 0, 'Duplicate review is missing pair key');
+  if (typeof pairKey === 'string') {
+    assert(!reviewKeys.has(pairKey), `Duplicate review contains duplicate pair key ${pairKey}`);
+    reviewKeys.add(pairKey);
+  }
+  assert(activityIds.has(activityAId), `Duplicate review ${pairKey} references missing activity ${activityAId}`);
+  assert(activityIds.has(activityBId), `Duplicate review ${pairKey} references missing activity ${activityBId}`);
+  assert(['DIFFERENT', 'DUPLICATE', 'LATER'].includes(status), `Duplicate review ${pairKey} has invalid status ${status}`);
+  if (status === 'DUPLICATE') {
+    assert([activityAId, activityBId].includes(duplicateActivityId), `Duplicate review ${pairKey} has invalid duplicate activity`);
+    assert([activityAId, activityBId].includes(keptActivityId), `Duplicate review ${pairKey} has invalid kept activity`);
+    assert(duplicateActivityId !== keptActivityId, `Duplicate review ${pairKey} cannot keep and reject the same activity`);
+  }
+}
+
 if (errors.length) {
   console.error(`Backup validation failed with ${errors.length} problem(s):`);
   for (const error of errors) console.error(`- ${error}`);
@@ -107,6 +131,7 @@ if (errors.length) {
 console.log('Backup validation passed.');
 console.log(JSON.stringify({
   exportedAt: backup.exportedAt,
+  version: backup.version,
   columns: columns.length,
   users: users.length,
   activities: activities.length,
@@ -114,5 +139,6 @@ console.log(JSON.stringify({
   profileSettings: profileSettings.length,
   weeklyGoals: weeklyGoals.length,
   rankingSnapshots: rankingSnapshots.length,
+  duplicateReviews: duplicateReviews.length,
   excludes: backup.excludes || [],
 }, null, 2));
