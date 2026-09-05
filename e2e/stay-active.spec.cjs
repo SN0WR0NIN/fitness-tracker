@@ -60,8 +60,8 @@ test('member to admin workflow stays correct and private', async ({ browser, req
   const adminContext = await browser.newContext();
   const adminPage = await login(adminContext, ADMIN);
   await adminPage.goto('/admin');
-  await expect(adminPage.getByText('Automated safety net')).toBeVisible();
-  await expect(adminPage.getByText('Score reconciliation')).toBeVisible();
+  await expect(adminPage.getByRole('heading', { name: 'Automated safety net' }).first()).toBeVisible();
+  await expect(adminPage.getByText('Score reconciliation').first()).toBeVisible();
 
   const approve = await adminPage.request.post(`/api/admin/activities/${created.id}/approve`, { data: {} });
   expect(approve.ok()).toBeTruthy();
