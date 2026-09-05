@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+:root {
+  --background: #050914;
+  --foreground: #f8fafc;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--background); }
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 12% -10%, rgba(163, 230, 53, .14), transparent 34rem),
+    radial-gradient(circle at 96% 10%, rgba(56, 189, 248, .08), transparent 30rem),
+    var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
+
+.mobile-dock-safe { bottom: max(.75rem, env(safe-area-inset-bottom)); }
+@media (max-width: 767px) {
+  body { padding-bottom: calc(6.5rem + env(safe-area-inset-bottom)); }
+}
+
+.athletic-display {
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  letter-spacing: -.025em;
+  text-transform: uppercase;
+}
+
+.glass-card {
+  border: 1px solid rgba(255,255,255,.09);
+  background: rgba(15,23,42,.72);
+  box-shadow: 0 24px 60px rgba(0,0,0,.22);
+  backdrop-filter: blur(14px);
+}
+
+.grid-fade {
+  background-image:
+    linear-gradient(rgba(148,163,184,.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148,163,184,.07) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(to bottom, black, transparent 95%);
+}
+
+input, textarea, select { color-scheme: dark; }
