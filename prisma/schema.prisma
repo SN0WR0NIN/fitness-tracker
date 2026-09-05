@@ -16,6 +16,14 @@ model User {
   name          String
   email         String     @unique
   password      String
+  username      String?    @unique
+  mustChangePassword Boolean @default(false)
+  temporaryPasswordExpiresAt DateTime?
+  pendingEmail  String?
+  emailConfirmedAt DateTime?
+  sessionVersion Int @default(0)
+  loginAttempts Int @default(0)
+  loginWindowStartedAt DateTime?
   role          Role       @default(MEMBER)
   column        Column?    @relation(fields: [columnId], references: [id])
   columnId      String?

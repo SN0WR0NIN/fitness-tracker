@@ -51,6 +51,7 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
   const [companionUserId, setCompanionUserId] = useState('');
   const [proofUrl, setProofUrl] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -60,15 +61,18 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
   const [draftStatus, setDraftStatus] = useState('');
   const draftKey = `kg-activity-draft:${userId}`;
   const queueKey = `kg-activity-queue:${userId}`;
+  const categoryKey = `kg-last-activity:v1:${userId}`;
 
   useEffect(() => {
     queueMicrotask(() => {
       setOnline(window.navigator.onLine);
       try {
+        const lastCategory = window.localStorage.getItem(categoryKey);
+        if (ACTIVITY_CATEGORIES.some((item) => item.value === lastCategory)) setCategory(lastCategory as ActivityCategory);
         const saved = window.localStorage.getItem(draftKey);
         if (saved) {
           const draft = JSON.parse(saved) as Partial<ActivityDraft>;
-          if (draft.category) setCategory(draft.category);
+          if (ACTIVITY_CATEGORIES.some((item) => item.value === draft.category)) setCategory(draft.category!);
           setDistance(draft.distance || '');
           setPace(draft.pace || '');
           setWithFriend(Boolean(draft.withFriend));
@@ -91,7 +95,7 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
-  }, [draftKey, queueKey]);
+  }, [categoryKey, draftKey, queueKey]);
 
   useEffect(() => {
     if (!draftReady) return;
@@ -145,6 +149,7 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
 
   const chooseCategory = (nextCategory: ActivityCategory) => {
     setCategory(nextCategory);
+    try { window.localStorage.setItem(categoryKey, nextCategory); } catch { /* Optional preference: continue when storage is unavailable. */ }
     if (nextCategory !== 'RUN') setPace('');
     if (nextCategory === 'TROOP_GAMES') setDistance('');
     setSubmitError('');
@@ -154,6 +159,11 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
     const file = event.target.files?.[0];
     if (!file) return;
     setUploadError('');
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      setUploadError('Choose a JPEG, PNG, WebP or GIF image. For HEIC photos, export a JPEG or take a screenshot.');
+      event.target.value = '';
+      return;
+    }
     if (file.size > MAX_FILE_SIZE) {
       setUploadError('The image is larger than 4MB. Please choose a smaller screenshot.');
       event.target.value = '';
@@ -166,17 +176,36 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
       return;
     }
     setUploading(true);
+    setUploadProgress(0);
+    const input = event.target;
     try {
       const body = new FormData();
       body.append('file', file);
-      const response = await fetch('/api/upload', { method: 'POST', body });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to upload proof.');
-      setProofUrl(data.url);
+      const url = await new Promise<string>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open('POST', '/api/upload');
+        request.timeout = 90000;
+        request.upload.onprogress = (progress) => {
+          if (progress.lengthComputable) setUploadProgress(Math.round(progress.loaded / progress.total * 100));
+        };
+        request.onerror = () => reject(new Error('Connection interrupted. Check your connection and choose the image again.'));
+        request.ontimeout = () => reject(new Error('Upload timed out. Try a smaller screenshot or a stronger connection.'));
+        request.onload = () => {
+          try {
+            const data = JSON.parse(request.responseText);
+            if (request.status < 200 || request.status >= 300 || typeof data.url !== 'string') {
+              reject(new Error(typeof data.error === 'string' ? data.error : 'Upload failed. Please choose the image again.'));
+            } else resolve(data.url);
+          } catch { reject(new Error('Upload failed. Please choose the image again.')); }
+        };
+        request.send(body);
+      });
+      setProofUrl(url);
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : 'Failed to upload proof.');
     } finally {
       setUploading(false);
+      input.value = '';
     }
   };
 
@@ -266,9 +295,11 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2"><label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-black/10 px-5 text-center transition hover:border-orange-400/50 hover:bg-orange-400/5"><Camera className="h-8 w-8 text-slate-500" /><span className="mt-3 font-bold text-slate-300">{uploading ? 'Uploading proof…' : 'Take a proof photo'}</span><span className="mt-1 text-xs text-slate-500">Open your phone&apos;s rear camera</span><input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={handleFileChange} disabled={uploading || !online || maintenanceMode} className="hidden" /></label><label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-black/10 px-5 text-center transition hover:border-sky-400/50 hover:bg-sky-400/5"><ImagePlus className="h-8 w-8 text-slate-500" /><span className="mt-3 font-bold text-slate-300">Choose screenshot</span><span className="mt-1 text-xs text-slate-500">JPEG, PNG, WebP or GIF · maximum 4MB</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFileChange} disabled={uploading || !online || maintenanceMode} className="hidden" /></label></div>
               )}
-              {uploadError ? <p className="mt-3 text-sm text-rose-300">{uploadError}</p> : null}
+              {uploading ? <div className="mt-4" role="status"><p className="text-sm text-sky-200">{uploadProgress === 100 ? 'Upload transferred. Saving your proof…' : `Uploading proof: ${uploadProgress}%`}</p><progress aria-label="Proof upload progress" value={uploadProgress} max={100} className="mt-2 h-2 w-full accent-orange-400" /></div> : null}
+              {uploadError ? <p role="alert" className="mt-3 text-sm text-rose-300">{uploadError}</p> : null}
             </FormSection>
 
+            <div className="rounded-xl border border-orange-400/20 bg-orange-400/10 p-4 lg:hidden"><p className="font-bold">Estimated score: {preview.totalPoints.toFixed(1)} points</p><p className="mt-1 text-xs text-slate-300">Base {preview.basePoints.toFixed(1)} + friend bonus {preview.friendBonus.toFixed(1)}. Points count after approval.</p>{validationMessage ? <p className="mt-2 text-sm text-amber-200">{validationMessage}</p> : null}{effectiveCategory !== category ? <p className="mt-2 text-sm text-amber-200">This pace is scored as Walk / Hike.</p> : null}</div>
             {submitError ? <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-200">{submitError}</div> : null}
             <div className="flex flex-col-reverse gap-3 border-t border-white/10 pt-6 sm:flex-row sm:justify-end"><Link href="/dashboard" className="rounded-xl border border-white/10 px-5 py-3 text-center text-sm font-bold text-slate-300 transition hover:bg-white/5">Cancel</Link><button type="submit" disabled={submitting || uploading || Boolean(validationMessage) || maintenanceMode} className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-6 py-3 text-sm font-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-40"><CheckCircle2 className="h-4 w-4" />{submitting ? 'Submitting…' : !online ? 'Queue until online' : 'Submit for review'}</button></div>
           </form>

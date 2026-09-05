@@ -292,6 +292,7 @@ export default function AthleteDashboard({
               </div>
               <div className="hero-reveal hero-reveal-delay-2 mt-7 flex flex-wrap gap-3">
                 <button type="button" onClick={openProfileEditor} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-bold transition hover:-translate-y-0.5 hover:border-lime-300/30 hover:bg-lime-300/10"><Pencil className="h-4 w-4" />Edit profile</button>
+                <Link href="/account" className="inline-flex items-center rounded-xl border border-white/10 px-5 py-2.5 text-sm font-bold">Email &amp; password</Link>
                 <ShareProfileButton participantName={profile.name} profilePath={`/participants/${profile.id}`} />
                 <Link href="/activities/new" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold shadow-lg shadow-orange-500/20 transition hover:-translate-y-0.5 hover:bg-orange-400"><Plus className="h-4 w-4" />Log activity</Link>
               </div>
