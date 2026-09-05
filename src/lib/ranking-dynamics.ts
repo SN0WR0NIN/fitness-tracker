@@ -13,31 +13,11 @@ export type RankingDynamics = {
   history: Array<{ date: string; rank: number; points: number }>;
 };
 
-let schemaReady: Promise<void> | null = null;
-
-export function ensureRankingSnapshotSchema() {
-  if (!schemaReady) {
-    schemaReady = (async () => {
-      await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "RankingSnapshot" (
-        "id" TEXT PRIMARY KEY,
-        "scope" TEXT NOT NULL,
-        "periodKey" TEXT NOT NULL,
-        "entityId" TEXT NOT NULL,
-        "rank" INTEGER NOT NULL,
-        "points" DOUBLE PRECISION NOT NULL,
-        "snapshotDate" DATE NOT NULL DEFAULT CURRENT_DATE,
-        "capturedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE ("scope", "periodKey", "entityId", "snapshotDate")
-      )`);
-      await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "RankingSnapshot_lookup_idx" ON "RankingSnapshot" ("scope", "periodKey", "snapshotDate")');
-      await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "Activity_approved_column_idx" ON "Activity" ("columnId") WHERE "status"=\'APPROVED\'');
-    })().catch((error) => { schemaReady = null; throw error; });
-  }
-  return schemaReady;
-}
+// RankingSnapshot is now guaranteed by a database migration. Keep the exported
+// no-op for compatibility with existing call sites without running DDL on reads.
+export async function ensureRankingSnapshotSchema() {}
 
 export async function getRankingDynamics(scope: string, periodKey: string, entities: RankedEntity[]) {
-  await ensureRankingSnapshotSchema();
   const [previousRows, historyRows] = await Promise.all([
     prisma.$queryRawUnsafe(`SELECT "entityId", "rank", "points", "snapshotDate"
       FROM "RankingSnapshot"
@@ -80,7 +60,6 @@ export async function getRankingDynamics(scope: string, periodKey: string, entit
 
 export async function captureRankingSnapshot(scope: string, periodKey: string, entities: RankedEntity[]) {
   if (entities.length === 0) return;
-  await ensureRankingSnapshotSchema();
   await prisma.$transaction(entities.map((entity, index) => prisma.$executeRawUnsafe(
     `INSERT INTO "RankingSnapshot" ("id", "scope", "periodKey", "entityId", "rank", "points", "snapshotDate", "capturedAt")
      VALUES ($1,$2,$3,$4,$5,$6,CURRENT_DATE,CURRENT_TIMESTAMP)
