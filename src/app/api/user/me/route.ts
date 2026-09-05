@@ -1,34 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getUserProfileSettings, updateUserProfileSettings } from '@/lib/user-profile-settings';
 import { deleteProfileImage, isProfileImageUrlForUser } from '@/lib/storage';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    }
-
-    if (request.nextUrl.searchParams.get('view') === 'metrics') {
-      const activities = await prisma.activity.findMany({
-        where: { userId: session.user.id, status: 'APPROVED' },
-        orderBy: { occurredAt: 'desc' },
-        select: {
-          category: true,
-          distance: true,
-          pace: true,
-          points: true,
-          status: true,
-          occurredAt: true,
-          completedWithFriend: true,
-        },
-      });
-      return NextResponse.json({
-        activities: activities.map((activity) => ({ ...activity, occurredAt: activity.occurredAt.toISOString() })),
-      });
     }
 
     const [user, settings] = await Promise.all([
