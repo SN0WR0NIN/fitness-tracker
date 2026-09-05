@@ -95,6 +95,35 @@ async function main() {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
+  await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS app_internal.weekly_result (
+    season_key TEXT NOT NULL,
+    week_number INTEGER NOT NULL,
+    challenge_name TEXT NOT NULL,
+    week_start_key DATE NOT NULL,
+    display_start_date DATE NOT NULL,
+    display_end_date DATE NOT NULL,
+    total_points DOUBLE PRECISION NOT NULL DEFAULT 0,
+    activity_count INTEGER NOT NULL DEFAULT 0,
+    active_athletes INTEGER NOT NULL DEFAULT 0,
+    awards JSONB NOT NULL DEFAULT '[]'::jsonb,
+    athlete_standings JSONB NOT NULL DEFAULT '[]'::jsonb,
+    column_standings JSONB NOT NULL DEFAULT '[]'::jsonb,
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (season_key, week_number)
+  )`);
+  await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS app_internal.notification (
+    id UUID PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    level TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    href TEXT NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    dedupe_key TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
 
   const hash = await bcrypt.hash(password, 10);
   await prisma.column.upsert({
@@ -129,6 +158,20 @@ async function main() {
       "weeklyGoal"=EXCLUDED."weeklyGoal", "scoringRules"=EXCLUDED."scoringRules", "maintenanceMode"=false`,
     'primary', 'E2E Stay Active', new Date('2026-09-01T00:00:00Z'), new Date('2026-12-31T23:59:59Z'), 25, '{}', 'E2E maintenance');
 
+  const e2eAwards = [{ type: 'TOP_ATHLETE', label: 'Top Athlete', emoji: '🥇', entityType: 'USER', entityId: 'e2e_member', entityName: 'E2E Member', value: 50, displayValue: '50.0 pts' }];
+  const e2eAthletes = [{ userId: 'e2e_member', name: 'E2E Member', rank: 1, points: 50, activityCount: 3, runPoints: 50, cyclePoints: 0, swimPoints: 0, hikePoints: 0, troopGamePoints: 0, goalTarget: 25, goalCompletionPct: 200 }];
+  const e2eColumns = [{ columnId: 'e2e_column', name: 'E2E Column', rank: 1, points: 50, activityCount: 3, activeAthletes: 1 }];
+  await prisma.$executeRawUnsafe(`INSERT INTO app_internal.weekly_result
+    (season_key,week_number,challenge_name,week_start_key,display_start_date,display_end_date,total_points,activity_count,active_athletes,awards,athlete_standings,column_standings)
+    VALUES ('2026-09-01',1,'E2E Stay Active','2026-08-30','2026-09-01','2026-09-05',50,3,1,$1::jsonb,$2::jsonb,$3::jsonb)
+    ON CONFLICT (season_key,week_number) DO UPDATE SET awards=EXCLUDED.awards, athlete_standings=EXCLUDED.athlete_standings, column_standings=EXCLUDED.column_standings, updated_at=NOW()`,
+    JSON.stringify(e2eAwards), JSON.stringify(e2eAthletes), JSON.stringify(e2eColumns));
+  await prisma.$executeRawUnsafe(`INSERT INTO app_internal.notification
+    (id,user_id,kind,level,title,message,href,metadata,dedupe_key)
+    VALUES ('00000000-0000-0000-0000-000000000003','e2e_member','WEEKLY_AWARD','success','🥇 Top Athlete','You earned Top Athlete for Week 1 with 50.0 pts.','/results',$1::jsonb,'e2e-weekly-award')
+    ON CONFLICT (dedupe_key) DO UPDATE SET title=EXCLUDED.title,message=EXCLUDED.message,created_at=NOW()`,
+    JSON.stringify({ seasonKey: '2026-09-01', weekNumber: 1 }));
+
   await prisma.$executeRawUnsafe(`INSERT INTO app_internal.system_health_check (id,status,details)
     VALUES ('00000000-0000-0000-0000-000000000001','HEALTHY',$1::jsonb)
     ON CONFLICT (id) DO UPDATE SET status=EXCLUDED.status, details=EXCLUDED.details, created_at=NOW()`, JSON.stringify({
@@ -141,10 +184,10 @@ async function main() {
     }));
   await prisma.$executeRawUnsafe(`INSERT INTO app_internal.operational_backup
     (id,format,version,payload,checksum_sha256,counts)
-    VALUES ('00000000-0000-0000-0000-000000000002','kg-stay-active-operational-backup',3,$1::jsonb,'e2e-checksum', $2::jsonb)
-    ON CONFLICT (id) DO UPDATE SET payload=EXCLUDED.payload, counts=EXCLUDED.counts, created_at=NOW()`,
-    JSON.stringify({ format: 'kg-stay-active-operational-backup', version: 3, exportedAt: new Date().toISOString(), users: [], activities: [], duplicateReviews: [] }),
-    JSON.stringify({ users: 2, activities: 0, weeklyScores: 0, profileSettings: 0, weeklyGoals: 0, rankingSnapshots: 0, duplicateReviews: 0 }));
+    VALUES ('00000000-0000-0000-0000-000000000002','kg-stay-active-operational-backup',4,$1::jsonb,'e2e-checksum', $2::jsonb)
+    ON CONFLICT (id) DO UPDATE SET payload=EXCLUDED.payload, counts=EXCLUDED.counts, version=4, created_at=NOW()`,
+    JSON.stringify({ format: 'kg-stay-active-operational-backup', version: 4, exportedAt: new Date().toISOString(), users: [], activities: [], duplicateReviews: [], weeklyResults: [], notifications: [] }),
+    JSON.stringify({ users: 2, activities: 0, weeklyScores: 0, profileSettings: 0, weeklyGoals: 0, rankingSnapshots: 0, duplicateReviews: 0, weeklyResults: 1, notifications: 1 }));
 
   console.log('E2E database bootstrapped.');
 }

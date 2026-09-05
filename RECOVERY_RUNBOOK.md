@@ -4,7 +4,7 @@ This runbook covers recovery from the admin **Operational backup** JSON export a
 
 ## 1. Safety layers
 
-The app now has three complementary safety layers:
+The app has three complementary safety layers:
 
 1. **Hourly integrity check** — Supabase Cron runs `app_internal.run_integrity_check()` at minute 10 of every hour. Results are stored privately for 90 days and surfaced in Command Centre.
 2. **Daily operational snapshot** — Supabase Cron runs `app_internal.create_operational_backup()` at 18:30 UTC (02:30 Singapore time). Snapshots are stored privately for 30 days with a SHA-256 checksum and row counts.
@@ -48,13 +48,23 @@ Restore records in dependency order:
 7. Weekly scores
 8. Weekly-goal history
 9. Ranking snapshots
-10. Admin audit entries, if needed for historical record
+10. Duplicate-review decisions
+11. Finalized weekly results
+12. Persistent user notifications
+13. Admin audit entries, if needed for historical record
 
 Do **not** replace current password hashes or Strava tokens from an operational backup; they are intentionally absent. Existing production credentials should remain untouched unless account recovery is separately required.
 
-When restoring users, use stable IDs from the backup so Activity, profile settings, goals and WeeklyScore foreign keys remain valid. Use a transaction for each recovery batch and stop on any constraint conflict rather than skipping rows silently.
+When restoring users, use stable IDs from the backup so Activity, profile settings, goals, notifications and WeeklyScore foreign keys remain valid. Use a transaction for each recovery batch and stop on any constraint conflict rather than skipping rows silently.
 
-Older version-1 operational backups may not contain profile settings, weekly goals or ranking snapshots. The validator accepts those older backups, but recovery from them cannot recreate those optional experience/history records. Automated snapshots use format version 2.
+Backup format history:
+
+- **Version 1** — core challenge data; some profile/history collections may be absent.
+- **Version 2** — automatic private snapshots add profile settings, weekly goals and ranking snapshots.
+- **Version 3** — duplicate-review decisions are included.
+- **Version 4** — finalized weekly competition results and persistent notifications are also included.
+
+The validator accepts versions 1–4, but an older backup cannot recreate collections that did not yet exist in that version.
 
 ## 5. Required post-restore checks
 
@@ -63,6 +73,9 @@ The restore is not complete until all of these pass:
 - Every Activity `userId` and `columnId` resolves to an existing row.
 - Every WeeklyScore `userId` and `columnId` resolves.
 - Profile settings and weekly goals reference existing users.
+- Duplicate-review decisions reference valid Activity records.
+- Finalized weekly-result awards reference valid users or columns.
+- Persistent notifications reference valid users and have unique dedupe keys.
 - There are no duplicate Activity IDs or duplicate Strava activity IDs.
 - No WeeklyScore category or total is negative.
 - Recomputed approved Activity totals equal the stored WeeklyScore totals for every participant/week/category.
@@ -70,6 +83,8 @@ The restore is not complete until all of these pass:
 - Rejected activities have a rejection reason.
 - No activity falls outside the configured challenge window.
 - The public leaderboard totals match approved activities.
+- The public **Weekly Results** page loads the restored finalized history.
+- The authenticated **Notification Centre** loads restored weekly-award/result notifications.
 - Login, dashboard, activity submission, admin review, proof images, leaderboard and backup download/export all load normally.
 - The next scheduled integrity check records `HEALTHY` or only known review-only duplicate warnings.
 
@@ -103,20 +118,32 @@ WHERE COALESCE(e.total,0) <> COALESCE(w."totalPoints",0)
 
 A healthy result is **zero rows**.
 
-## 6. If the restore fails
+## 6. Weekly competition recovery
+
+Finalized weekly results are reproducible from approved Activity records. If a restored weekly result is missing or a late correction changed a completed week:
+
+1. Reconcile Activity and WeeklyScore first.
+2. Open **Admin → Weekly Awards**.
+3. Select the affected completed week.
+4. Choose **Rebuild week**.
+5. Verify the public Results page and winner notifications.
+
+A rebuild refreshes the finalized standings, awards, and persistent weekly-result/award notifications for that week. It does not change Activity scoring.
+
+## 7. If the restore fails
 
 - Roll back the recovery transaction or restore the pre-recovery snapshot.
 - Keep maintenance mode enabled.
 - Do not repeatedly retry a partially applied import.
 - Identify the first constraint/reconciliation failure, correct the recovery input or procedure, then retry from a clean database state.
 
-## 7. Return to service
+## 8. Return to service
 
 After validation:
 
 1. Disable maintenance mode.
-2. Load the public home page and leaderboard.
-3. Log in as a normal participant and verify Dashboard and activity submission.
-4. Log in as an admin and verify review queue, Command Centre safety status, weekly recap and backup download/export.
-5. Confirm the next hourly integrity check completes.
+2. Load the public home page, leaderboard and Weekly Results page.
+3. Log in as a normal participant and verify Dashboard, Notification Centre and activity submission.
+4. Log in as an admin and verify review queue, Command Centre safety status, Weekly Awards, weekly recap and backup download/export.
+5. Confirm the next hourly integrity check and weekly-finalization scheduler complete normally.
 6. Record the recovery action in the admin audit trail with the incident/recovery details.
