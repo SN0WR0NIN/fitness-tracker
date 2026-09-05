@@ -37,9 +37,11 @@ export default function PwaManager({ children }: { children: React.ReactNode }) 
       setShowIOSInstructions(ios && !standalone);
     });
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch((error) => console.error('Service worker registration failed:', error));
-    }
+    const serviceWorkerTimer = 'serviceWorker' in navigator
+      ? window.setTimeout(() => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch((error) => console.error('Service worker registration failed:', error));
+        }, 1600)
+      : null;
 
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
@@ -56,6 +58,7 @@ export default function PwaManager({ children }: { children: React.ReactNode }) 
     window.addEventListener('beforeinstallprompt', onInstallPrompt);
     window.addEventListener('appinstalled', onInstalled);
     return () => {
+      if (serviceWorkerTimer !== null) window.clearTimeout(serviceWorkerTimer);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('beforeinstallprompt', onInstallPrompt);
