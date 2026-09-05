@@ -39,7 +39,7 @@ export async function getChallengeSettings(): Promise<ChallengeSettings> {
   await ensureAdminControlSchema();
   const rows = await prisma.$queryRawUnsafe('SELECT * FROM "ChallengeSetting" WHERE "id" = $1 LIMIT 1', 'primary') as ChallengeSettings[];
   if (rows[0]) return { ...rows[0], maintenanceMode: Boolean(rows[0].maintenanceMode), maintenanceMessage: rows[0].maintenanceMessage || 'New activity submissions are temporarily paused.', scoringRules: { ...DEFAULT_SCORING_RULES, ...rows[0].scoringRules } };
-  await prisma.$executeRawUnsafe('INSERT INTO "ChallengeSetting" ("id", "challengeName", "startDate", "endDate", "weeklyGoal", "scoringRules") VALUES ($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING', 'primary', 'Kilo Golf Stay Active Challenge', new Date('2026-08-16T00:00:00Z'), new Date('2026-12-31T23:59:59Z'), 25, JSON.stringify(DEFAULT_SCORING_RULES));
+  await prisma.$executeRawUnsafe('INSERT INTO "ChallengeSetting" ("id", "challengeName", "startDate", "endDate", "weeklyGoal", "scoringRules") VALUES ($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING', 'primary', 'Kilo Golf Stay Active Challenge', new Date('2026-09-01T00:00:00Z'), new Date('2026-12-31T23:59:59Z'), 25, JSON.stringify(DEFAULT_SCORING_RULES));
   return getChallengeSettings();
 }
 

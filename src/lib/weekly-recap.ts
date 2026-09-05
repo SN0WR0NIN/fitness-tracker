@@ -2,14 +2,19 @@ const DAY = 86400000;
 const OFFSET = 8 * 3600000;
 export function recapWeek(date: Date) {
   const local = new Date(date.getTime() + OFFSET);
-  const start = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() - local.getUTCDay()) - OFFSET);
-  return { start, end: new Date(start.getTime() + 7 * DAY), previousStart: new Date(start.getTime() - 7 * DAY) };
+  const sunday = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() - local.getUTCDay()) - OFFSET);
+  const challengeStart = new Date('2026-09-01T00:00:00+08:00');
+  const end = new Date(sunday.getTime() + 7 * DAY);
+  const start = sunday < challengeStart && end > challengeStart ? challengeStart : sunday;
+  const priorSunday = new Date(sunday.getTime() - 7 * DAY);
+  const previousStart = priorSunday < challengeStart && sunday > challengeStart ? challengeStart : priorSunday;
+  return { start, end, previousStart };
 }
 export type RecapActivity = { status: string; occurredAt: Date; points: number; user: { id: string; name: string }; column: { id: string; name: string } };
 export function buildWeeklyRecap(rows: RecapActivity[], start: Date, end: Date) {
   const approved = rows.filter((row) => row.status === 'APPROVED');
   const current = approved.filter((row) => row.occurredAt >= start && row.occurredAt < end);
-  const previousStart = new Date(start.getTime() - 7 * DAY);
+  const previousStart = recapWeek(start).previousStart;
   const previous = approved.filter((row) => row.occurredAt >= previousStart && row.occurredAt < start);
   const total = current.reduce((sum, row) => sum + row.points, 0);
   const previousTotal = previous.reduce((sum, row) => sum + row.points, 0);

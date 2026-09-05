@@ -126,7 +126,7 @@ export default async function DashboardPage() {
   const suggestedWeeklyGoal = getSuggestedWeeklyGoal(profile.weeklyScores, settings.weeklyGoal);
   const weeklyGoal = profileSettings?.weeklyGoal ?? suggestedWeeklyGoal;
   const currentWeekPoints = getCurrentWeekPoints(profile.weeklyScores);
-  const goalIntelligence = getWeeklyGoalIntelligence(profile.weeklyScores, goalRecords, weeklyGoal);
+  const goalIntelligence = getWeeklyGoalIntelligence(profile.weeklyScores, goalRecords, weeklyGoal, new Date(), settings.startDate);
   after(async () => {
     try {
       await captureWeeklyGoal(userId, getWeekStart(new Date()), weeklyGoal);

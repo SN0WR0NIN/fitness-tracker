@@ -141,26 +141,14 @@ export function calculateActivityPoints(input: ScoringInput, rules: ScoringRules
  * Calculate week start date (previous Sunday from given date)
  */
 export function getWeekStart(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day;
-  d.setDate(diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  // A UTC calendar key representing the Sunday in Singapore, not an instant.
+  const local = new Date(date.getTime() + 8 * 3600000);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() - local.getUTCDay()));
 }
 
-/**
- * Calculate week number from a given date
- * Week 1 starts from the first week containing activities
- */
-export function getWeekNumber(date: Date, periodStartDate: Date = new Date(2026, 7, 16)): number {
-  const weekStart = getWeekStart(date);
-  const periodStart = getWeekStart(periodStartDate);
-  
-  const diffTime = Math.abs(weekStart.getTime() - periodStart.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-  return Math.floor(diffDays / 7) + 1;
+export function getWeekNumber(date: Date, periodStartDate: Date = new Date('2026-09-01T00:00:00Z')): number {
+  const diff = getWeekStart(date).getTime() - getWeekStart(periodStartDate).getTime();
+  return Math.floor(diff / (7 * 86400000)) + 1;
 }
 
 /**
