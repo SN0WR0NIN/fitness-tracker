@@ -1,4 +1,5 @@
 'use client';
+import ActivityProof from '@/components/ActivityProof';
 import PersonalAnalytics from '@/components/PersonalAnalytics';
 import WeeklyProgressChart from '@/components/WeeklyProgressChart';
 import ApprovedActivityDateEditor from '@/components/ApprovedActivityDateEditor';
@@ -97,16 +98,6 @@ type Engagement = {
   goalHistory: Array<{ weekNumber: number; dateRange: string; points: number; target: number; achieved: boolean; current: boolean }>;
 };
 
-type CommunityActivity = {
-  id: string;
-  category: ActivityCategory;
-  distance: number;
-  points: number;
-  occurredAt: string;
-  user: { id: string; name: string };
-  column: { name: string };
-};
-
 const categoryIcons = {
   RUN: Footprints,
   CYCLE: Bike,
@@ -129,14 +120,12 @@ export default function AthleteDashboard({
   activities,
   users,
   engagement,
-  communityActivities,
 }: {
   profile: DashboardProfile;
   currentUser: CurrentUser;
   activities: DashboardActivity[];
   users: SelectableUser[];
   engagement: Engagement;
-  communityActivities: CommunityActivity[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -398,14 +387,6 @@ export default function AthleteDashboard({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
-          <SectionTitle icon={<Clock3 className="h-5 w-5 text-emerald-300" />} title="Live activity feed" subtitle="Recently approved efforts from across Kilo Golf" />
-          {communityActivities.length ? <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{communityActivities.map((activity) => {
-            const Icon = categoryIcons[activity.category];
-            return <Link key={activity.id} href={`/participants/${activity.user.id}`} className="group rounded-xl border border-white/5 bg-black/10 p-4 transition hover:border-emerald-400/20 hover:bg-emerald-400/5"><div className="flex items-start justify-between gap-3"><span className="rounded-xl bg-emerald-400/10 p-2 text-emerald-300"><Icon className="h-5 w-5" /></span><span className="font-black text-emerald-300">+{activity.points.toFixed(1)}</span></div><p className="mt-4 font-black transition group-hover:text-emerald-200">{activity.user.name}</p><p className="mt-1 text-xs text-slate-500">{activity.column.name} · {categoryLabels[activity.category]}{activity.distance ? ` · ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}` : ''}</p><p className="mt-2 text-[0.65rem] text-slate-600">{new Date(activity.occurredAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' })}</p></Link>;
-          })}</div> : <Empty message="Approved activities from the team will appear here." />}
-        </section>
-
         <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
           <div className="flex flex-wrap items-end justify-between gap-3 p-5 sm:p-6">
             <SectionTitle icon={<Activity className="h-5 w-5 text-emerald-300" />} title="My activities" subtitle="Track approvals and manage your submissions" />
@@ -440,7 +421,8 @@ export default function AthleteDashboard({
                       <button type="button" disabled={deletingId !== null} onClick={() => void deleteSubmission(activity)} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-rose-300 hover:bg-rose-400/10 disabled:opacity-50" aria-label={`Delete ${categoryLabels[activity.category]} submission from ${new Date(activity.occurredAt).toLocaleDateString('en-SG')}`}><Trash2 className="h-4 w-4" />{deletingId === activity.id ? 'Deleting…' : 'Delete'}</button>
                       <span className="min-w-16 text-right font-black text-orange-300">+{activity.points.toFixed(1)}</span>
                     </div>
-                    {activity.status === 'APPROVED' ? <ApprovedActivityDateEditor activity={activity} /> : null}
+                    <ActivityProof key={activity.proofUrl || 'no-proof'} proofUrl={activity.proofUrl} label={`${categoryLabels[activity.category]} activity screenshot`} />
+                    {activity.status === 'APPROVED'  ? <ApprovedActivityDateEditor activity={activity} /> : null}
                     {activity.status === 'PENDING' ? <PendingActivityEditor activity={activity} users={users.filter((user) => user.id !== profile.id)} /> : null}
                   </div>
                 );

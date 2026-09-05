@@ -37,16 +37,6 @@ type DashboardActivity = {
 
 type SelectableUser = { id: string; name: string };
 
-type CommunityActivity = {
-  id: string;
-  category: 'RUN' | 'CYCLE' | 'SWIM' | 'WALK_OR_HIKE' | 'TROOP_GAMES';
-  distance: number;
-  points: number;
-  occurredAt: Date;
-  user: { id: string; name: string };
-  column: { name: string };
-};
-
 type ColumnScore = { columnId: string; _sum: { totalPoints: number | null } };
 
 export default async function DashboardPage() {
@@ -54,7 +44,7 @@ export default async function DashboardPage() {
   const userId = session?.user?.id;
   if (!userId) redirect('/auth/login');
 
-  const [profile, userResult, profileSettings, goalRecords, activitiesResult, usersResult, communityResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
+  const [profile, userResult, profileSettings, goalRecords, activitiesResult, usersResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
     getParticipantProfile(userId),
     prisma.user.findUnique({
       where: { id: userId },
@@ -90,20 +80,6 @@ export default async function DashboardPage() {
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
-    prisma.activity.findMany({
-      where: { status: 'APPROVED' },
-      orderBy: { reviewedAt: 'desc' },
-      take: 6,
-      select: {
-        id: true,
-        category: true,
-        distance: true,
-        points: true,
-        occurredAt: true,
-        user: { select: { id: true, name: true } },
-        column: { select: { name: true } },
-      },
-    }),
     prisma.weeklyScore.groupBy({
       by: ['columnId'],
       _sum: { totalPoints: true },
@@ -115,7 +91,6 @@ export default async function DashboardPage() {
   const user = userResult as DashboardUser | null;
   const activities = activitiesResult as DashboardActivity[];
   const users = usersResult as SelectableUser[];
-  const communityActivities = communityResult as CommunityActivity[];
   const activeColumns = new Set(activeColumnIds);
   const columnScores = (columnScoresResult as ColumnScore[])
     .filter((column) => activeColumns.has(column.columnId))
@@ -182,10 +157,6 @@ export default async function DashboardPage() {
         milestone: goalIntelligence.milestone,
         goalHistory: goalIntelligence.history,
       }}
-      communityActivities={communityActivities.map((activity) => ({
-        ...activity,
-        occurredAt: activity.occurredAt.toISOString(),
-      }))}
       activities={activities.map((activity) => ({
         ...activity,
         occurredAt: activity.occurredAt.toISOString(),
