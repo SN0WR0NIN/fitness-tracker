@@ -7,12 +7,11 @@ import { z, ZodError } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { getChallengeSettings } from '@/lib/admin-control';
 import { requestLog } from '@/lib/telemetry';
-
-import { parseActivityDate } from '@/lib/activity-date';
+import { challengeDateRangeLabel, isWithinChallengeWindow, parseActivityDate } from '@/lib/activity-date';
 
 // Validation schema for activity submission
 const ActivitySchema = z.object({
-  activityDate: z.string().refine((value) => !!parseActivityDate(value), "Choose a valid activity date, today or earlier.").optional(),
+  activityDate: z.string().refine((value) => !!parseActivityDate(value), 'Choose a valid activity date, today or earlier.').optional(),
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']),
   distance: z.number().positive('Distance must be greater than zero').max(100000, 'Distance is too large').optional(),
   pace: z.number().positive('Pace must be greater than zero').max(60, 'Pace is too large').optional(),
@@ -42,6 +41,13 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const validatedData = ActivitySchema.parse(body);
+    const occurredAt = validatedData.activityDate ? parseActivityDate(validatedData.activityDate)! : new Date();
+    if (!isWithinChallengeWindow(occurredAt, settings.startDate, settings.endDate)) {
+      return NextResponse.json(
+        { error: `Activities must fall within the challenge period (${challengeDateRangeLabel(settings.startDate, settings.endDate)}).` },
+        { status: 400 }
+      );
+    }
 
     if (validatedData.companionUserId === sessionUserId) {
       return NextResponse.json(
@@ -74,7 +80,7 @@ export async function POST(request: NextRequest) {
       pace: validatedData.pace,
       companionUserId: validatedData.companionUserId,
       proofUrl: validatedData.proofUrl,
-      occurredAt: validatedData.activityDate ? parseActivityDate(validatedData.activityDate)! : undefined,
+      occurredAt,
     });
 
     log.success({ status: 201, activityId: activity.id });
@@ -91,37 +97,61 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * Public activity reads intentionally power the landing-page feed and public
+ * participant history. Keep this endpoint approved-only and return only
+ * public display fields — never participant email addresses or review data.
+ */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const userId = searchParams.get('userId');
     const columnId = searchParams.get('columnId');
     const weekNumber = searchParams.get('weekNumber');
-    const status = searchParams.get('status');
-    const limit = searchParams.get('limit');
+    const requestedStatus = searchParams.get('status');
+    const requestedLimit = Number.parseInt(searchParams.get('limit') || '50', 10);
 
-    const where: Prisma.ActivityWhereInput = {};
-    if (userId) where.userId = userId;
-    if (columnId) where.columnId = columnId;
-    if (weekNumber) where.weekNumber = parseInt(weekNumber);
-    if (status === 'PENDING' || status === 'APPROVED' || status === 'REJECTED') {
-      where.status = status;
+    if (requestedStatus && requestedStatus !== 'APPROVED') {
+      return NextResponse.json({ error: 'Only approved activities are publicly available.' }, { status: 403 });
     }
 
+    const where: Prisma.ActivityWhereInput = { status: 'APPROVED' };
+    if (userId) where.userId = userId;
+    if (columnId) where.columnId = columnId;
+    if (weekNumber) {
+      const parsedWeek = Number.parseInt(weekNumber, 10);
+      if (!Number.isFinite(parsedWeek) || parsedWeek < 1) {
+        return NextResponse.json({ error: 'Invalid week number' }, { status: 400 });
+      }
+      where.weekNumber = parsedWeek;
+    }
+
+    const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 50) : 50;
     const activities = await prisma.activity.findMany({
       where,
-      include: {
-        user: {
-          select: { id: true, name: true, email: true },
-        },
+      select: {
+        id: true,
+        category: true,
+        distance: true,
+        pace: true,
+        duration: true,
+        points: true,
+        completedWithFriend: true,
+        companion: true,
+        proofUrl: true,
+        occurredAt: true,
+        stravaActivityId: true,
+        mapPolyline: true,
+        elevationGain: true,
+        user: { select: { id: true, name: true } },
       },
-      orderBy: status === 'APPROVED' ? { reviewedAt: 'desc' } : { createdAt: 'desc' },
-      ...(limit ? { take: parseInt(limit) } : {}),
+      orderBy: { reviewedAt: 'desc' },
+      take: limit,
     });
 
-    return NextResponse.json(activities);
+    return NextResponse.json(activities, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
-    console.error('Error fetching activities:', error);
+    console.error('Error fetching public activities:', error);
     return NextResponse.json(
       { error: 'Failed to fetch activities' },
       { status: 500 }
