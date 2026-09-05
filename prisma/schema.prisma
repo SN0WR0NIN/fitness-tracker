@@ -83,6 +83,8 @@ model Activity {
   updatedAt       DateTime   @updatedAt
 
   @@index([userId])
+  @@index([userId, occurredAt])
+  @@index([userId, status])
   @@index([columnId])
   @@index([weekStart])
   @@index([status])
@@ -119,6 +121,7 @@ model WeeklyScore {
 
   @@unique([userId, weekStart])
   @@index([weekStart])
+  @@index([columnId])
 }
 
 enum ActivityCategory {

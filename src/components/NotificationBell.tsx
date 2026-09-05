@@ -51,9 +51,9 @@ export default function NotificationBell({ userId }: { userId: string }) {
       }
     };
 
-    void load();
+    const initialLoad = window.setTimeout(() => void load(), 1000);
     const interval = window.setInterval(load, 60000);
-    return () => { active = false; window.clearInterval(interval); };
+    return () => { active = false; window.clearTimeout(initialLoad); window.clearInterval(interval); };
   }, [userId]);
 
   const unreadCount = useMemo(() => notifications.filter((notification) => !seenIds.has(notification.id)).length, [notifications, seenIds]);

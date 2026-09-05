@@ -36,7 +36,6 @@ type DashboardActivity = {
 };
 
 type SelectableUser = { id: string; name: string };
-
 type ColumnScore = { columnId: string; _sum: { totalPoints: number | null } };
 
 export default async function DashboardPage() {
@@ -44,7 +43,7 @@ export default async function DashboardPage() {
   const userId = session?.user?.id;
   if (!userId) redirect('/auth/login');
 
-  const [profile, userResult, profileSettings, goalRecords, activitiesResult, usersResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
+  const [profile, userResult, profileSettings, goalRecords, activitiesResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
     getParticipantProfile(userId, { includeActivities: false }),
     prisma.user.findUnique({
       where: { id: userId },
@@ -75,11 +74,6 @@ export default async function DashboardPage() {
         stravaActivityId: true,
       },
     }),
-    prisma.user.findMany({
-      where: { id: { not: userId } },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
-    }),
     prisma.weeklyScore.groupBy({
       by: ['columnId'],
       _sum: { totalPoints: true },
@@ -90,13 +84,21 @@ export default async function DashboardPage() {
 
   const user = userResult as DashboardUser | null;
   const activities = activitiesResult as DashboardActivity[];
-  const users = usersResult as SelectableUser[];
+  if (!profile || !user) redirect('/auth/login');
+
+  const users = activities.some((activity) => activity.status === 'PENDING')
+    ? await prisma.user.findMany({
+        where: { id: { not: userId } },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      }) as SelectableUser[]
+    : [];
+
   const activeColumns = new Set(activeColumnIds);
   const columnScores = (columnScoresResult as ColumnScore[])
     .filter((column) => activeColumns.has(column.columnId))
     .map((column) => ({ columnId: column.columnId, totalPoints: column._sum.totalPoints ?? 0 }))
     .sort((a, b) => b.totalPoints - a.totalPoints);
-  if (!profile || !user) redirect('/auth/login');
 
   const suggestedWeeklyGoal = getSuggestedWeeklyGoal(profile.weeklyScores, settings.weeklyGoal);
   const weeklyGoal = profileSettings?.weeklyGoal ?? suggestedWeeklyGoal;

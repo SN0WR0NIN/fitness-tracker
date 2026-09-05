@@ -28,9 +28,9 @@ export default function AnnouncementBanner() {
         if (active) console.error('Unable to load announcements:', error);
       }
     };
-    void load();
+    const initialLoad = window.setTimeout(() => void load(), 1400);
     const interval = window.setInterval(load, 60000);
-    return () => { active = false; window.clearInterval(interval); };
+    return () => { active = false; window.clearTimeout(initialLoad); window.clearInterval(interval); };
   }, []);
   const item = items.find((announcement) => !dismissed.has(announcement.id));
   if (!item) return null;

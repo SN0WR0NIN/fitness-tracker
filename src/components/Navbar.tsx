@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -7,10 +8,15 @@ import { useSession, signOut } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import { useState, useSyncExternalStore } from 'react';
 import { Award, UserRound, BookOpen, Home, Menu, Moon, Plus, Settings, ShieldCheck, Sun, Trophy, Users, X } from 'lucide-react';
-import NotificationBell from '@/components/NotificationBell';
-import AnnouncementBanner from '@/components/AnnouncementBanner';
 import AppStatusBanner from '@/components/AppStatusBanner';
 import SiteBrandName from '@/components/SiteBrandName';
+
+const NotificationBell = dynamic(() => import('@/components/NotificationBell'), {
+  loading: () => <span aria-hidden className="block h-9 w-9 shrink-0" />,
+});
+const AnnouncementBanner = dynamic(() => import('@/components/AnnouncementBanner'), {
+  loading: () => null,
+});
 
 const emptySubscribe = () => () => {};
 
