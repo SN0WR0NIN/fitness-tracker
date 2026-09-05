@@ -25,6 +25,7 @@ import {
   Target,
   TrendingUp,
   Trophy,
+  Trash2,
   Users,
   Waves,
 } from 'lucide-react';
@@ -137,6 +138,27 @@ export default function AthleteDashboard({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { canInstall, showIOSInstructions, install } = usePwaInstall();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const [deleteMessage, setDeleteMessage] = useState('');
+  const visibleActivities = activities.filter((activity) => !deletedIds.includes(activity.id));
+  const deleteSubmission = async (activity: DashboardActivity) => {
+    const warning = activity.status === 'APPROVED' ? ` This removes ${activity.points.toFixed(1)} points from your score and your Column's total.` : '';
+    const syncWarning = activity.stravaActivityId ? ' This does not delete it from Strava; syncing again may reimport it.' : '';
+    if (!window.confirm(`Delete this ${categoryLabels[activity.category]} submission?${warning}${syncWarning} This cannot be undone.`)) return;
+    setDeletingId(activity.id);
+    setDeleteMessage('');
+    try {
+      const response = await fetch(`/api/activities/${activity.id}`, { method: 'DELETE' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not delete submission.');
+      setDeletedIds((ids) => [...ids, activity.id]);
+      setDeleteMessage('Submission deleted. Your scores are being refreshed.');
+      router.refresh();
+    } catch (error) {
+      setDeleteMessage(error instanceof Error ? error.message : 'Could not delete submission. Please try again.');
+    } finally { setDeletingId(null); }
+  };
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState(() => {
     if (searchParams.get('stravaConnected') === 'true') {
@@ -427,12 +449,13 @@ export default function AthleteDashboard({
 
         <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
           <div className="flex flex-wrap items-end justify-between gap-3 p-5 sm:p-6">
-            <SectionTitle icon={<Activity className="h-5 w-5 text-emerald-300" />} title="My activities" subtitle="Track approvals and manage synced workouts" />
-            <span className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-400">{activities.length} total</span>
+            <SectionTitle icon={<Activity className="h-5 w-5 text-emerald-300" />} title="My activities" subtitle="Track approvals and manage your submissions" />
+            <span className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-400">{visibleActivities.length} total</span>
           </div>
-          {activities.length ? (
+          <p role="status" aria-live="polite" className="px-5 text-sm text-slate-300 sm:px-6">{deleteMessage}</p>
+          {visibleActivities.length ? (
             <div>
-              {activities.map((activity) => {
+              {visibleActivities.map((activity) => {
                 const Icon = categoryIcons[activity.category];
                 return (
                   <div id={`activity-${activity.id}`} key={activity.id} className="grid scroll-mt-24 gap-4 border-t border-white/5 px-5 py-4 sm:px-6 lg:grid-cols-[auto_1fr_auto_auto] lg:items-center">
@@ -455,6 +478,7 @@ export default function AthleteDashboard({
                     </div>
                     <div className="flex items-center justify-between gap-5 lg:justify-end">
                       {activity.stravaActivityId ? <a href={`https://www.strava.com/activities/${activity.stravaActivityId}`} target="_blank" rel="noopener noreferrer" aria-label="View activity on Strava" className="text-orange-400 transition hover:text-orange-300"><ExternalLink className="h-4 w-4" /></a> : <span />}
+                      <button type="button" disabled={deletingId !== null} onClick={() => void deleteSubmission(activity)} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-rose-300 hover:bg-rose-400/10 disabled:opacity-50" aria-label={`Delete ${categoryLabels[activity.category]} submission from ${new Date(activity.occurredAt).toLocaleDateString('en-SG')}`}><Trash2 className="h-4 w-4" />{deletingId === activity.id ? 'Deleting…' : 'Delete'}</button>
                       <span className="min-w-16 text-right font-black text-orange-300">+{activity.points.toFixed(1)}</span>
                     </div>
                   </div>
