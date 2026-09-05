@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 export const PROOF_BUCKET = 'activity-proofs';
+export const PROFILE_BUCKET = 'profile-photos';
 
 let client: SupabaseClient | null = null;
 
@@ -71,4 +72,50 @@ export async function uploadProofImage(
 
   const { data: publicUrlData } = supabase.storage.from(PROOF_BUCKET).getPublicUrl(data.path);
   return publicUrlData.publicUrl;
+}
+
+export async function ensureProfileBucketExists(): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+  if (listError) throw listError;
+  if (buckets?.some((bucket) => bucket.name === PROFILE_BUCKET)) return;
+
+  const { error: createError } = await supabase.storage.createBucket(PROFILE_BUCKET, {
+    public: true,
+    fileSizeLimit: '2MB',
+    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  });
+  if (createError) throw createError;
+}
+
+export async function uploadProfileImage(buffer: Buffer, userId: string, contentType: string): Promise<string> {
+  const supabase = getSupabaseAdmin();
+  const path = `${userId}/avatar`;
+  const { data, error } = await supabase.storage.from(PROFILE_BUCKET).upload(path, buffer, {
+    contentType,
+    cacheControl: '3600',
+    upsert: true,
+  });
+  if (error) throw error;
+  const { data: publicUrlData } = supabase.storage.from(PROFILE_BUCKET).getPublicUrl(data.path);
+  return `${publicUrlData.publicUrl}?v=${Date.now()}`;
+}
+
+export async function deleteProfileImage(userId: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase.storage.from(PROFILE_BUCKET).remove([`${userId}/avatar`]);
+  if (error) throw error;
+}
+
+export function isProfileImageUrlForUser(value: string, userId: string): boolean {
+  try {
+    const url = new URL(value);
+    const configuredUrl = process.env.SUPABASE_URL;
+    if (!configuredUrl) return false;
+    return url.protocol === 'https:'
+      && url.hostname === new URL(configuredUrl).hostname
+      && url.pathname.endsWith(`/storage/v1/object/public/${PROFILE_BUCKET}/${userId}/avatar`);
+  } catch {
+    return false;
+  }
 }

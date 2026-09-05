@@ -4,6 +4,8 @@ import { getWeekStart } from '@/lib/scoring';
 export type UserProfileSettings = {
   userId: string;
   weeklyGoal: number;
+  bio: string;
+  profilePhotoUrl: string | null;
 };
 
 export type WeeklyGoalRecord = {
@@ -22,6 +24,8 @@ export function ensureUserProfileSettingsSchema() {
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       )`);
+      await prisma.$executeRawUnsafe('ALTER TABLE "UserProfileSettings" ADD COLUMN IF NOT EXISTS "bio" TEXT NOT NULL DEFAULT \'\'');
+      await prisma.$executeRawUnsafe('ALTER TABLE "UserProfileSettings" ADD COLUMN IF NOT EXISTS "profilePhotoUrl" TEXT');
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "WeeklyGoal" (
         "userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
         "weekStart" TIMESTAMP(3) NOT NULL,
@@ -41,7 +45,7 @@ export function ensureUserProfileSettingsSchema() {
 export async function getUserProfileSettings(userId: string) {
   await ensureUserProfileSettingsSchema();
   const rows = await prisma.$queryRawUnsafe(
-    'SELECT "userId", "weeklyGoal" FROM "UserProfileSettings" WHERE "userId"=$1 LIMIT 1',
+    'SELECT "userId", "weeklyGoal", "bio", "profilePhotoUrl" FROM "UserProfileSettings" WHERE "userId"=$1 LIMIT 1',
     userId,
   ) as UserProfileSettings[];
   return rows[0] ?? null;
@@ -68,18 +72,20 @@ export async function captureWeeklyGoal(userId: string, weekStart: Date, target:
   );
 }
 
-export async function updateUserProfileSettings(userId: string, name: string, weeklyGoal: number) {
+export async function updateUserProfileSettings(userId: string, name: string, weeklyGoal: number, bio: string, profilePhotoUrl: string | null) {
   await ensureUserProfileSettingsSchema();
   const weekStart = getWeekStart(new Date());
   await prisma.$transaction([
     prisma.user.update({ where: { id: userId }, data: { name } }),
     prisma.$executeRawUnsafe(
-      `INSERT INTO "UserProfileSettings" ("userId", "weeklyGoal", "createdAt", "updatedAt")
-       VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `INSERT INTO "UserProfileSettings" ("userId", "weeklyGoal", "bio", "profilePhotoUrl", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT ("userId") DO UPDATE
-       SET "weeklyGoal"=EXCLUDED."weeklyGoal", "updatedAt"=CURRENT_TIMESTAMP`,
+       SET "weeklyGoal"=EXCLUDED."weeklyGoal", "bio"=EXCLUDED."bio", "profilePhotoUrl"=EXCLUDED."profilePhotoUrl", "updatedAt"=CURRENT_TIMESTAMP`,
       userId,
       weeklyGoal,
+      bio,
+      profilePhotoUrl,
     ),
     prisma.$executeRawUnsafe(
       `INSERT INTO "WeeklyGoal" ("userId", "weekStart", "target", "createdAt", "updatedAt")

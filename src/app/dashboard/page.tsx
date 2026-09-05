@@ -141,6 +141,8 @@ export default async function DashboardPage() {
       profile={{
         id: profile.id,
         name: profile.name,
+        bio: profile.bio,
+        profilePhotoUrl: profile.profilePhotoUrl,
         column: profile.column,
         totalPoints: profile.totalPoints,
         rank: profile.rank,
