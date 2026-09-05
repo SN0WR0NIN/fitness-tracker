@@ -10,6 +10,7 @@ import { getActiveColumnIds, getChallengeSettings } from '@/lib/admin-control';
 import { captureWeeklyGoal, getUserProfileSettings, getWeeklyGoalRecords } from '@/lib/user-profile-settings';
 import { getWeekStart } from '@/lib/scoring';
 import { STRAVA_INTEGRATION_ENABLED } from '@/lib/features';
+import { performanceLog, timed } from '@/lib/telemetry';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,22 +40,24 @@ type SelectableUser = { id: string; name: string };
 type ColumnScore = { columnId: string; _sum: { totalPoints: number | null } };
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
+  const pageStartedAt = Date.now();
+  const session = await timed('perf.dashboard.session', () => getServerSession(authOptions), { route: '/dashboard' });
   const userId = session?.user?.id;
   if (!userId) redirect('/auth/login');
 
+  const dataStartedAt = Date.now();
   const [profile, userResult, profileSettings, goalRecords, activitiesResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
-    getParticipantProfile(userId, { includeActivities: false }),
-    prisma.user.findUnique({
+    timed('perf.dashboard.participant_profile', () => getParticipantProfile(userId, { includeActivities: false }), { route: '/dashboard' }),
+    timed('perf.dashboard.user', () => prisma.user.findUnique({
       where: { id: userId },
       select: {
         stravaAthleteId: true,
         email: true,
       },
-    }),
-    getUserProfileSettings(userId),
-    getWeeklyGoalRecords(userId),
-    prisma.activity.findMany({
+    }), { route: '/dashboard' }),
+    timed('perf.dashboard.profile_settings', () => getUserProfileSettings(userId), { route: '/dashboard' }),
+    timed('perf.dashboard.goal_records', () => getWeeklyGoalRecords(userId), { route: '/dashboard' }),
+    timed('perf.dashboard.activities', () => prisma.activity.findMany({
       where: { userId },
       orderBy: { occurredAt: 'desc' },
       select: {
@@ -73,25 +76,26 @@ export default async function DashboardPage() {
         occurredAt: true,
         stravaActivityId: true,
       },
-    }),
-    prisma.weeklyScore.groupBy({
+    }), { route: '/dashboard' }),
+    timed('perf.dashboard.column_scores', () => prisma.weeklyScore.groupBy({
       by: ['columnId'],
       _sum: { totalPoints: true },
-    }),
-    getChallengeSettings(),
-    getActiveColumnIds(),
+    }), { route: '/dashboard' }),
+    timed('perf.dashboard.challenge_settings', () => getChallengeSettings(), { route: '/dashboard' }),
+    timed('perf.dashboard.active_columns', () => getActiveColumnIds(), { route: '/dashboard' }),
   ]);
+  performanceLog('perf.dashboard.parallel_data', Date.now() - dataStartedAt, { route: '/dashboard' });
 
   const user = userResult as DashboardUser | null;
   const activities = activitiesResult as DashboardActivity[];
   if (!profile || !user) redirect('/auth/login');
 
   const users = activities.some((activity) => activity.status === 'PENDING')
-    ? await prisma.user.findMany({
+    ? await timed('perf.dashboard.participant_options', () => prisma.user.findMany({
         where: { id: { not: userId } },
         select: { id: true, name: true },
         orderBy: { name: 'asc' },
-      }) as SelectableUser[]
+      }), { route: '/dashboard' }) as SelectableUser[]
     : [];
 
   const activeColumns = new Set(activeColumnIds);
@@ -118,6 +122,12 @@ export default async function DashboardPage() {
   const gapToNext = columnRankIndex > 0
     ? Math.max(0, columnScores[columnRankIndex - 1].totalPoints - columnScores[columnRankIndex].totalPoints)
     : 0;
+
+  performanceLog('perf.dashboard.server_prep', Date.now() - pageStartedAt, {
+    route: '/dashboard',
+    activityRows: activities.length,
+    participantOptions: users.length,
+  });
 
   return (
     <AthleteDashboard
