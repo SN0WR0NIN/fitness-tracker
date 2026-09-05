@@ -30,14 +30,19 @@ Restore records in dependency order:
 1. Challenge settings
 2. Columns
 3. Users (identity/profile fields only)
-4. Announcements
-5. Activities
-6. Weekly scores
-7. Admin audit entries, if needed for historical record
+4. User profile settings
+5. Announcements
+6. Activities
+7. Weekly scores
+8. Weekly-goal history
+9. Ranking snapshots
+10. Admin audit entries, if needed for historical record
 
 Do **not** replace current password hashes or Strava tokens from an operational backup; they are intentionally absent. Existing production credentials should remain untouched unless account recovery is separately required.
 
-When restoring users, use stable IDs from the backup so Activity and WeeklyScore foreign keys remain valid. Use a transaction for each recovery batch and stop on any constraint conflict rather than skipping rows silently.
+When restoring users, use stable IDs from the backup so Activity, profile settings, goals and WeeklyScore foreign keys remain valid. Use a transaction for each recovery batch and stop on any constraint conflict rather than skipping rows silently.
+
+Older version-1 operational backups may not contain profile settings, weekly goals or ranking snapshots. The validator accepts those older backups, but recovery from them cannot recreate those optional experience/history records.
 
 ## 4. Required post-restore checks
 
@@ -45,6 +50,7 @@ The restore is not complete until all of these pass:
 
 - Every Activity `userId` and `columnId` resolves to an existing row.
 - Every WeeklyScore `userId` and `columnId` resolves.
+- Profile settings and weekly goals reference existing users.
 - There are no duplicate Activity IDs or duplicate Strava activity IDs.
 - No WeeklyScore category or total is negative.
 - Recomputed approved Activity totals equal the stored WeeklyScore totals for every participant/week/category.
