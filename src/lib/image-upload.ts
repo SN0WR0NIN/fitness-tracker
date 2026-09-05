@@ -16,7 +16,7 @@ export function verifiedImageMime(buffer: Buffer, declaredType: string, allowed:
 export function imageExtension(contentType: SupportedImageMime): string {
   if (contentType === 'image/jpeg') return 'jpg';
   if (contentType === 'image/png') return 'png';
-  if (contentType === 'webp') return 'webp';
+  if (contentType === 'image/webp') return 'webp';
   if (contentType === 'image/gif') return 'gif';
   return 'img';
 }
