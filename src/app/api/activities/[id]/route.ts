@@ -1,3 +1,4 @@
+import { deleteOwnActivity, ActivityDeletionError } from '@/lib/delete-activity';
 import { NextResponse } from 'next/server';
 import { z, ZodError } from 'zod';
 import { getServerSession } from 'next-auth';
@@ -68,5 +69,26 @@ export async function PATCH(
     }
     console.error('Error editing activity companion:', error);
     return NextResponse.json({ error: 'Failed to update activity' }, { status: 500 });
+  }
+}
+
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const { id } = await params;
+    await deleteOwnActivity(prisma, id, session.user.id);
+    return NextResponse.json({ deleted: true });
+  } catch (error) {
+    if (error instanceof ActivityDeletionError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2034') {
+      return NextResponse.json({ error: 'This activity changed while deleting. Please try again.' }, { status: 409 });
+    }
+    console.error('Error deleting activity:', error);
+    return NextResponse.json({ error: 'Could not delete activity. Please try again.' }, { status: 500 });
   }
 }
