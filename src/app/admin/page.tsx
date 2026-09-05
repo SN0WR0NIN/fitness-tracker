@@ -1,25 +1,66 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Activity, DatabaseBackup, FileClock, Megaphone, Settings, ShieldCheck, Trophy, Users } from 'lucide-react';
+import { Activity, CheckCircle2, DatabaseBackup, FileClock, Link2, Megaphone, Settings, ShieldCheck, TriangleAlert, Trophy, Users } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import SystemStatusCard from '@/components/SystemStatusCard';
 import { requireAdmin } from '@/lib/adminGuard';
 import { getAuditEntries } from '@/lib/admin-control';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
+type IntegrityRow = { scoreMismatchCount: number; possibleDuplicatePairs: number };
+
 export default async function AdminPage() {
   const guard = await requireAdmin();
   if (guard.status === 401) redirect('/auth/login');
   if (guard.error) redirect('/dashboard');
 
-  const [users, activities, pending, approvedPoints, audit] = await Promise.all([
+  const [users, activities, pending, approvedPoints, audit, stravaConnected, integrityRows] = await Promise.all([
     prisma.user.count(),
     prisma.activity.count(),
     prisma.activity.count({ where: { status: 'PENDING' } }),
     prisma.activity.aggregate({ where: { status: 'APPROVED' }, _sum: { points: true } }),
-    getAuditEntries(10),
+    getAuditEntries(100),
+    prisma.user.count({ where: { stravaAthleteId: { not: null } } }),
+    prisma.$queryRawUnsafe(`
+      WITH expected AS (
+        SELECT a."userId", a."weekStart",
+          COALESCE(SUM(a."points"), 0)::float8 AS total,
+          COALESCE(SUM(a."points") FILTER (WHERE a."category"='RUN'), 0)::float8 AS run,
+          COALESCE(SUM(a."points") FILTER (WHERE a."category"='CYCLE'), 0)::float8 AS cycle,
+          COALESCE(SUM(a."points") FILTER (WHERE a."category"='SWIM'), 0)::float8 AS swim,
+          COALESCE(SUM(a."points") FILTER (WHERE a."category"='WALK_OR_HIKE'), 0)::float8 AS hike,
+          COALESCE(SUM(a."points") FILTER (WHERE a."category"='TROOP_GAMES'), 0)::float8 AS troop
+        FROM "Activity" a WHERE a."status"='APPROVED'
+        GROUP BY a."userId", a."weekStart"
+      ), mismatches AS (
+        SELECT COALESCE(e."userId", w."userId") AS user_id
+        FROM expected e FULL OUTER JOIN "WeeklyScore" w
+          ON w."userId"=e."userId" AND w."weekStart"=e."weekStart"
+        WHERE COALESCE(e.total,0) <> COALESCE(w."totalPoints",0)
+          OR COALESCE(e.run,0) <> COALESCE(w."runPoints",0)
+          OR COALESCE(e.cycle,0) <> COALESCE(w."cyclePoints",0)
+          OR COALESCE(e.swim,0) <> COALESCE(w."swimPoints",0)
+          OR COALESCE(e.hike,0) <> COALESCE(w."hikePoints",0)
+          OR COALESCE(e.troop,0) <> COALESCE(w."troopGamePoints",0)
+      ), duplicate_pairs AS (
+        SELECT x.id
+        FROM "Activity" x JOIN "Activity" y
+          ON x."userId"=y."userId" AND x."category"=y."category" AND x.id<y.id
+        WHERE x."status" <> 'REJECTED' AND y."status" <> 'REJECTED'
+          AND x.distance > 0 AND y.distance > 0
+          AND (x."occurredAt" AT TIME ZONE 'Asia/Singapore')::date = (y."occurredAt" AT TIME ZONE 'Asia/Singapore')::date
+          AND abs(x.distance-y.distance) <= greatest(x.distance,y.distance)*0.02
+      )
+      SELECT (SELECT COUNT(*)::int FROM mismatches) AS "scoreMismatchCount",
+             (SELECT COUNT(*)::int FROM duplicate_pairs) AS "possibleDuplicatePairs"
+    `) as Promise<IntegrityRow[]>,
   ]);
+
+  const integrity = integrityRows[0] ?? { scoreMismatchCount: 0, possibleDuplicatePairs: 0 };
+  const lastBackup = audit.find((entry) => entry.action === 'BACKUP_EXPORT');
+  const recentAudit = audit.slice(0, 10);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -40,6 +81,18 @@ export default async function AdminPage() {
           <Stat icon={<Trophy className="h-5 w-5" />} label="Approved points" value={(approvedPoints._sum.points ?? 0).toFixed(1)} />
         </section>
 
+        <SystemStatusCard />
+
+        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
+          <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black">Operational health</h2><p className="mt-1 text-sm text-slate-500">Fast checks for scoring integrity, duplicate review, connections, and recovery readiness.</p></div><span className="text-xs text-slate-600">Warnings require review; they are never auto-deleted.</span></div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <HealthStat icon={integrity.scoreMismatchCount === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />} label="Score reconciliation" value={integrity.scoreMismatchCount === 0 ? 'Balanced' : `${integrity.scoreMismatchCount} mismatch${integrity.scoreMismatchCount === 1 ? '' : 'es'}`} detail="Approved activities vs weekly scores" good={integrity.scoreMismatchCount === 0} />
+            <HealthStat icon={integrity.possibleDuplicatePairs === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />} label="Duplicate review" value={`${integrity.possibleDuplicatePairs} warning${integrity.possibleDuplicatePairs === 1 ? '' : 's'}`} detail="Similar same-day distance pairs" good={integrity.possibleDuplicatePairs === 0} />
+            <HealthStat icon={<Link2 className="h-5 w-5" />} label="Strava connected" value={`${stravaConnected} / ${users}`} detail="Participant accounts" good />
+            <HealthStat icon={<DatabaseBackup className="h-5 w-5" />} label="Latest backup" value={lastBackup ? lastBackup.createdAt.toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short' }) : 'Not recorded'} detail={lastBackup ? lastBackup.createdAt.toLocaleTimeString('en-SG', { timeZone: 'Asia/Singapore', hour: '2-digit', minute: '2-digit' }) : 'Export one from Quick actions'} good={Boolean(lastBackup)} />
+          </div>
+        </section>
+
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <h2 className="text-lg font-black">Quick actions</h2>
           <p className="mt-1 text-sm text-slate-500">Jump directly to the most common admin tasks.</p>
@@ -56,7 +109,7 @@ export default async function AdminPage() {
           <h2 className="text-lg font-black">Admin activity feed</h2>
           <p className="mt-1 text-sm text-slate-500">Recent operational changes from the existing audit trail.</p>
           <div className="mt-5 divide-y divide-white/5">
-            {audit.length ? audit.map((item) => (
+            {recentAudit.length ? recentAudit.map((item) => (
               <div key={item.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div><p className="text-sm font-bold">{item.action}</p><p className="mt-1 text-xs text-slate-500">{item.actorName} · {item.target}</p></div>
                 <time className="text-xs text-slate-600">{item.createdAt.toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</time>
@@ -71,6 +124,9 @@ export default async function AdminPage() {
 
 function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><span className="text-lime-300">{icon}</span><p className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-2 text-3xl font-black">{value}</p></div>;
+}
+function HealthStat({ icon, label, value, detail, good }: { icon: React.ReactNode; label: string; value: string; detail: string; good: boolean }) {
+  return <div className={`rounded-xl border p-4 ${good ? 'border-emerald-400/15 bg-emerald-400/[0.06]' : 'border-amber-400/20 bg-amber-400/[0.07]'}`}><span className={good ? 'text-emerald-300' : 'text-amber-300'}>{icon}</span><p className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-1 text-lg font-black">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>;
 }
 function Quick({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
   return <Link href={href} className="rounded-xl border border-white/10 bg-black/10 p-4 transition hover:border-lime-300/30"><span className="text-lime-300">{icon}</span><p className="mt-4 text-sm font-black">{label}</p></Link>;

@@ -5,12 +5,11 @@ import { prisma } from '@/lib/prisma';
 import { getValidStravaToken, fetchAndMapStravaActivities, fetchActivityPhoto } from '@/lib/strava';
 import { createActivity } from '@/lib/activities';
 import { STRAVA_INTEGRATION_ENABLED } from '@/lib/features';
+import { getChallengeSettings } from '@/lib/admin-control';
+import { challengeWindow } from '@/lib/activity-date';
 
-// Only import activities from this date onward (configurable without a code change).
-// The troop operates in Malaysia (UTC+8), so "September 1st" locally begins at
-// 2026-08-31T16:00:00Z — using a naive UTC midnight here would wrongly exclude
-// activities logged in the early hours of the local day (e.g. an evening ride
-// or a workout done just after midnight local time but still "yesterday" UTC).
+// Optional deployment-level floor for Strava imports. Challenge settings are
+// always enforced as the authoritative start/end window below.
 const SYNC_START_DATE = process.env.STRAVA_SYNC_START_DATE
   ? new Date(process.env.STRAVA_SYNC_START_DATE)
   : new Date('2026-08-31T16:00:00Z');
@@ -27,7 +26,10 @@ export async function POST() {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const [user, settings] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId } }),
+      getChallengeSettings(),
+    ]);
     if (!user?.columnId) {
       return NextResponse.json(
         { error: 'User not assigned to a column' },
@@ -35,6 +37,8 @@ export async function POST() {
       );
     }
     const columnId = user.columnId;
+    const window = challengeWindow(settings.startDate, settings.endDate);
+    const effectiveStart = SYNC_START_DATE > window.start ? SYNC_START_DATE : window.start;
 
     const tokens = await getValidStravaToken(userId);
     if (!tokens) {
@@ -45,13 +49,19 @@ export async function POST() {
     }
 
     const stravaActivities = await fetchAndMapStravaActivities(tokens.accessToken, {
-      after: SYNC_START_DATE,
+      after: effectiveStart,
     });
 
     let imported = 0;
     let skipped = 0;
+    let skippedOutsideChallenge = 0;
 
     for (const activity of stravaActivities) {
+      if (activity.occurredAt < window.start || activity.occurredAt > window.end) {
+        skippedOutsideChallenge++;
+        continue;
+      }
+
       const existing = await prisma.activity.findUnique({
         where: { stravaActivityId: activity.stravaActivityId },
       });
@@ -82,7 +92,7 @@ export async function POST() {
       imported++;
     }
 
-    return NextResponse.json({ imported, skipped });
+    return NextResponse.json({ imported, skipped, skippedOutsideChallenge });
   } catch (error) {
     console.error('Error syncing Strava activities:', error);
     return NextResponse.json(

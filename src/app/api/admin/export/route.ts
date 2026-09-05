@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminGuard';
 import { prisma } from '@/lib/prisma';
-import { getAnnouncements, getAuditEntries, getChallengeSettings, getManagedColumns } from '@/lib/admin-control';
+import { getAnnouncements, getAuditEntries, getChallengeSettings, getManagedColumns, recordAdminAudit } from '@/lib/admin-control';
 import { requestLog } from '@/lib/telemetry';
 
 const csvCell = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
@@ -17,16 +17,46 @@ export async function GET(request: NextRequest) {
   const type = request.nextUrl.searchParams.get('type') || 'activities';
   if (type === 'backup') {
     try {
-      const [settings, announcements, columns, users, activities, weeklyScores, audit] = await Promise.all([
+      const [settings, announcements, columns, users, activities, weeklyScores, profileSettings, weeklyGoals, rankingSnapshots, audit] = await Promise.all([
         getChallengeSettings(),
         getAnnouncements(),
         getManagedColumns(),
         prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, columnId: true, stravaAthleteId: true, createdAt: true, updatedAt: true }, orderBy: { name: 'asc' } }),
         prisma.activity.findMany({ select: { id: true, userId: true, columnId: true, category: true, distance: true, pace: true, duration: true, completedWithFriend: true, companion: true, companionUserId: true, proofUrl: true, points: true, status: true, reviewedById: true, reviewedAt: true, rejectionReason: true, occurredAt: true, weekStart: true, weekNumber: true, stravaActivityId: true, elevationGain: true, createdAt: true, updatedAt: true }, orderBy: { occurredAt: 'desc' } }),
         prisma.weeklyScore.findMany({ orderBy: [{ weekNumber: 'asc' }, { totalPoints: 'desc' }] }),
+        prisma.$queryRawUnsafe('SELECT "userId", "weeklyGoal", "bio", "profilePhotoUrl", "createdAt", "updatedAt" FROM "UserProfileSettings" ORDER BY "userId"'),
+        prisma.$queryRawUnsafe('SELECT "userId", "weekStart", "target", "createdAt", "updatedAt" FROM "WeeklyGoal" ORDER BY "weekStart", "userId"'),
+        prisma.$queryRawUnsafe('SELECT "id", "scope", "periodKey", "entityId", "rank", "points", "snapshotDate", "capturedAt" FROM "RankingSnapshot" ORDER BY "capturedAt"'),
         getAuditEntries(10000),
       ]);
-      const backup = { format: 'kg-stay-active-operational-backup', version: 1, exportedAt: new Date().toISOString(), excludes: ['passwords', 'Strava access tokens', 'Strava refresh tokens'], challenge: settings, announcements, columns, users, activities, weeklyScores, audit };
+      const backup = {
+        format: 'kg-stay-active-operational-backup',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        excludes: ['passwords', 'Strava access tokens', 'Strava refresh tokens'],
+        challenge: settings,
+        announcements,
+        columns,
+        users,
+        activities,
+        weeklyScores,
+        profileSettings,
+        weeklyGoals,
+        rankingSnapshots,
+        audit,
+      };
+      try {
+        await recordAdminAudit(guard.userId, 'BACKUP_EXPORT', 'Operational backup', {
+          users: users.length,
+          activities: activities.length,
+          weeklyScores: weeklyScores.length,
+          profileSettings: Array.isArray(profileSettings) ? profileSettings.length : 0,
+          weeklyGoals: Array.isArray(weeklyGoals) ? weeklyGoals.length : 0,
+          rankingSnapshots: Array.isArray(rankingSnapshots) ? rankingSnapshots.length : 0,
+        });
+      } catch (auditError) {
+        console.warn('Backup export completed but audit entry could not be recorded.', auditError);
+      }
       log.success({ status: 200, type, users: users.length, activities: activities.length });
       return new NextResponse(JSON.stringify(backup, null, 2), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="kg-backup-${new Date().toISOString().slice(0, 10)}.json"`, 'Cache-Control': 'no-store' } });
     } catch (error) {

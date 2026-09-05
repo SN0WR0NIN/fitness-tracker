@@ -5,8 +5,9 @@ import { authOptions } from '@/lib/auth';
 import { ensureProofBucketExists, uploadProofImage } from '@/lib/storage';
 import { getChallengeSettings } from '@/lib/admin-control';
 import { requestLog } from '@/lib/telemetry';
+import { imageExtension, verifiedImageMime, type SupportedImageMime } from '@/lib/image-upload';
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const ALLOWED_TYPES: readonly SupportedImageMime[] = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_SIZE_BYTES = 4 * 1024 * 1024; // 4MB — stays under serverless function payload limits
 
 export async function POST(request: NextRequest) {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    if (!ALLOWED_TYPES.includes(file.type)) {
+    if (!ALLOWED_TYPES.includes(file.type as SupportedImageMime)) {
       return NextResponse.json(
         { error: 'Unsupported file type. Use JPEG, PNG, WebP, or GIF.' },
         { status: 400 }
@@ -42,15 +43,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File too large. Max 4MB.' }, { status: 400 });
     }
 
-    await ensureProofBucketExists();
-
     const buffer = Buffer.from(await file.arrayBuffer());
-    const extension = file.type.split('/')[1];
-    const fileName = `${session.user.id}/${randomUUID()}.${extension}`;
+    const contentType = verifiedImageMime(buffer, file.type, ALLOWED_TYPES);
+    if (!contentType) {
+      return NextResponse.json({ error: 'The uploaded file content does not match a supported image format.' }, { status: 400 });
+    }
 
-    const url = await uploadProofImage(buffer, fileName, file.type);
+    await ensureProofBucketExists();
+    const fileName = `${session.user.id}/${randomUUID()}.${imageExtension(contentType)}`;
+    const url = await uploadProofImage(buffer, fileName, contentType);
 
-    log.success({ status: 200, contentType: file.type, bytes: file.size });
+    log.success({ status: 200, contentType, bytes: file.size });
     return NextResponse.json({ url });
   } catch (error) {
     log.failure(error);

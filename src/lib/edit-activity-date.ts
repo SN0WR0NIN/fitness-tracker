@@ -1,12 +1,15 @@
 import { getWeekStart, getWeekNumber } from './scoring';
 import type { PrismaClient, Activity } from '@prisma/client';
-import { parseActivityDate, singaporeDate } from './activity-date';
+import { challengeDateRangeLabel, isWithinChallengeWindow, parseActivityDate, singaporeDate } from './activity-date';
 import { ActivityEditError } from './activity-duplicates';
 
 /** Move the existing awarded points; never recalculate them using newer rules. */
-export async function editOwnActivityDate(db: PrismaClient, id: string, ownerId: string, value: string, periodStart: Date) {
+export async function editOwnActivityDate(db: PrismaClient, id: string, ownerId: string, value: string, periodStart: Date, periodEnd: Date) {
   const occurredAt = parseActivityDate(value);
   if (!occurredAt) throw new ActivityEditError('Choose a valid activity date, today or earlier.', 400);
+  if (!isWithinChallengeWindow(occurredAt, periodStart, periodEnd)) {
+    throw new ActivityEditError(`Activities must fall within the challenge period (${challengeDateRangeLabel(periodStart, periodEnd)}).`, 400);
+  }
   return db.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<Activity[]>`SELECT * FROM "Activity" WHERE id = ${id} FOR UPDATE`;
     const activity = rows[0];

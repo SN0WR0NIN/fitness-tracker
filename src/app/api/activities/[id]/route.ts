@@ -26,7 +26,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (body && typeof body === 'object' && 'activityDate' in body) {
       const { activityDate } = z.object({ activityDate: z.string() }).strict().parse(body);
       const settings = await getChallengeSettings();
-      return NextResponse.json(await editOwnActivityDate(prisma, id, session.user.id, activityDate, settings.startDate));
+      return NextResponse.json(await editOwnActivityDate(prisma, id, session.user.id, activityDate, settings.startDate, settings.endDate));
     }
     const data = EditSchema.parse(body);
     if (data.category && data.category !== 'TROOP_GAMES' && data.distance === undefined) return NextResponse.json({ error: 'Distance is required.' }, { status: 400 });
