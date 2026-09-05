@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import { useState, useSyncExternalStore } from 'react';
-import { Award, UserRound, BookOpen, Home, Menu, Moon, Plus, Settings, ShieldCheck, Sun, Trophy, Users, X } from 'lucide-react';
+import { Award, Bell, UserRound, BookOpen, Home, Medal, Menu, Moon, Plus, Settings, ShieldCheck, Sun, Trophy, Users, X } from 'lucide-react';
 import AppStatusBanner from '@/components/AppStatusBanner';
 import SiteBrandName from '@/components/SiteBrandName';
 
@@ -61,6 +61,8 @@ export default function Navbar() {
               {status === 'authenticated' ? <MobileLink href="/dashboard" icon={<Home />} onClick={closeMenu}>Dashboard</MobileLink> : null}
               {status === 'authenticated' ? <MobileLink href="/trophies" icon={<Award />} onClick={closeMenu}>Trophy Cabinet</MobileLink> : null}
               <MobileLink href="/leaderboard" icon={<Trophy />} onClick={closeMenu}>Leaderboard</MobileLink>
+              <MobileLink href="/results" icon={<Medal />} onClick={closeMenu}>Weekly results</MobileLink>
+              {status === 'authenticated' ? <MobileLink href="/notifications" icon={<Bell />} onClick={closeMenu}>Notifications</MobileLink> : null}
               <MobileLink href="/rules" icon={<BookOpen />} onClick={closeMenu}>Rules</MobileLink>
               {isAdmin ? <><MobileLink href="/admin" icon={<Settings />} onClick={closeMenu}>Control centre</MobileLink><MobileLink href="/admin/activities" icon={<ShieldCheck />} onClick={closeMenu}>Activity review</MobileLink><MobileLink href="/admin/users" icon={<Users />} onClick={closeMenu}>Manage users</MobileLink></> : null}
               {status === 'authenticated' ? <button type="button" onClick={() => signOut({ callbackUrl: '/' })} className="mt-2 rounded-xl border border-gray-200 px-4 py-3 text-left text-rose-600 dark:border-gray-800 dark:text-rose-300">Log Out</button> : <MobileLink href="/auth/login" icon={<Users />} onClick={closeMenu}>Login</MobileLink>}
@@ -105,7 +107,7 @@ function DockLink({ href, label, icon: Icon, active }: { href: string; label: st
 
 function DesktopLinks({ authenticated, isAdmin }: { authenticated: boolean; isAdmin: boolean }) {
   const linkClass = 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white';
-  return <>{authenticated ? <Link href="/dashboard" className={linkClass}>Dashboard</Link> : null}{authenticated ? <Link href="/trophies" className={`flex items-center gap-1 ${linkClass}`}><Award className="h-4 w-4" />Trophies</Link> : null}<Link href="/leaderboard" className={linkClass}>Leaderboard</Link><Link href="/rules" className={linkClass}>Rules</Link>{isAdmin ? <><Link href="/admin" className={`flex items-center gap-1 ${linkClass}`}><Settings className="h-4 w-4" />Control</Link><Link href="/admin/activities" className={`flex items-center gap-1 ${linkClass}`}><ShieldCheck className="h-4 w-4" />Review</Link><Link href="/admin/users" className={`flex items-center gap-1 ${linkClass}`}><Users className="h-4 w-4" />Users</Link></> : null}{!authenticated ? <Link href="/auth/login" className={linkClass}>Login</Link> : null}</>;
+  return <>{authenticated ? <Link href="/dashboard" className={linkClass}>Dashboard</Link> : null}{authenticated ? <Link href="/trophies" className={`flex items-center gap-1 ${linkClass}`}><Award className="h-4 w-4" />Trophies</Link> : null}<Link href="/leaderboard" className={linkClass}>Leaderboard</Link><Link href="/results" className={linkClass}>Results</Link><Link href="/rules" className={linkClass}>Rules</Link>{isAdmin ? <><Link href="/admin" className={`flex items-center gap-1 ${linkClass}`}><Settings className="h-4 w-4" />Control</Link><Link href="/admin/activities" className={`flex items-center gap-1 ${linkClass}`}><ShieldCheck className="h-4 w-4" />Review</Link><Link href="/admin/users" className={`flex items-center gap-1 ${linkClass}`}><Users className="h-4 w-4" />Users</Link></> : null}{!authenticated ? <Link href="/auth/login" className={linkClass}>Login</Link> : null}</>;
 }
 
 function MobileLink({ href, icon, onClick, children }: { href: string; icon: React.ReactNode; onClick: () => void; children: React.ReactNode }) {
