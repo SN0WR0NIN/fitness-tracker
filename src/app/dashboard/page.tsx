@@ -13,8 +13,7 @@ import { STRAVA_INTEGRATION_ENABLED } from '@/lib/features';
 
 export const dynamic = 'force-dynamic';
 
-const ACTIVITY_PAGE_SIZE = 8;
-const MAX_ACTIVITY_ROWS = 48;
+const INITIAL_ACTIVITY_ROWS = 8;
 
 type DashboardUser = {
   stravaAthleteId: string | null;
@@ -39,20 +38,15 @@ type DashboardActivity = {
 };
 
 type SelectableUser = { id: string; name: string };
+
 type ColumnScore = { columnId: string; _sum: { totalPoints: number | null } };
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ activities?: string }> }) {
+export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id;
   if (!userId) redirect('/auth/login');
 
-  const params = await searchParams;
-  const requestedRows = Number(params.activities ?? ACTIVITY_PAGE_SIZE);
-  const activityLimit = Number.isFinite(requestedRows)
-    ? Math.min(MAX_ACTIVITY_ROWS, Math.max(ACTIVITY_PAGE_SIZE, Math.ceil(requestedRows / ACTIVITY_PAGE_SIZE) * ACTIVITY_PAGE_SIZE))
-    : ACTIVITY_PAGE_SIZE;
-
-  const [profile, userResult, profileSettings, goalRecords, activitiesResult, activityTotal, pendingCount, analyticsActivitiesResult, usersResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
+  const [profile, userResult, profileSettings, goalRecords, activitiesResult, usersResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
     getParticipantProfile(userId, { includeActivities: false }),
     prisma.user.findUnique({
       where: { id: userId },
@@ -65,8 +59,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     getWeeklyGoalRecords(userId),
     prisma.activity.findMany({
       where: { userId },
-      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
-      take: activityLimit,
+      orderBy: { occurredAt: 'desc' },
+      take: INITIAL_ACTIVITY_ROWS,
       select: {
         id: true,
         category: true,
@@ -82,21 +76,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         proofUrl: true,
         occurredAt: true,
         stravaActivityId: true,
-      },
-    }),
-    prisma.activity.count({ where: { userId } }),
-    prisma.activity.count({ where: { userId, status: 'PENDING' } }),
-    prisma.activity.findMany({
-      where: { userId, status: 'APPROVED' },
-      orderBy: { occurredAt: 'desc' },
-      select: {
-        category: true,
-        distance: true,
-        pace: true,
-        points: true,
-        status: true,
-        occurredAt: true,
-        completedWithFriend: true,
       },
     }),
     prisma.user.findMany({
@@ -184,13 +163,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         milestone: goalIntelligence.milestone,
         goalHistory: goalIntelligence.history,
       }}
-      activitySummary={{ total: activityTotal, approved: profile.activityCount, pending: pendingCount }}
-      activityShown={activityLimit}
       activities={activities.map((activity) => ({
-        ...activity,
-        occurredAt: activity.occurredAt.toISOString(),
-      }))}
-      analyticsActivities={analyticsActivitiesResult.map((activity) => ({
         ...activity,
         occurredAt: activity.occurredAt.toISOString(),
       }))}
