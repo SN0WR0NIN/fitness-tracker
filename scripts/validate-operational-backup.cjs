@@ -21,6 +21,7 @@ const array = (value, name) => {
   assert(Array.isArray(value), `${name} must be an array`);
   return Array.isArray(value) ? value : [];
 };
+const optionalArray = (value, name) => value === undefined ? [] : array(value, name);
 const uniqueIds = (rows, name) => {
   const seen = new Set();
   for (const row of rows) {
@@ -41,6 +42,9 @@ const columns = array(backup?.columns, 'columns');
 const users = array(backup?.users, 'users');
 const activities = array(backup?.activities, 'activities');
 const weeklyScores = array(backup?.weeklyScores, 'weeklyScores');
+const profileSettings = optionalArray(backup?.profileSettings, 'profileSettings');
+const weeklyGoals = optionalArray(backup?.weeklyGoals, 'weeklyGoals');
+const rankingSnapshots = optionalArray(backup?.rankingSnapshots, 'rankingSnapshots');
 array(backup?.announcements, 'announcements');
 array(backup?.audit, 'audit');
 
@@ -48,6 +52,7 @@ const columnIds = uniqueIds(columns, 'columns');
 const userIds = uniqueIds(users, 'users');
 uniqueIds(activities, 'activities');
 uniqueIds(weeklyScores, 'weeklyScores');
+uniqueIds(rankingSnapshots, 'rankingSnapshots');
 
 for (const user of users) {
   if (user?.columnId != null) assert(columnIds.has(user.columnId), `User ${user.id} references missing column ${user.columnId}`);
@@ -77,6 +82,22 @@ for (const score of weeklyScores) {
   }
 }
 
+const profileUsers = new Set();
+for (const row of profileSettings) {
+  assert(userIds.has(row?.userId), `Profile settings reference missing user ${row?.userId}`);
+  assert(!profileUsers.has(row?.userId), `Duplicate profile settings for user ${row?.userId}`);
+  profileUsers.add(row?.userId);
+}
+
+const goalKeys = new Set();
+for (const row of weeklyGoals) {
+  assert(userIds.has(row?.userId), `Weekly goal references missing user ${row?.userId}`);
+  const key = `${row?.userId}|${row?.weekStart}`;
+  assert(!goalKeys.has(key), `Duplicate weekly goal ${key}`);
+  goalKeys.add(key);
+  assert(typeof row?.target === 'number' && Number.isFinite(row.target) && row.target > 0, `Weekly goal ${key} has invalid target`);
+}
+
 if (errors.length) {
   console.error(`Backup validation failed with ${errors.length} problem(s):`);
   for (const error of errors) console.error(`- ${error}`);
@@ -90,5 +111,8 @@ console.log(JSON.stringify({
   users: users.length,
   activities: activities.length,
   weeklyScores: weeklyScores.length,
+  profileSettings: profileSettings.length,
+  weeklyGoals: weeklyGoals.length,
+  rankingSnapshots: rankingSnapshots.length,
   excludes: backup.excludes || [],
 }, null, 2));
