@@ -50,7 +50,8 @@ export default async function AdminPage() {
           ON x."userId"=y."userId" AND x."category"=y."category" AND x.id<y.id
         WHERE x."status" <> 'REJECTED' AND y."status" <> 'REJECTED'
           AND x.distance > 0 AND y.distance > 0
-          AND (x."occurredAt" AT TIME ZONE 'Asia/Singapore')::date = (y."occurredAt" AT TIME ZONE 'Asia/Singapore')::date
+          AND (x."occurredAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore')::date =
+              (y."occurredAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore')::date
           AND abs(x.distance-y.distance) <= greatest(x.distance,y.distance)*0.02
       )
       SELECT (SELECT COUNT(*)::int FROM mismatches) AS "scoreMismatchCount",
