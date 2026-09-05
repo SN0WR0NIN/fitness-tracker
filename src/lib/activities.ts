@@ -1,3 +1,4 @@
+import { duplicateReason, DuplicateApprovalError, ActivityEditError } from '@/lib/activity-duplicates';
 import { prisma } from '@/lib/prisma';
 import { calculateActivityPoints, resolveEffectiveCategory, getWeekStart, getWeekNumber, ActivityCategory } from '@/lib/scoring';
 import { getChallengeSettings } from '@/lib/admin-control';
@@ -89,15 +90,20 @@ export async function createActivity(input: CreateActivityInput) {
  * Approves a pending (or previously rejected) activity and applies its points
  * to the weekly score. Idempotent if already approved.
  */
-export async function approveActivity(activityId: string, reviewerId: string) {
+export async function approveActivity(activityId: string, reviewerId: string, duplicateOverrideReason?: string) {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const activity = await tx.activity.findUnique({ where: { id: activityId } });
+    const locked = await tx.$queryRaw<import('@prisma/client').Activity[]>`SELECT * FROM "Activity" WHERE id = ${activityId} FOR UPDATE`;
+    const activity = locked[0];
     if (!activity) {
       throw new Error('Activity not found');
     }
     if (activity.status === 'APPROVED') {
       return activity;
     }
+
+    const candidates = await tx.activity.findMany({ where: { userId: activity.userId, id: { not: activity.id }, status: { not: 'REJECTED' } } });
+    const matches = candidates.flatMap((other) => { const reason = duplicateReason(activity, other); return reason ? [{ id: other.id, reason }] : []; });
+    if (matches.length && !duplicateOverrideReason?.trim()) throw new DuplicateApprovalError(matches);
 
     await tx.weeklyScore.upsert({
       where: {
@@ -129,7 +135,7 @@ export async function approveActivity(activityId: string, reviewerId: string) {
         rejectionReason: null,
       },
     });
-  });
+  }, { isolationLevel: 'Serializable' });
 }
 
 /**
@@ -138,7 +144,8 @@ export async function approveActivity(activityId: string, reviewerId: string) {
  */
 export async function rejectActivity(activityId: string, reviewerId: string, reason?: string) {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const activity = await tx.activity.findUnique({ where: { id: activityId } });
+    const locked = await tx.$queryRaw<import('@prisma/client').Activity[]>`SELECT * FROM "Activity" WHERE id = ${activityId} FOR UPDATE`;
+    const activity = locked[0];
     if (!activity) {
       throw new Error('Activity not found');
     }
@@ -180,7 +187,8 @@ export async function rejectActivity(activityId: string, reviewerId: string, rea
  */
 export async function resetActivityToPending(activityId: string) {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const activity = await tx.activity.findUnique({ where: { id: activityId } });
+    const locked = await tx.$queryRaw<import('@prisma/client').Activity[]>`SELECT * FROM "Activity" WHERE id = ${activityId} FOR UPDATE`;
+    const activity = locked[0];
     if (!activity) {
       throw new Error('Activity not found');
     }
@@ -218,7 +226,8 @@ export async function resetActivityToPending(activityId: string) {
 interface UpdateActivityInput {
   category?: ActivityCategory;
   distance?: number;
-  pace?: number;
+  pace?: number | null;
+  proofUrl?: string | null;
   // undefined = leave companion unchanged, null = remove companion, string = set a verified companion
   companionUserId?: string | null;
   // admin-only manual override for a friend who hasn't registered an account yet;
@@ -231,17 +240,21 @@ interface UpdateActivityInput {
  * If the activity is currently APPROVED, the weekly score is corrected
  * in the same transaction (reversing the old contribution, applying the new one).
  */
-export async function updateActivity(activityId: string, input: UpdateActivityInput) {
+export async function updateActivity(activityId: string, input: UpdateActivityInput, ownerId?: string) {
   const settings = await getChallengeSettings();
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const activity = await tx.activity.findUnique({ where: { id: activityId } });
+    const locked = await tx.$queryRaw<import('@prisma/client').Activity[]>`SELECT * FROM "Activity" WHERE id = ${activityId} FOR UPDATE`;
+    const activity = locked[0];
     if (!activity) {
       throw new Error('Activity not found');
     }
 
+    if (ownerId && activity.userId !== ownerId) throw new ActivityEditError('Not your activity', 403);
+    if (ownerId && activity.status !== 'PENDING') throw new ActivityEditError('This submission has been reviewed. Refresh to see its status.', 409);
+    if (ownerId && activity.stravaActivityId && (input.category !== undefined || input.distance !== undefined || input.pace !== undefined || input.proofUrl !== undefined)) throw new ActivityEditError('Strava workout details must be corrected in Strava. You can update the companion here.', 400);
     const requestedCategory = input.category ?? activity.category;
     const newDistance = input.distance ?? activity.distance;
-    const newPace = input.pace ?? activity.pace;
+    const newPace = input.pace === undefined ? activity.pace : input.pace;
     const newCategory = resolveEffectiveCategory(requestedCategory, newPace ?? undefined, settings.scoringRules);
 
     let newCompanionUserId = activity.companionUserId;
@@ -254,6 +267,7 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
         newCompletedWithFriend = false;
       } else {
         const companionUser = await tx.user.findUnique({ where: { id: input.companionUserId } });
+        if (ownerId && (!companionUser || input.companionUserId === ownerId)) throw new ActivityEditError('Choose another registered participant as companion.', 400);
         newCompanionUserId = input.companionUserId;
         newCompanionName = companionUser?.name ?? null;
         newCompletedWithFriend = true;
@@ -306,7 +320,8 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
       where: { id: activityId },
       data: {
         category: newCategory,
-        distance: newDistance,
+        proofUrl: input.proofUrl,
+        distance: newCategory === 'TROOP_GAMES' ? 0 : newDistance,
         pace: newPace,
         completedWithFriend: newCompletedWithFriend,
         companionUserId: newCompanionUserId,

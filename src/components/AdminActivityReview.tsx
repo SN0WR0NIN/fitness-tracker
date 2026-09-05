@@ -1,5 +1,6 @@
 'use client';
 
+import { duplicateReason } from '@/lib/activity-duplicates';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
@@ -97,16 +98,22 @@ export default function AdminActivityReview({ initialActivities, users }: { init
       });
   }, [activities, statusFilter, categoryFilter, query]);
 
-  const runStatusAction = async (activityId: string, action: 'approve' | 'reject' | 'reset', reason?: string) => {
+  const runStatusAction = async (activityId: string, action: 'approve' | 'reject' | 'reset', reason?: string, duplicateOverrideReason?: string) => {
     setActioningId(activityId);
     setActionError('');
     try {
       const response = await fetch(`/api/admin/activities/${activityId}/${action}`, {
         method: 'POST',
-        headers: action === 'reject' ? { 'Content-Type': 'application/json' } : undefined,
-        body: action === 'reject' ? JSON.stringify({ reason }) : undefined,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(action === 'reject' ? { reason } : { duplicateOverrideReason }),
       });
       const data = await response.json().catch(() => ({}));
+      if (response.status === 409 && data.duplicates?.length && action === 'approve') {
+        const explanation = window.prompt(`${data.error}\n${data.duplicates.map((match: { id: string; reason: string }) => `${match.reason}: ${match.id}`).join('\n')}\n\nIf you verified these are different workouts, explain why (at least 10 characters). Cancel to compare or reject.`);
+        if (explanation && explanation.trim().length >= 10) await runStatusAction(activityId, action, undefined, explanation.trim());
+        else setActionError('Approval paused. Compare the matching submissions before continuing.');
+        return;
+      }
       if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : `Failed to ${action} activity.`);
       setActivities((current) => current.map((activity) => activity.id === activityId ? {
         ...activity,
@@ -209,6 +216,7 @@ export default function AdminActivityReview({ initialActivities, users }: { init
                     </div>
                   )}
 
+                  {activities.some((other) => duplicateReason({ ...activity, userId: activity.user.id }, { ...other, userId: other.user.id })) ? <div className="mt-4 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200"><strong>Possible duplicate — compare before approval</strong>{activities.flatMap((other) => { const reason = duplicateReason({ ...activity, userId: activity.user.id }, { ...other, userId: other.user.id }); return reason ? [<p key={other.id} className="mt-2">{reason} · {new Date(other.occurredAt).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })} · {other.distance} · {other.status}<button type="button" className="ml-2 min-h-11 underline" onClick={() => { setStatusFilter('ALL'); setQuery(activity.user.name); setCategoryFilter('ALL'); }}>Compare entries</button></p>] : []; })}</div> : null}
                   {activity.rejectionReason ? <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-200"><strong>Rejection reason:</strong> {activity.rejectionReason}</div> : null}
                   <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5">
                     <div className="flex flex-wrap gap-3 text-xs">
