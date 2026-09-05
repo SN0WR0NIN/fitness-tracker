@@ -49,6 +49,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'The uploaded file content does not match a supported image format.' }, { status: 400 });
     }
 
+    // CI E2E uses an ephemeral database and must never depend on production
+    // Supabase Storage. The gate requires both explicit E2E mode and CI=true,
+    // so this path cannot activate on normal Vercel runtime traffic.
+    if (process.env.E2E_TEST_MODE === '1' && process.env.CI === 'true') {
+      const url = `https://example.invalid/e2e-proof/${session.user.id}/${randomUUID()}.${imageExtension(contentType)}`;
+      log.success({ status: 200, contentType, bytes: file.size, e2e: true });
+      return NextResponse.json({ url });
+    }
+
     await ensureProofBucketExists();
     const fileName = `${session.user.id}/${randomUUID()}.${imageExtension(contentType)}`;
     const url = await uploadProofImage(buffer, fileName, contentType);
