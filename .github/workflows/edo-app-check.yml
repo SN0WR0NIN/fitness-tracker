@@ -25,3 +25,9 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build
         run: npm run build
+      - name: Capture lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: edo-lockfile
+          path: edo-app/package-lock.json
+          if-no-files-found: error
