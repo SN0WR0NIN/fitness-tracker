@@ -93,6 +93,8 @@ jobs:
       - name: Verify standalone build
         working-directory: standalone
         run: npm ci --no-audit --no-fund && npm run build
+      - name: Remove generated dependencies and build output
+        run: rm -rf standalone/node_modules standalone/.next
       - name: Upload standalone project
         uses: actions/upload-artifact@v4
         with:
