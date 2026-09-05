@@ -6,62 +6,29 @@ import SystemStatusCard from '@/components/SystemStatusCard';
 import { requireAdmin } from '@/lib/adminGuard';
 import { getAuditEntries } from '@/lib/admin-control';
 import { prisma } from '@/lib/prisma';
+import { getLatestOperationalBackupSummary, getLatestScheduledHealth } from '@/lib/system-automation';
 
 export const dynamic = 'force-dynamic';
-
-type IntegrityRow = { scoreMismatchCount: number; possibleDuplicatePairs: number };
 
 export default async function AdminPage() {
   const guard = await requireAdmin();
   if (guard.status === 401) redirect('/auth/login');
   if (guard.error) redirect('/dashboard');
 
-  const [users, activities, pending, approvedPoints, audit, stravaConnected, integrityRows] = await Promise.all([
+  const [users, activities, pending, approvedPoints, audit, stravaConnected, scheduledHealth, automatedBackup] = await Promise.all([
     prisma.user.count(),
     prisma.activity.count(),
     prisma.activity.count({ where: { status: 'PENDING' } }),
     prisma.activity.aggregate({ where: { status: 'APPROVED' }, _sum: { points: true } }),
     getAuditEntries(100),
     prisma.user.count({ where: { stravaAthleteId: { not: null } } }),
-    prisma.$queryRawUnsafe(`
-      WITH expected AS (
-        SELECT a."userId", a."weekStart",
-          COALESCE(SUM(a."points"), 0)::float8 AS total,
-          COALESCE(SUM(a."points") FILTER (WHERE a."category"='RUN'), 0)::float8 AS run,
-          COALESCE(SUM(a."points") FILTER (WHERE a."category"='CYCLE'), 0)::float8 AS cycle,
-          COALESCE(SUM(a."points") FILTER (WHERE a."category"='SWIM'), 0)::float8 AS swim,
-          COALESCE(SUM(a."points") FILTER (WHERE a."category"='WALK_OR_HIKE'), 0)::float8 AS hike,
-          COALESCE(SUM(a."points") FILTER (WHERE a."category"='TROOP_GAMES'), 0)::float8 AS troop
-        FROM "Activity" a WHERE a."status"='APPROVED'
-        GROUP BY a."userId", a."weekStart"
-      ), mismatches AS (
-        SELECT COALESCE(e."userId", w."userId") AS user_id
-        FROM expected e FULL OUTER JOIN "WeeklyScore" w
-          ON w."userId"=e."userId" AND w."weekStart"=e."weekStart"
-        WHERE COALESCE(e.total,0) <> COALESCE(w."totalPoints",0)
-          OR COALESCE(e.run,0) <> COALESCE(w."runPoints",0)
-          OR COALESCE(e.cycle,0) <> COALESCE(w."cyclePoints",0)
-          OR COALESCE(e.swim,0) <> COALESCE(w."swimPoints",0)
-          OR COALESCE(e.hike,0) <> COALESCE(w."hikePoints",0)
-          OR COALESCE(e.troop,0) <> COALESCE(w."troopGamePoints",0)
-      ), duplicate_pairs AS (
-        SELECT x.id
-        FROM "Activity" x JOIN "Activity" y
-          ON x."userId"=y."userId" AND x."category"=y."category" AND x.id<y.id
-        WHERE x."status" <> 'REJECTED' AND y."status" <> 'REJECTED'
-          AND x.distance > 0 AND y.distance > 0
-          AND (x."occurredAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore')::date =
-              (y."occurredAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore')::date
-          AND abs(x.distance-y.distance) <= greatest(x.distance,y.distance)*0.02
-      )
-      SELECT (SELECT COUNT(*)::int FROM mismatches) AS "scoreMismatchCount",
-             (SELECT COUNT(*)::int FROM duplicate_pairs) AS "possibleDuplicatePairs"
-    `) as Promise<IntegrityRow[]>,
+    getLatestScheduledHealth(),
+    getLatestOperationalBackupSummary(),
   ]);
 
-  const integrity = integrityRows[0] ?? { scoreMismatchCount: 0, possibleDuplicatePairs: 0 };
-  const lastBackup = audit.find((entry) => entry.action === 'BACKUP_EXPORT');
+  const integrity = scheduledHealth?.details;
   const recentAudit = audit.slice(0, 10);
+  const checkTime = scheduledHealth?.createdAt;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -85,24 +52,46 @@ export default async function AdminPage() {
         <SystemStatusCard />
 
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
-          <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black">Operational health</h2><p className="mt-1 text-sm text-slate-500">Fast checks for scoring integrity, duplicate review, connections, and recovery readiness.</p></div><span className="text-xs text-slate-600">Warnings require review; they are never auto-deleted.</span></div>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div><h2 className="text-lg font-black">Automated safety net</h2><p className="mt-1 text-sm text-slate-500">Integrity runs hourly. Private operational snapshots run daily at 2:30 AM Singapore time.</p></div>
+            <span className="text-xs text-slate-600">{checkTime ? `Last check ${formatSg(checkTime)}` : 'No scheduled check recorded'}</span>
+          </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <HealthStat icon={integrity.scoreMismatchCount === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />} label="Score reconciliation" value={integrity.scoreMismatchCount === 0 ? 'Balanced' : `${integrity.scoreMismatchCount} mismatch${integrity.scoreMismatchCount === 1 ? '' : 'es'}`} detail="Approved activities vs weekly scores" good={integrity.scoreMismatchCount === 0} />
-            <HealthStat icon={integrity.possibleDuplicatePairs === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />} label="Duplicate review" value={`${integrity.possibleDuplicatePairs} warning${integrity.possibleDuplicatePairs === 1 ? '' : 's'}`} detail="Similar same-day distance pairs" good={integrity.possibleDuplicatePairs === 0} />
+            <HealthStat
+              icon={(integrity?.score_mismatches ?? 1) === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />}
+              label="Score reconciliation"
+              value={integrity ? (integrity.score_mismatches === 0 ? 'Balanced' : `${integrity.score_mismatches} mismatch${integrity.score_mismatches === 1 ? '' : 'es'}`) : 'No result'}
+              detail={scheduledHealth ? `Scheduled status: ${scheduledHealth.status}` : 'Waiting for scheduler'}
+              good={Boolean(integrity && integrity.score_mismatches === 0)}
+            />
+            <HealthStat
+              icon={(integrity?.possible_duplicate_pairs ?? 1) === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />}
+              label="Duplicate review"
+              value={integrity ? `${integrity.possible_duplicate_pairs} warning${integrity.possible_duplicate_pairs === 1 ? '' : 's'}` : 'No result'}
+              detail="Similar same-day distance pairs · review only"
+              good={Boolean(integrity && integrity.possible_duplicate_pairs === 0)}
+            />
             <HealthStat icon={<Link2 className="h-5 w-5" />} label="Strava connected" value={`${stravaConnected} / ${users}`} detail="Participant accounts" good />
-            <HealthStat icon={<DatabaseBackup className="h-5 w-5" />} label="Latest backup" value={lastBackup ? lastBackup.createdAt.toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short' }) : 'Not recorded'} detail={lastBackup ? lastBackup.createdAt.toLocaleTimeString('en-SG', { timeZone: 'Asia/Singapore', hour: '2-digit', minute: '2-digit' }) : 'Export one from Quick actions'} good={Boolean(lastBackup)} />
+            <HealthStat
+              icon={<DatabaseBackup className="h-5 w-5" />}
+              label="Automated backup"
+              value={automatedBackup ? automatedBackup.createdAt.toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short' }) : 'Not recorded'}
+              detail={automatedBackup ? `${automatedBackup.counts.activities ?? 0} activities · checksum ${automatedBackup.checksumSha256.slice(0, 8)}…` : 'Waiting for first snapshot'}
+              good={Boolean(automatedBackup)}
+            />
           </div>
         </section>
 
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <h2 className="text-lg font-black">Quick actions</h2>
           <p className="mt-1 text-sm text-slate-500">Jump directly to the most common admin tasks.</p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <Quick href="/admin/activities" icon={<FileClock className="h-5 w-5" />} label="Review pending" />
             <Quick href="/admin/users" icon={<Users className="h-5 w-5" />} label="Manage users" />
             <Quick href="/admin/settings" icon={<Settings className="h-5 w-5" />} label="Settings & scoring" />
             <Quick href="/admin/recap" icon={<Megaphone className="h-5 w-5" />} label="Weekly recap" />
-            <Quick href="/api/admin/export?type=backup" icon={<DatabaseBackup className="h-5 w-5" />} label="Export backup" />
+            <Quick href="/api/admin/export?type=backup" icon={<DatabaseBackup className="h-5 w-5" />} label="Fresh backup now" />
+            <Quick href="/api/admin/backups/latest" icon={<DatabaseBackup className="h-5 w-5" />} label="Download auto backup" />
           </div>
         </section>
 
@@ -123,6 +112,9 @@ export default async function AdminPage() {
   );
 }
 
+function formatSg(value: Date) {
+  return value.toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
 function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><span className="text-lime-300">{icon}</span><p className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-2 text-3xl font-black">{value}</p></div>;
 }
