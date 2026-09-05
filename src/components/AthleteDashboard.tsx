@@ -2,11 +2,13 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState } from 'react';
 import {
   Activity,
   Award,
   Bike,
+  Camera,
   Check,
   CheckCircle2,
   Clock3,
@@ -35,6 +37,8 @@ type ActivityCategory = 'RUN' | 'CYCLE' | 'SWIM' | 'WALK_OR_HIKE' | 'TROOP_GAMES
 type DashboardProfile = {
   id: string;
   name: string;
+  bio: string;
+  profilePhotoUrl: string | null;
   column: { id: string; name: string } | null;
   totalPoints: number;
   rank: number | null;
@@ -141,8 +145,11 @@ export default function AthleteDashboard({
   const [savingCompanion, setSavingCompanion] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileName, setProfileName] = useState(profile.name);
+  const [profileBio, setProfileBio] = useState(profile.bio);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState(profile.profilePhotoUrl);
   const [weeklyGoal, setWeeklyGoal] = useState(engagement.weeklyGoal.toString());
   const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
   const activitySubmitted = searchParams.get('activitySubmitted') === 'true';
 
@@ -206,7 +213,7 @@ export default function AthleteDashboard({
       const response = await fetch('/api/user/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: profileName, weeklyGoal: Number(weeklyGoal) }),
+        body: JSON.stringify({ name: profileName, weeklyGoal: Number(weeklyGoal), bio: profileBio, profilePhotoUrl }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -225,9 +232,37 @@ export default function AthleteDashboard({
 
   const openProfileEditor = () => {
     setProfileName(profile.name);
+    setProfileBio(profile.bio);
+    setProfilePhotoUrl(profile.profilePhotoUrl);
     setWeeklyGoal(engagement.weeklyGoal.toString());
     setProfileMessage('');
     setEditingProfile(true);
+  };
+
+  const uploadPhoto = async (file: File | undefined) => {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      setProfileMessage('Choose a JPEG, PNG, or WebP image no larger than 2 MB.');
+      return;
+    }
+    setUploadingPhoto(true);
+    setProfileMessage('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch('/api/profile/photo', { method: 'POST', body: formData });
+      const data = await response.json();
+      if (!response.ok) {
+        setProfileMessage(data.error || 'Unable to upload your photo.');
+        return;
+      }
+      setProfilePhotoUrl(data.url);
+    } catch (error) {
+      console.error('Error uploading profile photo:', error);
+      setProfileMessage('Unable to upload your photo.');
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   return (
@@ -239,13 +274,15 @@ export default function AthleteDashboard({
           <div className="grid items-center gap-8 lg:grid-cols-[1fr_auto]">
             <div>
               <div className="hero-reveal flex flex-col gap-5 sm:flex-row sm:items-center">
-                <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-lime-300 via-yellow-300 to-orange-500 text-2xl font-black text-slate-950 shadow-xl shadow-orange-500/20">
-                  {initials}<span className="absolute -right-1 -top-1 h-4 w-4 rounded-full border-4 border-slate-950 bg-lime-300" />
+                <div className="relative h-20 w-20 shrink-0">
+                  <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-lime-300 via-yellow-300 to-orange-500 text-2xl font-black text-slate-950 shadow-xl shadow-orange-500/20">{profile.profilePhotoUrl ? <Image src={profile.profilePhotoUrl} alt={`${profile.name}'s profile photo`} fill sizes="80px" className="object-cover" /> : initials}</div>
+                  <span className="absolute -right-1 -top-1 z-10 h-4 w-4 rounded-full border-4 border-slate-950 bg-lime-300" />
                 </div>
                 <div>
                   <p className="live-pulse inline-flex items-center gap-2.5 text-xs font-black uppercase tracking-[0.2em] text-lime-300">My live season</p>
                   <h1 className="athletic-display mt-3 text-4xl leading-none sm:text-6xl">{profile.name}</h1>
                   <p className="mt-2 flex items-center gap-2 text-sm text-slate-300"><Users className="h-4 w-4 text-sky-300" />{profile.column?.name ?? 'No column assigned'}</p>
+                  {profile.bio ? <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">{profile.bio}</p> : null}
                 </div>
               </div>
               <div className="hero-reveal hero-reveal-delay-2 mt-7 flex flex-wrap gap-3">
@@ -426,12 +463,17 @@ export default function AthleteDashboard({
             <section className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl sm:p-8">
               <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-lime-300">Personal settings</p><h2 id="profile-settings-title" className="mt-2 text-2xl font-black">Edit your profile</h2><p className="mt-2 text-sm text-slate-400">Your name appears across rankings, activities, and Column pages.</p></div><button type="button" onClick={() => setEditingProfile(false)} aria-label="Close profile settings" className="rounded-xl border border-white/10 px-3 py-2 text-sm font-bold text-slate-400 hover:text-white">Close</button></div>
               <div className="mt-7 space-y-5">
+                <div className="flex items-center gap-4 rounded-2xl border border-white/5 bg-black/15 p-4">
+                  <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-lime-300 to-orange-400 text-xl font-black text-slate-950">{profilePhotoUrl ? <Image src={profilePhotoUrl} alt="Profile photo preview" fill sizes="80px" className="object-cover" /> : initials}</div>
+                  <div><label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-bold transition hover:border-lime-300/30"><Camera className="h-4 w-4" />{uploadingPhoto ? 'Uploading…' : profilePhotoUrl ? 'Replace photo' : 'Add photo'}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingPhoto} onChange={(event) => void uploadPhoto(event.target.files?.[0])} className="sr-only" /></label><p className="mt-2 text-xs text-slate-500">Square images work best · maximum 2 MB</p>{profilePhotoUrl ? <button type="button" onClick={() => setProfilePhotoUrl(null)} className="mt-2 text-xs font-bold text-rose-300">Remove photo</button> : null}</div>
+                </div>
                 <label className="block"><span className="text-sm font-bold text-slate-300">Display name</span><input value={profileName} onChange={(event) => setProfileName(event.target.value)} minLength={2} maxLength={60} autoComplete="name" className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 outline-none transition focus:border-lime-300" /></label>
+                <label className="block"><span className="text-sm font-bold text-slate-300">Athlete bio</span><textarea value={profileBio} onChange={(event) => setProfileBio(event.target.value)} maxLength={160} rows={3} placeholder="Example: Weekend runner chasing consistency and points for the team." className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-slate-950 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-violet-300" /><span className="mt-1 block text-right text-xs text-slate-500">{profileBio.length}/160</span></label>
                 <label className="block"><span className="text-sm font-bold text-slate-300">Weekly points target</span><input type="number" min="5" max="500" step="5" value={weeklyGoal} onChange={(event) => setWeeklyGoal(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 outline-none transition focus:border-orange-400" /><span className="mt-2 block text-xs text-slate-500">Choose between 5 and 500 points. You can change it whenever your training plan changes.</span></label>
                 <div className="grid gap-3 rounded-2xl border border-white/5 bg-black/15 p-4 text-sm sm:grid-cols-2"><div><span className="block text-xs text-slate-500">Login email</span><span className="mt-1 block truncate font-bold text-slate-300">{currentUser.email}</span></div><div><span className="block text-xs text-slate-500">Assigned Column</span><span className="mt-1 block font-bold text-slate-300">{profile.column?.name ?? 'Not assigned'}</span></div></div>
               </div>
               {profileMessage ? <p role="alert" className="mt-4 text-sm font-semibold text-rose-300">{profileMessage}</p> : null}
-              <div className="mt-7 flex justify-end gap-3"><button type="button" onClick={() => setEditingProfile(false)} className="rounded-xl border border-white/10 px-5 py-2.5 text-sm font-bold text-slate-300">Cancel</button><button type="button" onClick={saveProfile} disabled={savingProfile || profileName.trim().length < 2 || Number(weeklyGoal) < 5 || Number(weeklyGoal) > 500} className="rounded-xl bg-lime-300 px-5 py-2.5 text-sm font-black text-slate-950 transition hover:bg-lime-200 disabled:opacity-40">{savingProfile ? 'Saving…' : 'Save profile'}</button></div>
+              <div className="mt-7 flex justify-end gap-3"><button type="button" onClick={() => setEditingProfile(false)} className="rounded-xl border border-white/10 px-5 py-2.5 text-sm font-bold text-slate-300">Cancel</button><button type="button" onClick={saveProfile} disabled={savingProfile || uploadingPhoto || profileName.trim().length < 2 || Number(weeklyGoal) < 5 || Number(weeklyGoal) > 500} className="rounded-xl bg-lime-300 px-5 py-2.5 text-sm font-black text-slate-950 transition hover:bg-lime-200 disabled:opacity-40">{savingProfile ? 'Saving…' : 'Save profile'}</button></div>
             </section>
           </div>
         ) : null}

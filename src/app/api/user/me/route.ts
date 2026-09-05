@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getUserProfileSettings, updateUserProfileSettings } from '@/lib/user-profile-settings';
+import { deleteProfileImage, isProfileImageUrlForUser } from '@/lib/storage';
 
 export async function GET() {
   try {
@@ -38,6 +39,8 @@ export async function GET() {
       column: user.column,
       stravaConnected: !!user.stravaAthleteId,
       weeklyGoal: settings?.weeklyGoal ?? null,
+      bio: settings?.bio ?? '',
+      profilePhotoUrl: settings?.profilePhotoUrl ?? null,
     });
   } catch (error) {
     console.error('Error fetching current user:', error);
@@ -52,9 +55,11 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const body = await request.json() as { name?: unknown; weeklyGoal?: unknown };
+    const body = await request.json() as { name?: unknown; weeklyGoal?: unknown; bio?: unknown; profilePhotoUrl?: unknown };
     const name = typeof body.name === 'string' ? body.name.trim().replace(/\s+/g, ' ') : '';
     const weeklyGoal = typeof body.weeklyGoal === 'number' ? body.weeklyGoal : Number(body.weeklyGoal);
+    const bio = typeof body.bio === 'string' ? body.bio.trim().replace(/\s+/g, ' ') : '';
+    const profilePhotoUrl = typeof body.profilePhotoUrl === 'string' && body.profilePhotoUrl ? body.profilePhotoUrl : null;
 
     if (name.length < 2 || name.length > 60) {
       return NextResponse.json({ error: 'Display name must be between 2 and 60 characters.' }, { status: 400 });
@@ -62,13 +67,26 @@ export async function PATCH(request: Request) {
     if (!Number.isFinite(weeklyGoal) || weeklyGoal < 5 || weeklyGoal > 500) {
       return NextResponse.json({ error: 'Weekly target must be between 5 and 500 points.' }, { status: 400 });
     }
+    if (bio.length > 160) return NextResponse.json({ error: 'Athlete bio must be 160 characters or fewer.' }, { status: 400 });
+    if (profilePhotoUrl && !isProfileImageUrlForUser(profilePhotoUrl, session.user.id)) {
+      return NextResponse.json({ error: 'Invalid profile photo URL.' }, { status: 400 });
+    }
 
-    await updateUserProfileSettings(session.user.id, name, Math.round(weeklyGoal * 10) / 10);
+    await updateUserProfileSettings(session.user.id, name, Math.round(weeklyGoal * 10) / 10, bio, profilePhotoUrl);
+    if (!profilePhotoUrl) {
+      try {
+        await deleteProfileImage(session.user.id);
+      } catch (error) {
+        console.error('Unable to remove old profile photo:', error);
+      }
+    }
 
     return NextResponse.json({
       message: 'Profile updated.',
       name,
       weeklyGoal: Math.round(weeklyGoal * 10) / 10,
+      bio,
+      profilePhotoUrl,
     });
   } catch (error) {
     console.error('Error updating current user:', error);

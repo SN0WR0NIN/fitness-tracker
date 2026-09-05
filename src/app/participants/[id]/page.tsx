@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import {
   Activity,
@@ -77,8 +78,8 @@ export default async function ParticipantProfilePage({
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(249,115,22,0.2),_transparent_38%),radial-gradient(circle_at_80%_20%,_rgba(37,99,235,0.22),_transparent_34%)]" />
           <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-              <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-orange-400 to-orange-600 text-3xl font-black shadow-xl shadow-orange-500/20">
-                {initials}
+              <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-orange-400 to-orange-600 text-3xl font-black shadow-xl shadow-orange-500/20">
+                {profile.profilePhotoUrl ? <Image src={profile.profilePhotoUrl} alt={`${profile.name}'s profile photo`} fill sizes="96px" className="object-cover" priority /> : initials}
               </div>
               <div>
                 <p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-300">Athlete profile</p>
@@ -87,6 +88,7 @@ export default async function ParticipantProfilePage({
                   <span className="inline-flex items-center gap-2"><Users className="h-4 w-4 text-sky-300" />{profile.column?.name ?? 'No column assigned'}</span>
                   <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4 text-violet-300" />Joined {profile.createdAt.toLocaleDateString('en-SG', { month: 'short', year: 'numeric' })}</span>
                 </div>
+                {profile.bio ? <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-400">{profile.bio}</p> : null}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[34rem]">

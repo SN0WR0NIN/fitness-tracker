@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import type { ActivityCategory } from '@prisma/client';
+import { getUserProfileSettings } from '@/lib/user-profile-settings';
 
 const CATEGORY_DETAILS = {
   RUN: { label: 'Run', colour: 'bg-orange-400' },
@@ -58,7 +59,7 @@ type RankedScore = {
 };
 
 export async function getParticipantProfile(userId: string) {
-  const [userResult, rankedScoresResult] = await Promise.all([
+  const [userResult, rankedScoresResult, profileSettings] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -105,6 +106,7 @@ export async function getParticipantProfile(userId: string) {
       _sum: { totalPoints: true },
       orderBy: { _sum: { totalPoints: 'desc' } },
     }),
+    getUserProfileSettings(userId),
   ]);
 
   const user = userResult as ProfileUser | null;
@@ -199,5 +201,7 @@ export async function getParticipantProfile(userId: string) {
     activeCategories,
     bestWeek,
     achievements,
+    bio: profileSettings?.bio ?? '',
+    profilePhotoUrl: profileSettings?.profilePhotoUrl ?? null,
   };
 }
