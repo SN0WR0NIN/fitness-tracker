@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "node prisma/seed.js",
+    "validate:backup": "node scripts/validate-operational-backup.cjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {
