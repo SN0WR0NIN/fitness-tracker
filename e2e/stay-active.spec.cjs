@@ -20,6 +20,20 @@ test('member to admin workflow stays correct and private', async ({ browser, req
   const memberPage = await login(memberContext, MEMBER);
   await expect(memberPage.getByText('E2E Member').first()).toBeVisible();
 
+  const notificationsResponse = await memberPage.request.get('/api/notifications');
+  expect(notificationsResponse.ok()).toBeTruthy();
+  const notificationPayload = await notificationsResponse.json();
+  expect(notificationPayload.some((item) => item.kind === 'WEEKLY_AWARD' && item.title.includes('Top Athlete'))).toBeTruthy();
+
+  await memberPage.goto('/notifications');
+  await expect(memberPage.getByRole('heading', { name: 'Notification Centre' })).toBeVisible();
+  await expect(memberPage.getByText('You earned Top Athlete for Week 1 with 50.0 pts.')).toBeVisible();
+
+  await memberPage.goto('/results');
+  await expect(memberPage.getByRole('heading', { name: 'Weekly Results & Awards' })).toBeVisible();
+  await expect(memberPage.getByText('Week 1 awards')).toBeVisible();
+  await expect(memberPage.getByText('E2E Member').first()).toBeVisible();
+
   const fakeImage = await memberPage.request.post('/api/upload', {
     multipart: { file: { name: 'fake.png', mimeType: 'image/png', buffer: Buffer.from('not-a-png') } },
   });
@@ -62,6 +76,11 @@ test('member to admin workflow stays correct and private', async ({ browser, req
   await adminPage.goto('/admin');
   await expect(adminPage.getByRole('heading', { name: 'Automated safety net' }).first()).toBeVisible();
   await expect(adminPage.getByText('Score reconciliation').first()).toBeVisible();
+  await expect(adminPage.getByText('Weekly awards').first()).toBeVisible();
+
+  await adminPage.goto('/admin/awards');
+  await expect(adminPage.getByRole('heading', { name: 'Weekly Awards' })).toBeVisible();
+  await expect(adminPage.getByText('Week 1').first()).toBeVisible();
 
   const approve = await adminPage.request.post(`/api/admin/activities/${created.id}/approve`, { data: {} });
   expect(approve.ok()).toBeTruthy();
