@@ -3,9 +3,14 @@ import axios from 'axios';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { STRAVA_INTEGRATION_ENABLED } from '@/lib/features';
 
 export async function GET(request: NextRequest) {
   try {
+    if (!STRAVA_INTEGRATION_ENABLED) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.redirect(new URL('/auth/login', request.url));

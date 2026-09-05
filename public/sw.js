@@ -1,6 +1,6 @@
-const CACHE_NAME = 'kg-stay-active-v1';
+const CACHE_NAME = 'kg-stay-active-v2';
 const OFFLINE_URL = '/offline';
-const STATIC_ASSETS = [OFFLINE_URL, '/app-icon.svg', '/manifest.webmanifest'];
+const STATIC_ASSETS = [OFFLINE_URL, '/kg-gorilla-192.png', '/kg-gorilla-512.png', '/kg-gorilla-maskable-512.png', '/kg-gorilla-apple.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)));
@@ -27,7 +27,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (url.pathname.startsWith('/_next/static/') || url.pathname === '/app-icon.svg') {
+  if (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/kg-gorilla-')) {
     event.respondWith(
       caches.match(request).then((cached) => cached || fetch(request).then((response) => {
         const copy = response.clone();

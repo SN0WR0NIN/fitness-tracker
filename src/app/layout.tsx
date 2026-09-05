@@ -23,8 +23,11 @@ export const metadata: Metadata = {
     title: "KG Active",
   },
   icons: {
-    icon: "/app-icon.svg",
-    apple: "/2902.jpg",
+    icon: [
+      { url: "/kg-gorilla-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/kg-gorilla-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/kg-gorilla-apple.png", sizes: "180x180", type: "image/png" }],
   },
 };
 

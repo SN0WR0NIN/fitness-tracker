@@ -1,0 +1,1 @@
+export const STRAVA_INTEGRATION_ENABLED = process.env.STRAVA_INTEGRATION_ENABLED === 'true';

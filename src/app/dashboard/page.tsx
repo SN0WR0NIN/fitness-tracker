@@ -9,6 +9,7 @@ import { getCurrentWeekPoints, getSuggestedWeeklyGoal, getWeeklyGoalIntelligence
 import { getActiveColumnIds, getChallengeSettings } from '@/lib/admin-control';
 import { captureWeeklyGoal, getUserProfileSettings, getWeeklyGoalRecords } from '@/lib/user-profile-settings';
 import { getWeekStart } from '@/lib/scoring';
+import { STRAVA_INTEGRATION_ENABLED } from '@/lib/features';
 
 export const dynamic = 'force-dynamic';
 
@@ -159,6 +160,7 @@ export default async function DashboardPage() {
         } : null,
       }}
       currentUser={{
+        stravaEnabled: STRAVA_INTEGRATION_ENABLED,
         stravaConnected: Boolean(user.stravaAthleteId),
         email: user.email,
         hasCustomWeeklyGoal: Boolean(profileSettings),
