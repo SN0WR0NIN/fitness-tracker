@@ -16,8 +16,9 @@ export default function ActivityProof({proofUrl,label}:{proofUrl:string|null;lab
     }
   } catch { valid=false; }
   if (!valid) return <p className="text-xs text-slate-500 lg:col-span-4">Screenshot link unavailable.</p>;
+  const isGoogleDrive = preview.includes('drive.google.com');
   return <div className="lg:col-span-4"><a href={proofUrl} target="_blank" rel="noopener noreferrer" className="block max-w-sm overflow-hidden rounded-xl border border-white/10 bg-black/20 transition hover:border-orange-300/50 focus-visible:ring-2 focus-visible:ring-orange-300" aria-label={`Open ${label} in a new tab`}>
-    {failed ? <p className="p-5 text-sm text-slate-400">Preview unavailable. Open the original screenshot.</p> : <div className="relative h-60 sm:h-72"><Image src={preview} alt={label} fill unoptimized sizes="(max-width: 640px) 100vw, 384px" className="object-contain" onError={()=>setFailed(true)} /></div>}
+    {failed ? <p className="p-5 text-sm text-slate-400">Preview unavailable. Open the original screenshot.</p> : <div className="relative h-48 sm:h-56"><Image src={preview} alt={label} fill unoptimized={isGoogleDrive} loading="lazy" quality={68} sizes="(max-width: 640px) 92vw, 384px" className="object-contain" onError={()=>setFailed(true)} /></div>}
     <p className="border-t border-white/10 px-4 py-2 text-xs font-semibold text-orange-300">Open full screenshot ↗</p>
   </a></div>;
 }
