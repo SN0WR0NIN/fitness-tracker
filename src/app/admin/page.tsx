@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Activity, CheckCircle2, DatabaseBackup, FileClock, Link2, Megaphone, Settings, ShieldCheck, TriangleAlert, Trophy, Users } from 'lucide-react';
+import { Activity, Award, CheckCircle2, DatabaseBackup, FileClock, Link2, Megaphone, Settings, ShieldCheck, TriangleAlert, Trophy, Users } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import SystemStatusCard from '@/components/SystemStatusCard';
 import { requireAdmin } from '@/lib/adminGuard';
@@ -40,7 +40,7 @@ export default async function AdminPage() {
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-lime-300"><ShieldCheck className="h-4 w-4" />Admin operations</p>
           <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div><h1 className="text-3xl font-black sm:text-5xl">Command Centre 2.0</h1><p className="mt-3 text-slate-400">A faster operations-first landing page for the challenge.</p></div>
-            <div className="flex flex-wrap gap-2"><AdminLink href="/admin/activities" label="Review queue" /><AdminLink href="/admin/duplicates" label="Duplicate review" /><AdminLink href="/admin/users" label="Manage users" /><AdminLink href="/admin/settings" label="Settings" /></div>
+            <div className="flex flex-wrap gap-2"><AdminLink href="/admin/activities" label="Review queue" /><AdminLink href="/admin/duplicates" label="Duplicate review" /><AdminLink href="/admin/awards" label="Weekly awards" /><AdminLink href="/admin/users" label="Manage users" /><AdminLink href="/admin/settings" label="Settings" /></div>
           </div>
         </header>
 
@@ -90,6 +90,8 @@ export default async function AdminPage() {
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Quick href="/admin/activities" icon={<FileClock className="h-5 w-5" />} label="Review pending" />
             <Quick href="/admin/duplicates" icon={<TriangleAlert className="h-5 w-5" />} label={`Duplicate review (${openDuplicatePairs})`} />
+            <Quick href="/admin/awards" icon={<Award className="h-5 w-5" />} label="Weekly awards" />
+            <Quick href="/results" icon={<Trophy className="h-5 w-5" />} label="Public results" />
             <Quick href="/admin/users" icon={<Users className="h-5 w-5" />} label="Manage users" />
             <Quick href="/admin/settings" icon={<Settings className="h-5 w-5" />} label="Settings & scoring" />
             <Quick href="/admin/recap" icon={<Megaphone className="h-5 w-5" />} label="Weekly recap" />
