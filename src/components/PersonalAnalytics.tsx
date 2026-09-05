@@ -1,15 +1,39 @@
 'use client';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { personalMetrics, type MetricActivity } from '@/lib/personal-metrics';
 import { formatPace } from '@/lib/format';
 
 type Props = { activities: MetricActivity[]; today: string; weeklyChart?: React.ReactNode };
 
-export default function PersonalAnalytics(props: Props) {
+export default function PersonalAnalytics({ activities, ...props }: Props) {
   const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<MetricActivity[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!open || rows || loading) return;
+    const controller = new AbortController();
+    setLoading(true);
+    setError('');
+    fetch('/api/user/activities?mode=metrics', { signal: controller.signal, cache: 'no-store' })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !Array.isArray(data.activities)) throw new Error('Unable to load analytics.');
+        return data.activities as MetricActivity[];
+      })
+      .then((data) => setRows(data))
+      .catch((caught) => {
+        if (controller.signal.aborted) return;
+        setError(caught instanceof Error ? caught.message : 'Unable to load analytics.');
+      })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [loading, open, rows]);
+
   return <details className="dashboard-fold" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary>Performance analytics</summary>
-    {open ? <PersonalAnalyticsContent {...props} /> : null}
+    {open ? loading ? <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-sm text-slate-400">Loading full analytics…</div> : error ? <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-200">{error}</div> : <PersonalAnalyticsContent activities={rows ?? activities} {...props} /> : null}
   </details>;
 }
 
