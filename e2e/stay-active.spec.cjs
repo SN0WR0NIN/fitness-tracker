@@ -88,6 +88,55 @@ test('member to admin workflow stays correct and private', async ({ browser, req
   await memberPage.goto('/participants/e2e_member');
   await expect(memberPage.getByText('E2E Member').first()).toBeVisible();
 
+  const duplicateCreate = await memberPage.request.post('/api/activities', {
+    data: { activityDate: '2026-09-02', category: 'RUN', distance: 5.2, pace: 6, proofUrl },
+  });
+  expect(duplicateCreate.status()).toBe(201);
+  const duplicateActivity = await duplicateCreate.json();
+
+  const duplicateBlocked = await adminPage.request.post(`/api/admin/activities/${duplicateActivity.id}/approve`, { data: {} });
+  expect(duplicateBlocked.status()).toBe(409);
+
+  const duplicateOverride = await adminPage.request.post(`/api/admin/activities/${duplicateActivity.id}/approve`, {
+    data: { duplicateOverrideReason: 'E2E temporary approval for duplicate-centre reversal test' },
+  });
+  expect(duplicateOverride.ok()).toBeTruthy();
+  const duplicateApproved = await duplicateOverride.json();
+  expect(duplicateApproved.status).toBe('APPROVED');
+
+  const doubledResponse = await request.get('/api/leaderboard?type=individual');
+  const doubledPayload = await doubledResponse.json();
+  const doubledStanding = doubledPayload.leaderboard.find((entry) => entry.userId === 'e2e_member');
+  expect(doubledStanding.totalPoints).toBeCloseTo(approved.points + duplicateApproved.points, 5);
+
+  await adminPage.goto('/admin/duplicates');
+  await expect(adminPage.getByRole('heading', { name: 'Duplicate Review Centre' })).toBeVisible();
+  await expect(adminPage.getByText('E2E Member').first()).toBeVisible();
+
+  const markDuplicate = await adminPage.request.post('/api/admin/duplicates/decision', {
+    data: {
+      action: 'DUPLICATE',
+      activityAId: created.id,
+      activityBId: duplicateActivity.id,
+      duplicateActivityId: duplicateActivity.id,
+      note: 'E2E confirmed duplicate',
+    },
+  });
+  expect(markDuplicate.ok()).toBeTruthy();
+
+  const afterDuplicateResponse = await request.get('/api/leaderboard?type=individual');
+  const afterDuplicatePayload = await afterDuplicateResponse.json();
+  const afterDuplicateStanding = afterDuplicatePayload.leaderboard.find((entry) => entry.userId === 'e2e_member');
+  expect(afterDuplicateStanding.totalPoints).toBeCloseTo(approved.points, 5);
+
+  const approvedAfterDuplicate = await request.get('/api/activities?userId=e2e_member&status=APPROVED');
+  const approvedAfterDuplicateRows = await approvedAfterDuplicate.json();
+  expect(approvedAfterDuplicateRows.some((activity) => activity.id === duplicateActivity.id)).toBeFalsy();
+
+  await adminPage.goto('/admin/duplicates');
+  await adminPage.getByRole('button', { name: /Resolved/ }).click();
+  await expect(adminPage.getByText('Duplicate resolved').first()).toBeVisible();
+
   const second = await memberPage.request.post('/api/activities', {
     data: { activityDate: '2026-09-03', category: 'CYCLE', distance: 12, proofUrl },
   });
