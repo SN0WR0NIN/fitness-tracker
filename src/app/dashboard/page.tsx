@@ -64,16 +64,20 @@ export default async function DashboardPage() {
         stravaActivityId: true,
       },
     }), { route: '/dashboard' }),
-    timed('perf.dashboard.column_scores', () => prisma.$queryRawUnsafe(
-      `SELECT
-        c."id" AS "columnId",
-        COALESCE(SUM(ws."totalPoints"), 0)::float8 AS "totalPoints"
-       FROM "Column" c
-       LEFT JOIN "WeeklyScore" ws ON ws."columnId" = c."id"
-       WHERE c."isActive" = true
-       GROUP BY c."id"
-       ORDER BY "totalPoints" DESC`,
-    ) as Promise<ColumnScore[]>), { route: '/dashboard' }),
+    timed(
+      'perf.dashboard.column_scores',
+      () => prisma.$queryRawUnsafe(
+        `SELECT
+          c."id" AS "columnId",
+          COALESCE(SUM(ws."totalPoints"), 0)::float8 AS "totalPoints"
+         FROM "Column" c
+         LEFT JOIN "WeeklyScore" ws ON ws."columnId" = c."id"
+         WHERE c."isActive" = true
+         GROUP BY c."id"
+         ORDER BY "totalPoints" DESC`,
+      ) as Promise<ColumnScore[]>,
+      { route: '/dashboard' },
+    ),
     timed('perf.dashboard.challenge_settings', () => getChallengeSettings(), { route: '/dashboard' }),
   ]);
   performanceLog('perf.dashboard.parallel_data', Date.now() - dataStartedAt, { route: '/dashboard' });
