@@ -65,6 +65,7 @@ A comprehensive fitness activity tracking web application built with Next.js, fe
    STRAVA_CLIENT_ID="your_strava_client_id"
    STRAVA_CLIENT_SECRET="your_strava_client_secret"
    STRAVA_REDIRECT_URI="http://localhost:3000/api/auth/strava/callback"
+   STRAVA_INTEGRATION_ENABLED="false"
    NEXTAUTH_URL="http://localhost:3000"
    NEXTAUTH_SECRET="your_secret_key_here"
    AWS_REGION="us-east-1"
@@ -72,6 +73,8 @@ A comprehensive fitness activity tracking web application built with Next.js, fe
    AWS_SECRET_ACCESS_KEY="your_aws_secret_key"
    AWS_S3_BUCKET_NAME="fitness-tracker-uploads"
    ```
+
+   Strava is disabled unless `STRAVA_INTEGRATION_ENABLED` is explicitly set to `true`. This keeps the connection controls and OAuth/sync endpoints unavailable while the Strava athlete limit is restricted.
 
 3. **Set up the database:**
    ```bash

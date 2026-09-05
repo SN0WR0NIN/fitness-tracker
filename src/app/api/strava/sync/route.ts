@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getValidStravaToken, fetchAndMapStravaActivities, fetchActivityPhoto } from '@/lib/strava';
 import { createActivity } from '@/lib/activities';
+import { STRAVA_INTEGRATION_ENABLED } from '@/lib/features';
 
 // Only import activities from this date onward (configurable without a code change).
 // The troop operates in Malaysia (UTC+8), so "September 1st" locally begins at
@@ -16,6 +17,10 @@ const SYNC_START_DATE = process.env.STRAVA_SYNC_START_DATE
 
 export async function POST() {
   try {
+    if (!STRAVA_INTEGRATION_ENABLED) {
+      return NextResponse.json({ error: 'Strava integration is temporarily unavailable' }, { status: 503 });
+    }
+
     const session = await getServerSession(authOptions);
     const userId = session?.user?.id;
     if (!userId) {

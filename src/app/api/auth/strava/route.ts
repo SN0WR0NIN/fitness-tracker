@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { STRAVA_INTEGRATION_ENABLED } from '@/lib/features';
 
 export async function GET(request: NextRequest) {
   try {
+    if (!STRAVA_INTEGRATION_ENABLED) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.redirect(new URL('/auth/login?next=/api/auth/strava', request.url));

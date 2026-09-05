@@ -50,6 +50,7 @@ type DashboardProfile = {
 };
 
 type CurrentUser = {
+  stravaEnabled: boolean;
   stravaConnected: boolean;
   email: string;
   hasCustomWeeklyGoal: boolean;
@@ -325,7 +326,7 @@ export default function AthleteDashboard({
           <section role="status" className="flex items-start gap-3 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4"><Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-rose-300" /><div><p className="font-black text-rose-100">Your weekly target needs a final effort</p><p className="mt-1 text-sm text-slate-400">{engagement.remainingPoints.toFixed(1)} points remaining and about {engagement.hoursRemaining} hours left.</p></div></section>
         ) : null}
 
-        <section className="flex flex-col gap-4 rounded-2xl border border-orange-400/20 bg-gradient-to-r from-orange-500/10 to-white/[0.03] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        {currentUser.stravaEnabled ? <section className="flex flex-col gap-4 rounded-2xl border border-orange-400/20 bg-gradient-to-r from-orange-500/10 to-white/[0.03] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex items-center gap-4">
             <span className="rounded-2xl bg-orange-500/15 p-3 text-orange-400"><StravaIcon className="h-7 w-7" /></span>
             <div><h2 className="font-black">Strava connection</h2><p className="mt-1 text-sm text-slate-400">{syncMessage || (currentUser.stravaConnected ? 'Connected and ready to import your activities.' : 'Connect once, then import workouts in seconds.')}</p></div>
@@ -337,7 +338,7 @@ export default function AthleteDashboard({
             // eslint-disable-next-line @next/next/no-html-link-for-pages
             <a href="/api/auth/strava" className="shrink-0 rounded-xl bg-orange-500 px-5 py-2.5 text-center text-sm font-bold transition hover:bg-orange-400">Connect Strava</a>
           )}
-        </section>
+        </section> : null}
 
         <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr]">
           <div className="flex items-center gap-5 rounded-2xl border border-orange-400/20 bg-gradient-to-br from-orange-400/10 to-white/[0.04] p-5 sm:p-6">
