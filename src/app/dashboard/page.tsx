@@ -38,7 +38,6 @@ type DashboardActivity = {
 };
 
 type SelectableUser = { id: string; name: string };
-
 type ColumnScore = { columnId: string; _sum: { totalPoints: number | null } };
 
 export default async function DashboardPage() {
@@ -46,7 +45,7 @@ export default async function DashboardPage() {
   const userId = session?.user?.id;
   if (!userId) redirect('/auth/login');
 
-  const [profile, userResult, profileSettings, goalRecords, activitiesResult, usersResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
+  const [profile, userResult, profileSettings, goalRecords, activitiesResult, activityTotal, pendingCount, usersResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
     getParticipantProfile(userId, { includeActivities: false }),
     prisma.user.findUnique({
       where: { id: userId },
@@ -78,6 +77,8 @@ export default async function DashboardPage() {
         stravaActivityId: true,
       },
     }),
+    prisma.activity.count({ where: { userId } }),
+    prisma.activity.count({ where: { userId, status: 'PENDING' } }),
     prisma.user.findMany({
       where: { id: { not: userId } },
       select: { id: true, name: true },
@@ -90,6 +91,8 @@ export default async function DashboardPage() {
     getChallengeSettings(),
     getActiveColumnIds(),
   ]);
+  void activityTotal;
+  void pendingCount;
 
   const user = userResult as DashboardUser | null;
   const activities = activitiesResult as DashboardActivity[];
