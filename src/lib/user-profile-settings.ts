@@ -14,34 +14,9 @@ export type WeeklyGoalRecord = {
   target: number;
 };
 
-let schemaReady: Promise<void> | null = null;
-
-export function ensureUserProfileSettingsSchema() {
-  if (!schemaReady) {
-    schemaReady = (async () => {
-      await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "UserProfileSettings" (
-        "userId" TEXT PRIMARY KEY REFERENCES "User"("id") ON DELETE CASCADE,
-        "weeklyGoal" DOUBLE PRECISION NOT NULL,
-        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )`);
-      await prisma.$executeRawUnsafe('ALTER TABLE "UserProfileSettings" ADD COLUMN IF NOT EXISTS "bio" TEXT NOT NULL DEFAULT \'\'');
-      await prisma.$executeRawUnsafe('ALTER TABLE "UserProfileSettings" ADD COLUMN IF NOT EXISTS "profilePhotoUrl" TEXT');
-      await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "WeeklyGoal" (
-        "userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
-        "weekStart" TIMESTAMP(3) NOT NULL,
-        "target" DOUBLE PRECISION NOT NULL,
-        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY ("userId", "weekStart")
-      )`);
-    })().catch((error: unknown) => {
-      schemaReady = null;
-      throw error;
-    });
-  }
-  return schemaReady;
-}
+// UserProfileSettings and WeeklyGoal are managed by database migrations.
+// Keep this exported no-op for compatibility without doing DDL on requests.
+export async function ensureUserProfileSettingsSchema() {}
 
 async function getUserProfileSettingsUncached(userId: string) {
   await ensureUserProfileSettingsSchema();
