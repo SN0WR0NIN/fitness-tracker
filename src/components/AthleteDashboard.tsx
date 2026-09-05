@@ -1,4 +1,5 @@
 'use client';
+import PersonalAnalytics from '@/components/PersonalAnalytics';
 import WeeklyProgressChart from '@/components/WeeklyProgressChart';
 import ApprovedActivityDateEditor from '@/components/ApprovedActivityDateEditor';
 
@@ -380,19 +381,7 @@ export default function AthleteDashboard({
 
         <WeeklyProgressChart weeks={engagement.goalHistory} />
 
-        <div>
-          <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
-            <SectionTitle icon={<Sparkles className="h-5 w-5 text-violet-300" />} title="Performance mix" subtitle="Where your points come from" />
-            <div className="mt-6 space-y-5">
-              {profile.categories.map((category) => (
-                <div key={category.key}>
-                  <div className="flex items-center justify-between text-sm"><span className="font-semibold text-slate-300">{category.label}</span><span className="font-black">{category.points.toFixed(1)}</span></div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/5"><div className={`h-full rounded-full ${category.colour}`} style={{ width: `${profile.totalPoints ? Math.max(category.points ? 3 : 0, category.points / profile.totalPoints * 100) : 0}%` }} /></div>
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
+        <PersonalAnalytics activities={activities} today={new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })} />
 
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <SectionTitle icon={<Award className="h-5 w-5 text-yellow-300" />} title="Achievements" subtitle={`${unlockedCount} unlocked · keep moving for the rest`} />
