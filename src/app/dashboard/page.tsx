@@ -1,12 +1,14 @@
 import { redirect } from 'next/navigation';
+import { after } from 'next/server';
 import { getServerSession } from 'next-auth';
 import AthleteDashboard from '@/components/AthleteDashboard';
 import { authOptions } from '@/lib/auth';
 import { getParticipantProfile } from '@/lib/participant-profile';
 import { prisma } from '@/lib/prisma';
-import { getCurrentWeekPoints, getSuggestedWeeklyGoal, getWeeklyStreak } from '@/lib/engagement';
+import { getCurrentWeekPoints, getSuggestedWeeklyGoal, getWeeklyGoalIntelligence, getWeeklyStreak } from '@/lib/engagement';
 import { getActiveColumnIds, getChallengeSettings } from '@/lib/admin-control';
-import { getUserProfileSettings } from '@/lib/user-profile-settings';
+import { captureWeeklyGoal, getUserProfileSettings, getWeeklyGoalRecords } from '@/lib/user-profile-settings';
+import { getWeekStart } from '@/lib/scoring';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,7 +52,7 @@ export default async function DashboardPage() {
   const userId = session?.user?.id;
   if (!userId) redirect('/auth/login');
 
-  const [profile, userResult, profileSettings, activitiesResult, usersResult, communityResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
+  const [profile, userResult, profileSettings, goalRecords, activitiesResult, usersResult, communityResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
     getParticipantProfile(userId),
     prisma.user.findUnique({
       where: { id: userId },
@@ -60,6 +62,7 @@ export default async function DashboardPage() {
       },
     }),
     getUserProfileSettings(userId),
+    getWeeklyGoalRecords(userId),
     prisma.activity.findMany({
       where: { userId },
       orderBy: { occurredAt: 'desc' },
@@ -120,6 +123,14 @@ export default async function DashboardPage() {
   const suggestedWeeklyGoal = getSuggestedWeeklyGoal(profile.weeklyScores, settings.weeklyGoal);
   const weeklyGoal = profileSettings?.weeklyGoal ?? suggestedWeeklyGoal;
   const currentWeekPoints = getCurrentWeekPoints(profile.weeklyScores);
+  const goalIntelligence = getWeeklyGoalIntelligence(profile.weeklyScores, goalRecords, weeklyGoal);
+  after(async () => {
+    try {
+      await captureWeeklyGoal(userId, getWeekStart(new Date()), weeklyGoal);
+    } catch (error) {
+      console.error('Unable to capture weekly goal:', error);
+    }
+  });
   const columnRankIndex = profile.column ? columnScores.findIndex((column) => column.columnId === profile.column?.id) : -1;
   const gapToNext = columnRankIndex > 0
     ? Math.max(0, columnScores[columnRankIndex - 1].totalPoints - columnScores[columnRankIndex].totalPoints)
@@ -139,7 +150,7 @@ export default async function DashboardPage() {
           totalPoints: week.totalPoints,
         })),
         categories: profile.categories,
-        achievements: profile.achievements,
+        achievements: [...profile.achievements, ...goalIntelligence.badges],
         bestWeek: profile.bestWeek ? {
           weekNumber: profile.bestWeek.weekNumber,
           totalPoints: profile.bestWeek.totalPoints,
@@ -157,6 +168,13 @@ export default async function DashboardPage() {
         columnRank: columnRankIndex >= 0 ? columnRankIndex + 1 : null,
         columnCount: columnScores.length,
         gapToNext,
+        goalStatus: goalIntelligence.status,
+        daysRemaining: goalIntelligence.daysRemaining,
+        hoursRemaining: goalIntelligence.hoursRemaining,
+        remainingPoints: goalIntelligence.remainingPoints,
+        goalCompletionStreak: goalIntelligence.completionStreak,
+        milestone: goalIntelligence.milestone,
+        goalHistory: goalIntelligence.history,
       }}
       communityActivities={communityActivities.map((activity) => ({
         ...activity,
