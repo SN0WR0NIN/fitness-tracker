@@ -12,6 +12,7 @@ import {
   Check,
   CheckCircle2,
   Clock3,
+  Download,
   ExternalLink,
   Flame,
   Footprints,
@@ -20,6 +21,7 @@ import {
   PartyPopper,
   Plus,
   Sparkles,
+  Share2,
   Target,
   TrendingUp,
   Trophy,
@@ -31,6 +33,7 @@ import HeroAtmosphere from '@/components/HeroAtmosphere';
 import ShareProfileButton from '@/components/ShareProfileButton';
 import StravaIcon from '@/components/StravaIcon';
 import { formatDistance, formatDuration, formatPace } from '@/lib/format';
+import { usePwaInstall } from '@/components/PwaManager';
 
 type ActivityCategory = 'RUN' | 'CYCLE' | 'SWIM' | 'WALK_OR_HIKE' | 'TROOP_GAMES';
 
@@ -133,6 +136,7 @@ export default function AthleteDashboard({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { canInstall, showIOSInstructions, install } = usePwaInstall();
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState(() => {
     if (searchParams.get('stravaConnected') === 'true') {
@@ -473,6 +477,7 @@ export default function AthleteDashboard({
                 <label className="block"><span className="text-sm font-bold text-slate-300">Athlete bio</span><textarea value={profileBio} onChange={(event) => setProfileBio(event.target.value)} maxLength={160} rows={3} placeholder="Example: Weekend runner chasing consistency and points for the team." className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-slate-950 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-violet-300" /><span className="mt-1 block text-right text-xs text-slate-500">{profileBio.length}/160</span></label>
                 <label className="block"><span className="text-sm font-bold text-slate-300">Weekly points target</span><input type="number" min="5" max="500" step="5" value={weeklyGoal} onChange={(event) => setWeeklyGoal(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 outline-none transition focus:border-orange-400" /><span className="mt-2 block text-xs text-slate-500">Choose between 5 and 500 points. You can change it whenever your training plan changes.</span></label>
                 <div className="grid gap-3 rounded-2xl border border-white/5 bg-black/15 p-4 text-sm sm:grid-cols-2"><div><span className="block text-xs text-slate-500">Login email</span><span className="mt-1 block truncate font-bold text-slate-300">{currentUser.email}</span></div><div><span className="block text-xs text-slate-500">Assigned Column</span><span className="mt-1 block font-bold text-slate-300">{profile.column?.name ?? 'Not assigned'}</span></div></div>
+                {canInstall || showIOSInstructions ? <div className="flex items-start gap-3 rounded-2xl border border-sky-300/20 bg-sky-400/[0.07] p-4"><span className="rounded-xl bg-sky-400/10 p-2.5 text-sky-300">{showIOSInstructions && !canInstall ? <Share2 className="h-5 w-5" /> : <Download className="h-5 w-5" />}</span><div className="min-w-0 flex-1"><p className="font-black text-sky-100">Install KG Active</p><p className="mt-1 text-xs leading-5 text-slate-400">{showIOSInstructions && !canInstall ? 'In Safari, tap Share and choose Add to Home Screen.' : 'Add the app to this device for quicker access and a full-screen experience.'}</p>{canInstall ? <button type="button" onClick={() => void install()} className="mt-3 rounded-xl bg-sky-400 px-4 py-2.5 text-sm font-black text-slate-950">Install app</button> : null}</div></div> : null}
                 </div>
                 {profileMessage ? <p role="alert" className="mt-4 text-sm font-semibold text-rose-300">{profileMessage}</p> : null}
               </div>
