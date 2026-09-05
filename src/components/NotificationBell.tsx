@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, BellRing, CheckCircle2, XCircle } from 'lucide-react';
+import { Award, Bell, BellRing, CheckCircle2, Info, XCircle } from 'lucide-react';
 
 type ReviewNotification = {
   id: string;
-  type: 'success' | 'error';
+  type: 'success' | 'error' | 'info';
+  kind: string;
   title: string;
   message: string;
   href: string;
@@ -42,7 +43,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         if (knownValue && window.localStorage.getItem('kg-browser-alerts') === 'true' && window.Notification.permission === 'granted' && 'serviceWorker' in navigator) {
           const newItems = nextNotifications.filter((notification) => !knownIds.has(notification.id));
           const registration = await navigator.serviceWorker.ready;
-          await Promise.all(newItems.map((notification) => registration.showNotification(notification.title, { body: notification.message, icon: '/app-icon.svg', badge: '/app-icon.svg', tag: `activity-${notification.id}`, data: { url: notification.href } })));
+          await Promise.all(newItems.map((notification) => registration.showNotification(notification.title, { body: notification.message, icon: '/app-icon.svg', badge: '/app-icon.svg', tag: `kg-${notification.id}`, data: { url: notification.href } })));
         }
         window.localStorage.setItem(knownKey, JSON.stringify(nextNotifications.map((notification) => notification.id)));
         setNotifications(nextNotifications);
@@ -74,7 +75,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
     if (result === 'granted') {
       window.localStorage.setItem('kg-browser-alerts', 'true');
       const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification('KG Active alerts enabled', { body: 'You will see new review results while the app is running.', icon: '/app-icon.svg', data: { url: '/dashboard' } });
+      await registration.showNotification('KG Active alerts enabled', { body: 'Weekly awards, results and review updates can now appear here.', icon: '/app-icon.svg', data: { url: '/notifications' } });
     }
   };
 
@@ -86,14 +87,16 @@ export default function NotificationBell({ userId }: { userId: string }) {
       </button>
       {open ? (
         <div className="fixed inset-x-4 top-20 z-[70] max-h-[70vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900 p-2 text-white shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-96">
-          <div className="flex items-center justify-between px-3 py-2"><div><p className="font-black">Notifications</p><p className="text-xs text-slate-500">Goal reminders and activity reviews</p></div><span className="rounded-full bg-white/5 px-2 py-1 text-xs text-slate-400">{notifications.length}</span></div>
+          <div className="flex items-center justify-between px-3 py-2"><div><p className="font-black">Notifications</p><p className="text-xs text-slate-500">Awards, results, goals and reviews</p></div><span className="rounded-full bg-white/5 px-2 py-1 text-xs text-slate-400">{notifications.length}</span></div>
           {permission === 'default' ? <button type="button" onClick={enableAlerts} className="mx-2 mb-2 flex w-[calc(100%-1rem)] items-center gap-2 rounded-xl border border-sky-400/20 bg-sky-400/10 px-3 py-2.5 text-left text-xs font-bold text-sky-200"><BellRing className="h-4 w-4" />Enable browser alerts</button> : null}
           {permission === 'granted' ? <p className="mx-3 mb-2 text-[0.65rem] text-emerald-300">Browser alerts active while the app is running.</p> : null}
           {permission === 'denied' ? <p className="mx-3 mb-2 text-[0.65rem] text-amber-300">Alerts are blocked in browser settings.</p> : null}
-          {notifications.length ? notifications.map((notification) => {
-            const Icon = notification.type === 'success' ? CheckCircle2 : XCircle;
-            return <Link key={notification.id} href={notification.href} onClick={() => setOpen(false)} className="flex gap-3 rounded-xl border-t border-white/5 px-3 py-3 transition hover:bg-white/5"><Icon className={`mt-0.5 h-5 w-5 shrink-0 ${notification.type === 'success' ? 'text-emerald-300' : 'text-rose-300'}`} /><span className="min-w-0"><span className="block text-sm font-bold">{notification.title}</span><span className="mt-1 block text-xs leading-5 text-slate-400">{notification.message}</span><span className="mt-1 block text-[0.65rem] text-slate-600">{new Date(notification.createdAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' })}</span></span></Link>;
-          }) : <p className="px-3 py-8 text-center text-sm text-slate-500">No review updates yet.</p>}
+          {notifications.length ? notifications.slice(0, 8).map((notification) => {
+            const Icon = notification.kind === 'WEEKLY_AWARD' ? Award : notification.type === 'success' ? CheckCircle2 : notification.type === 'error' ? XCircle : Info;
+            const tone = notification.type === 'success' ? 'text-emerald-300' : notification.type === 'error' ? 'text-rose-300' : 'text-sky-300';
+            return <Link key={notification.id} href={notification.href} onClick={() => setOpen(false)} className="flex gap-3 rounded-xl border-t border-white/5 px-3 py-3 transition hover:bg-white/5"><Icon className={`mt-0.5 h-5 w-5 shrink-0 ${tone}`} /><span className="min-w-0"><span className="block text-sm font-bold">{notification.title}</span><span className="mt-1 block text-xs leading-5 text-slate-400">{notification.message}</span><span className="mt-1 block text-[0.65rem] text-slate-600">{new Date(notification.createdAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' })}</span></span></Link>;
+          }) : <p className="px-3 py-8 text-center text-sm text-slate-500">No updates yet.</p>}
+          <Link href="/notifications" onClick={() => setOpen(false)} className="mt-1 block rounded-xl border-t border-white/5 px-3 py-3 text-center text-xs font-black text-lime-300 hover:bg-white/5">View all notifications</Link>
         </div>
       ) : null}
     </div>
