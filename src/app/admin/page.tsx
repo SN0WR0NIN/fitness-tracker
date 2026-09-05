@@ -29,6 +29,8 @@ export default async function AdminPage() {
   const integrity = scheduledHealth?.details;
   const recentAudit = audit.slice(0, 10);
   const checkTime = scheduledHealth?.createdAt;
+  const openDuplicatePairs = integrity?.open_duplicate_pairs ?? integrity?.possible_duplicate_pairs ?? 0;
+  const deferredDuplicatePairs = integrity?.deferred_duplicate_pairs ?? 0;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -38,7 +40,7 @@ export default async function AdminPage() {
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-lime-300"><ShieldCheck className="h-4 w-4" />Admin operations</p>
           <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div><h1 className="text-3xl font-black sm:text-5xl">Command Centre 2.0</h1><p className="mt-3 text-slate-400">A faster operations-first landing page for the challenge.</p></div>
-            <div className="flex flex-wrap gap-2"><AdminLink href="/admin/activities" label="Review queue" /><AdminLink href="/admin/users" label="Manage users" /><AdminLink href="/admin/settings" label="Settings" /></div>
+            <div className="flex flex-wrap gap-2"><AdminLink href="/admin/activities" label="Review queue" /><AdminLink href="/admin/duplicates" label="Duplicate review" /><AdminLink href="/admin/users" label="Manage users" /><AdminLink href="/admin/settings" label="Settings" /></div>
           </div>
         </header>
 
@@ -67,8 +69,8 @@ export default async function AdminPage() {
             <HealthStat
               icon={(integrity?.possible_duplicate_pairs ?? 1) === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />}
               label="Duplicate review"
-              value={integrity ? `${integrity.possible_duplicate_pairs} warning${integrity.possible_duplicate_pairs === 1 ? '' : 's'}` : 'No result'}
-              detail="Similar same-day distance pairs · review only"
+              value={integrity ? `${openDuplicatePairs} open` : 'No result'}
+              detail={`${deferredDuplicatePairs} deferred · decisions are tracked`}
               good={Boolean(integrity && integrity.possible_duplicate_pairs === 0)}
             />
             <HealthStat icon={<Link2 className="h-5 w-5" />} label="Strava connected" value={`${stravaConnected} / ${users}`} detail="Participant accounts" good />
@@ -85,8 +87,9 @@ export default async function AdminPage() {
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <h2 className="text-lg font-black">Quick actions</h2>
           <p className="mt-1 text-sm text-slate-500">Jump directly to the most common admin tasks.</p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Quick href="/admin/activities" icon={<FileClock className="h-5 w-5" />} label="Review pending" />
+            <Quick href="/admin/duplicates" icon={<TriangleAlert className="h-5 w-5" />} label={`Duplicate review (${openDuplicatePairs})`} />
             <Quick href="/admin/users" icon={<Users className="h-5 w-5" />} label="Manage users" />
             <Quick href="/admin/settings" icon={<Settings className="h-5 w-5" />} label="Settings & scoring" />
             <Quick href="/admin/recap" icon={<Megaphone className="h-5 w-5" />} label="Weekly recap" />
