@@ -270,7 +270,7 @@ export async function saveDuplicateReviewDecision(input: {
     throw new DuplicateReviewError('Add a short note explaining why these are different workouts (at least 5 characters).');
   }
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const pair = await loadLockedPair(tx, input.activityAId, input.activityBId);
     const reviewer = await getReviewer(tx, input.reviewerId);
     const pairKey = await writeDecision(tx, {
@@ -302,7 +302,7 @@ export async function markActivityAsDuplicate(input: {
 }) {
   const note = input.note?.trim().slice(0, 500) || null;
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const pair = await loadLockedPair(tx, input.activityAId, input.activityBId);
     if (![pair.firstId, pair.secondId].includes(input.duplicateActivityId)) {
       throw new DuplicateReviewError('Choose which of the two entries is the duplicate.');
