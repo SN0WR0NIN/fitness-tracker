@@ -8,6 +8,7 @@ import {
   Award,
   Bike,
   Check,
+  CheckCircle2,
   Clock3,
   ExternalLink,
   Flame,
@@ -75,6 +76,13 @@ type Engagement = {
   columnRank: number | null;
   columnCount: number;
   gapToNext: number;
+  goalStatus: 'achieved' | 'on-track' | 'at-risk';
+  daysRemaining: number;
+  hoursRemaining: number;
+  remainingPoints: number;
+  goalCompletionStreak: number;
+  milestone: 0 | 50 | 80 | 100;
+  goalHistory: Array<{ weekNumber: number; points: number; target: number; achieved: boolean; current: boolean }>;
 };
 
 type CommunityActivity = {
@@ -144,6 +152,9 @@ export default function AthleteDashboard({
   const unlockedCount = profile.achievements.filter((achievement) => achievement.unlocked).length;
   const maxWeekPoints = Math.max(...profile.weeklyScores.map((week) => week.totalPoints), 1);
   const goalProgress = Math.min(100, engagement.currentWeekPoints / engagement.weeklyGoal * 100);
+  const maxGoalHistory = Math.max(...engagement.goalHistory.flatMap((week) => [week.points, week.target]), 1);
+  const goalStatusLabel = engagement.goalStatus === 'achieved' ? 'Goal achieved' : engagement.goalStatus === 'on-track' ? 'On track' : 'At risk';
+  const goalStatusStyle = engagement.goalStatus === 'achieved' ? 'bg-emerald-400/10 text-emerald-300' : engagement.goalStatus === 'on-track' ? 'bg-sky-400/10 text-sky-300' : 'bg-rose-400/10 text-rose-300';
   const latestUnlockedAchievement = [...profile.achievements].reverse().find((achievement) => achievement.unlocked);
 
   const handleSync = async () => {
@@ -267,6 +278,16 @@ export default function AthleteDashboard({
           </section>
         ) : null}
 
+        {engagement.milestone === 100 ? (
+          <section role="status" className="goal-celebration relative overflow-hidden rounded-2xl border border-lime-300/30 bg-gradient-to-r from-lime-300/15 via-yellow-300/10 to-orange-400/10 p-5 sm:p-6"><div className="relative flex items-start gap-4"><span className="rounded-2xl bg-lime-300 p-3 text-slate-950"><PartyPopper className="h-6 w-6" /></span><div><p className="text-xs font-black uppercase tracking-[0.18em] text-lime-300">Weekly goal complete</p><h2 className="mt-1 text-xl font-black">You hit {engagement.weeklyGoal.toFixed(0)} points. Brilliant work.</h2><p className="mt-1 text-sm text-slate-400">Every extra point now strengthens your personal and Column standing.</p></div></div></section>
+        ) : engagement.milestone >= 80 ? (
+          <section role="status" className="flex items-start gap-3 rounded-2xl border border-orange-400/20 bg-orange-400/10 p-4"><Target className="mt-0.5 h-5 w-5 shrink-0 text-orange-300" /><div><p className="font-black text-orange-100">Final push — you&apos;re {Math.round(goalProgress)}% there</p><p className="mt-1 text-sm text-slate-400">Only {engagement.remainingPoints.toFixed(1)} points remain with {engagement.daysRemaining} {engagement.daysRemaining === 1 ? 'day' : 'days'} left.</p></div></section>
+        ) : engagement.milestone >= 50 ? (
+          <section role="status" className="flex items-start gap-3 rounded-2xl border border-violet-400/20 bg-violet-400/10 p-4"><Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" /><div><p className="font-black text-violet-100">Halfway milestone reached</p><p className="mt-1 text-sm text-slate-400">You&apos;ve crossed 50%. Another {engagement.remainingPoints.toFixed(1)} points completes this week&apos;s target.</p></div></section>
+        ) : engagement.goalStatus === 'at-risk' && engagement.daysRemaining <= 2 ? (
+          <section role="status" className="flex items-start gap-3 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4"><Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-rose-300" /><div><p className="font-black text-rose-100">Your weekly target needs a final effort</p><p className="mt-1 text-sm text-slate-400">{engagement.remainingPoints.toFixed(1)} points remaining and about {engagement.hoursRemaining} hours left.</p></div></section>
+        ) : null}
+
         <section className="flex flex-col gap-4 rounded-2xl border border-orange-400/20 bg-gradient-to-r from-orange-500/10 to-white/[0.03] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex items-center gap-4">
             <span className="rounded-2xl bg-orange-500/15 p-3 text-orange-400"><StravaIcon className="h-7 w-7" /></span>
@@ -286,10 +307,26 @@ export default function AthleteDashboard({
             <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full p-2" style={{ background: `conic-gradient(#f97316 ${goalProgress * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}>
               <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-slate-950"><span className="text-2xl font-black">{Math.round(goalProgress)}%</span><span className="text-[0.65rem] text-slate-500">complete</span></div>
             </div>
-            <div><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-orange-300"><Target className="h-4 w-4" />Weekly target</p><p className="mt-3 text-3xl font-black">{engagement.currentWeekPoints.toFixed(1)} <span className="text-base text-slate-500">/ {engagement.weeklyGoal.toFixed(0)} pts</span></p><p className="mt-2 text-sm text-slate-400">{goalProgress >= 100 ? 'Goal complete — keep building the lead.' : `${Math.max(0, engagement.weeklyGoal - engagement.currentWeekPoints).toFixed(1)} points to reach your ${currentUser.hasCustomWeeklyGoal ? 'chosen' : 'personalised'} target.`}</p><button type="button" onClick={openProfileEditor} className="mt-3 text-xs font-black text-orange-300 hover:text-orange-200">Change target</button></div>
+            <div><div className="flex flex-wrap items-center gap-2"><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-orange-300"><Target className="h-4 w-4" />Weekly target</p><span className={`rounded-full px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-wider ${goalStatusStyle}`}>{goalStatusLabel}</span></div><p className="mt-3 text-3xl font-black">{engagement.currentWeekPoints.toFixed(1)} <span className="text-base text-slate-500">/ {engagement.weeklyGoal.toFixed(0)} pts</span></p><p className="mt-2 text-sm text-slate-400">{goalProgress >= 100 ? 'Goal complete — keep building the lead.' : `${engagement.remainingPoints.toFixed(1)} points to reach your ${currentUser.hasCustomWeeklyGoal ? 'chosen' : 'personalised'} target · ${engagement.daysRemaining}d left.`}</p><button type="button" onClick={openProfileEditor} className="mt-3 text-xs font-black text-orange-300 hover:text-orange-200">Change target</button></div>
           </div>
-          <EngagementCard icon={<Flame className="h-6 w-6" />} tone="text-orange-300 bg-orange-400/10" label="Active streak" value={`${engagement.weeklyStreak} ${engagement.weeklyStreak === 1 ? 'week' : 'weeks'}`} detail={engagement.weeklyStreak ? 'Log this week to keep it alive.' : 'Your first approved week starts it.'} />
+          <EngagementCard icon={<Flame className="h-6 w-6" />} tone="text-orange-300 bg-orange-400/10" label="Goal streak" value={`${engagement.goalCompletionStreak} ${engagement.goalCompletionStreak === 1 ? 'week' : 'weeks'}`} detail={engagement.goalCompletionStreak ? 'Consecutive weekly targets completed.' : `${engagement.weeklyStreak} active-week streak · complete this target to begin.`} />
           <EngagementCard icon={<TrendingUp className="h-6 w-6" />} tone="text-sky-300 bg-sky-400/10" label="Column momentum" value={engagement.columnRank ? `#${engagement.columnRank} of ${engagement.columnCount}` : 'Not ranked'} detail={engagement.columnRank === 1 ? 'Your column leads the challenge.' : engagement.columnRank ? `${engagement.gapToNext.toFixed(1)} points to the next place.` : 'Earn points to enter the standings.'} />
+        </section>
+
+        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
+          <SectionTitle icon={<Target className="h-5 w-5 text-lime-300" />} title="Goal history" subtitle="Your points against the target saved for each week" />
+          <div className="mt-7 grid grid-cols-7 gap-2 sm:gap-3">
+            {engagement.goalHistory.map((week, index) => (
+              <div key={`${week.weekNumber}-${index}`} className={`rounded-xl border p-2 text-center sm:p-3 ${week.current ? 'border-lime-300/30 bg-lime-300/[0.07]' : 'border-white/5 bg-black/10'}`}>
+                <div className="relative mx-auto flex h-28 max-w-12 items-end overflow-hidden rounded-lg bg-white/5">
+                  <div className={`w-full rounded-t-md transition-[height] duration-700 ${week.achieved ? 'bg-gradient-to-t from-emerald-500 to-lime-300' : 'bg-gradient-to-t from-orange-600 to-orange-300'}`} style={{ height: `${Math.max(4, week.points / maxGoalHistory * 100)}%` }} />
+                  <span className="absolute inset-x-0 border-t border-dashed border-white/70" style={{ bottom: `${Math.min(100, week.target / maxGoalHistory * 100)}%` }} />
+                </div>
+                <p className="mt-2 text-xs font-black">W{week.weekNumber}</p><p className={`mt-1 text-[0.65rem] font-bold ${week.achieved ? 'text-emerald-300' : 'text-slate-500'}`}>{week.points.toFixed(0)}/{week.target.toFixed(0)}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-slate-500"><span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-orange-400" />Points earned</span><span className="inline-flex items-center gap-2"><span className="w-4 border-t border-dashed border-slate-300" />Weekly target</span><span className="inline-flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />Green means achieved</span></div>
         </section>
 
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">

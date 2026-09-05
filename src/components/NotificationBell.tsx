@@ -86,7 +86,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       </button>
       {open ? (
         <div className="fixed inset-x-4 top-20 z-[70] max-h-[70vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900 p-2 text-white shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-96">
-          <div className="flex items-center justify-between px-3 py-2"><div><p className="font-black">Notifications</p><p className="text-xs text-slate-500">Your latest activity reviews</p></div><span className="rounded-full bg-white/5 px-2 py-1 text-xs text-slate-400">{notifications.length}</span></div>
+          <div className="flex items-center justify-between px-3 py-2"><div><p className="font-black">Notifications</p><p className="text-xs text-slate-500">Goal reminders and activity reviews</p></div><span className="rounded-full bg-white/5 px-2 py-1 text-xs text-slate-400">{notifications.length}</span></div>
           {permission === 'default' ? <button type="button" onClick={enableAlerts} className="mx-2 mb-2 flex w-[calc(100%-1rem)] items-center gap-2 rounded-xl border border-sky-400/20 bg-sky-400/10 px-3 py-2.5 text-left text-xs font-bold text-sky-200"><BellRing className="h-4 w-4" />Enable browser alerts</button> : null}
           {permission === 'granted' ? <p className="mx-3 mb-2 text-[0.65rem] text-emerald-300">Browser alerts active while the app is running.</p> : null}
           {permission === 'denied' ? <p className="mx-3 mb-2 text-[0.65rem] text-amber-300">Alerts are blocked in browser settings.</p> : null}
