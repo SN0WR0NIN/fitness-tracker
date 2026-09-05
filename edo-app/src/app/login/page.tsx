@@ -15,7 +15,7 @@ export default function LoginPage() {
 
   async function routeSession(userId: string) {
     const { data: access } = await supabase.from('edo_access').select('role').eq('user_id', userId).maybeSingle();
-    router.replace(access ? '/dashboard' : '/setup');
+    router.replace(access ? '/dashboard' : '/join');
     router.refresh();
   }
 
@@ -62,7 +62,7 @@ export default function LoginPage() {
           </label>
           {error ? <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">{error}</div> : null}
           <button disabled={loading} className="mt-6 w-full rounded-2xl bg-lime-300 px-4 py-3 font-black text-slate-950 disabled:opacity-60">{loading ? 'Signing in…' : 'Sign in'}</button>
-          <Link href="/setup" className="mt-4 flex items-center justify-center gap-2 text-xs font-bold text-slate-500 hover:text-amber-200"><ShieldCheck className="h-3.5 w-3.5"/>First-time system setup</Link>
+          <div className="mt-4 flex items-center justify-center gap-3 text-xs font-bold"><Link href="/join" className="text-lime-300 hover:text-lime-200">Join with code</Link><span className="text-slate-700">·</span><Link href="/setup" className="flex items-center gap-1 text-slate-500 hover:text-amber-200"><ShieldCheck className="h-3.5 w-3.5"/>Initial setup</Link></div>
         </form>
       </div>
     </main>
