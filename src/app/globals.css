@@ -176,3 +176,7 @@ body {
 .analytics-line { stroke-dasharray: 1; animation: analytics-draw 1.2s ease-out both; }
 .analytics-fade { animation: analytics-appear .7s ease-out both; }
 @media (prefers-reduced-motion: reduce) { .analytics-line, .analytics-fade { animation: none; } }
+
+.dashboard-fold > summary { cursor: pointer; padding: .75rem 1rem; font-size: .875rem; font-weight: 700; color: #cbd5e1; border: 1px solid #ffffff15; border-radius: .75rem; margin-bottom: .5rem; }
+.dashboard-fold > summary:focus-visible { outline: 2px solid #bef264; outline-offset: 2px; }
+.dashboard-fold > section { content-visibility: auto; contain-intrinsic-size: auto 400px; }

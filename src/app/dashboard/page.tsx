@@ -104,7 +104,10 @@ export default async function DashboardPage() {
   const goalIntelligence = getWeeklyGoalIntelligence(profile.weeklyScores, goalRecords, weeklyGoal, new Date(), settings.startDate);
   after(async () => {
     try {
-      await captureWeeklyGoal(userId, getWeekStart(new Date()), weeklyGoal);
+      const start = getWeekStart(new Date());
+      if (!goalRecords.some(record => record.weekStart.getTime() === start.getTime() && record.target === weeklyGoal)) {
+        await captureWeeklyGoal(userId, start, weeklyGoal);
+      }
     } catch (error) {
       console.error('Unable to capture weekly goal:', error);
     }

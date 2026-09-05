@@ -286,7 +286,7 @@ export default function AthleteDashboard({
     <div className="min-h-screen bg-slate-950 text-white">
       <Navbar />
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-        <section className="hero-stage rounded-3xl border border-white/10 bg-slate-950 p-6 shadow-2xl shadow-black/20 sm:p-8">
+        <details open className="dashboard-fold"><summary>Profile & season</summary><section className="hero-stage rounded-3xl border border-white/10 bg-slate-950 p-6 shadow-2xl shadow-black/20 sm:p-8">
           <HeroAtmosphere />
           <div className="hero-reveal mb-5 flex items-start justify-between gap-3">
                 <div className="relative h-20 w-20 shrink-0">
@@ -326,7 +326,7 @@ export default function AthleteDashboard({
             <HeroStat label="Activities" value={approvedCount.toString()} detail={`${pendingCount} pending review`} />
             <HeroStat label="Achievements" value={unlockedCount.toString()} detail={`of ${profile.achievements.length} unlocked`} />
           </div>
-        </section>
+        </section></details>
 
         {activitySubmitted ? (
           <section role="status" className="flex items-start gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-emerald-100">
@@ -335,9 +335,7 @@ export default function AthleteDashboard({
           </section>
         ) : null}
 
-        {engagement.milestone === 100 ? (
-          <section role="status" className="goal-celebration relative overflow-hidden rounded-2xl border border-lime-300/30 bg-gradient-to-r from-lime-300/15 via-yellow-300/10 to-orange-400/10 p-5 sm:p-6"><div className="relative flex items-start gap-4"><span className="rounded-2xl bg-lime-300 p-3 text-slate-950"><PartyPopper className="h-6 w-6" /></span><div><p className="text-xs font-black uppercase tracking-[0.18em] text-lime-300">Weekly goal complete</p><h2 className="mt-1 text-xl font-black">You hit {engagement.weeklyGoal.toFixed(0)} points. Brilliant work.</h2><p className="mt-1 text-sm text-slate-400">Every extra point now strengthens your personal and Column standing.</p></div></div></section>
-        ) : engagement.milestone >= 80 ? (
+        {engagement.milestone === 100 ? null : engagement.milestone >= 80 ? (
           <section role="status" className="flex items-start gap-3 rounded-2xl border border-orange-400/20 bg-orange-400/10 p-4"><Target className="mt-0.5 h-5 w-5 shrink-0 text-orange-300" /><div><p className="font-black text-orange-100">Final push — you&apos;re {Math.round(goalProgress)}% there</p><p className="mt-1 text-sm text-slate-400">Only {engagement.remainingPoints.toFixed(1)} points remain with {engagement.daysRemaining} {engagement.daysRemaining === 1 ? 'day' : 'days'} left.</p></div></section>
         ) : engagement.milestone >= 50 ? (
           <section role="status" className="flex items-start gap-3 rounded-2xl border border-violet-400/20 bg-violet-400/10 p-4"><Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" /><div><p className="font-black text-violet-100">Halfway milestone reached</p><p className="mt-1 text-sm text-slate-400">You&apos;ve crossed 50%. Another {engagement.remainingPoints.toFixed(1)} points completes this week&apos;s target.</p></div></section>
@@ -345,7 +343,7 @@ export default function AthleteDashboard({
           <section role="status" className="flex items-start gap-3 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4"><Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-rose-300" /><div><p className="font-black text-rose-100">Your weekly target needs a final effort</p><p className="mt-1 text-sm text-slate-400">{engagement.remainingPoints.toFixed(1)} points remaining and about {engagement.hoursRemaining} hours left.</p></div></section>
         ) : null}
 
-        {currentUser.stravaEnabled ? <section className="flex flex-col gap-4 rounded-2xl border border-orange-400/20 bg-gradient-to-r from-orange-500/10 to-white/[0.03] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        {currentUser.stravaEnabled ? <details open className="dashboard-fold"><summary>Strava connection</summary><section className="flex flex-col gap-4 rounded-2xl border border-orange-400/20 bg-gradient-to-r from-orange-500/10 to-white/[0.03] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex items-center gap-4">
             <span className="rounded-2xl bg-orange-500/15 p-3 text-orange-400"><StravaIcon className="h-7 w-7" /></span>
             <div><h2 className="font-black">Strava connection</h2><p className="mt-1 text-sm text-slate-400">{syncMessage || (currentUser.stravaConnected ? 'Connected and ready to import your activities.' : 'Connect once, then import workouts in seconds.')}</p></div>
@@ -357,10 +355,10 @@ export default function AthleteDashboard({
             // eslint-disable-next-line @next/next/no-html-link-for-pages
             <a href="/api/auth/strava" className="shrink-0 rounded-xl bg-orange-500 px-5 py-2.5 text-center text-sm font-bold transition hover:bg-orange-400">Connect Strava</a>
           )}
-        </section> : null}
+        </section></details> : null}
 
-        <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr]">
-          <div className="flex items-center gap-5 rounded-2xl border border-orange-400/20 bg-gradient-to-br from-orange-400/10 to-white/[0.04] p-5 sm:p-6">
+        <details open className="dashboard-fold"><summary>Weekly target & momentum</summary><section className="grid grid-cols-2 gap-3">
+          <div className="col-span-2 flex items-center gap-5 rounded-2xl border border-orange-400/20 bg-gradient-to-br from-orange-400/10 to-white/[0.04] p-5 sm:p-6">
             <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full p-2" style={{ background: `conic-gradient(#f97316 ${goalProgress * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}>
               <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-slate-950"><span className="text-2xl font-black">{Math.round(goalProgress)}%</span><span className="text-[0.65rem] text-slate-500">complete</span></div>
             </div>
@@ -368,13 +366,12 @@ export default function AthleteDashboard({
           </div>
           <EngagementCard icon={<Flame className="h-6 w-6" />} tone="text-orange-300 bg-orange-400/10" label="Goal streak" value={`${engagement.goalCompletionStreak} ${engagement.goalCompletionStreak === 1 ? 'week' : 'weeks'}`} detail={engagement.goalCompletionStreak ? 'Consecutive weekly targets completed.' : `${engagement.weeklyStreak} active-week streak · complete this target to begin.`} />
           <EngagementCard icon={<TrendingUp className="h-6 w-6" />} tone="text-sky-300 bg-sky-400/10" label="Column momentum" value={engagement.columnRank ? `#${engagement.columnRank} of ${engagement.columnCount}` : 'Not ranked'} detail={engagement.columnRank === 1 ? 'Your column leads the challenge.' : engagement.columnRank ? `${engagement.gapToNext.toFixed(1)} points to the next place.` : 'Earn points to enter the standings.'} />
-        </section>
+        </section></details>
 
-        <WeeklyProgressChart weeks={engagement.goalHistory} />
 
-        <PersonalAnalytics activities={activities} today={new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })} />
+        <PersonalAnalytics activities={activities} today={new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })} weeklyChart={<WeeklyProgressChart weeks={engagement.goalHistory} />} />
 
-        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
+        <details open className="dashboard-fold"><summary>Achievements</summary><section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <SectionTitle icon={<Award className="h-5 w-5 text-yellow-300" />} title="Achievements" subtitle={`${unlockedCount} unlocked · keep moving for the rest`} />
           {latestUnlockedAchievement ? <div className="mt-5 flex items-start gap-3 rounded-2xl border border-yellow-300/20 bg-gradient-to-r from-yellow-300/10 to-orange-400/5 p-4"><span className="rounded-xl bg-yellow-300 p-2.5 text-slate-950"><PartyPopper className="h-5 w-5" /></span><div><p className="text-xs font-black uppercase tracking-wider text-yellow-300">Latest badge unlocked</p><p className="mt-1 font-black text-yellow-100">{latestUnlockedAchievement.name}</p><p className="mt-1 text-sm text-slate-400">{latestUnlockedAchievement.description}</p></div></div> : null}
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -387,9 +384,9 @@ export default function AthleteDashboard({
               </div>
             ))}
           </div>
-        </section>
+        </section></details>
 
-        <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+        <details open className="dashboard-fold"><summary>My activities</summary><section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
           <div className="flex flex-wrap items-end justify-between gap-3 p-5 sm:p-6">
             <SectionTitle icon={<Activity className="h-5 w-5 text-emerald-300" />} title="My activities" subtitle="Track approvals and manage your submissions" />
             <span className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-400">{visibleActivities.length} total</span>
@@ -431,7 +428,7 @@ export default function AthleteDashboard({
               })}
             </div>
           ) : <Empty message="No activities yet. Log your first activity to begin." />}
-        </section>
+        </section></details>
 
         {editingProfile ? (
           <div role="dialog" aria-modal="true" aria-labelledby="profile-settings-title" className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/85 backdrop-blur-sm sm:items-center sm:p-4">
@@ -461,11 +458,11 @@ export default function AthleteDashboard({
 }
 
 function HeroStat({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"><p className="text-xs text-slate-400">{label}</p><p className="mt-2 text-2xl font-black">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>;
+  return <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"><p className="text-xs text-slate-400">{label}</p><p className="mt-1 text-lg font-black sm:text-xl">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>;
 }
 
 function EngagementCard({ icon, tone, label, value, detail }: { icon: React.ReactNode; tone: string; label: string; value: string; detail: string }) {
-  return <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><span className={`inline-flex rounded-xl p-2.5 ${tone}`}>{icon}</span><p className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-2 text-2xl font-black">{value}</p><p className="mt-2 text-xs leading-5 text-slate-500">{detail}</p></div>;
+  return <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 sm:p-4"><span className={`inline-flex rounded-lg p-1.5 ${tone}`}>{icon}</span><p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p><p className="mt-1 text-lg font-black sm:text-xl">{value}</p><p className="mt-2 text-xs leading-5 text-slate-500">{detail}</p></div>;
 }
 
 function SectionTitle({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
