@@ -50,9 +50,7 @@ export async function ensureProofBucketExists(): Promise<void> {
     fileSizeLimit: '4MB',
     allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
   });
-  if (createError) {
-    throw createError;
-  }
+  if (createError) throw createError;
 }
 
 export async function uploadProofImage(
@@ -64,11 +62,13 @@ export async function uploadProofImage(
 
   const { data, error } = await supabase.storage
     .from(PROOF_BUCKET)
-    .upload(fileName, buffer, { contentType, upsert: false });
+    .upload(fileName, buffer, {
+      contentType,
+      cacheControl: '31536000',
+      upsert: false,
+    });
 
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 
   const { data: publicUrlData } = supabase.storage.from(PROOF_BUCKET).getPublicUrl(data.path);
   return publicUrlData.publicUrl;
