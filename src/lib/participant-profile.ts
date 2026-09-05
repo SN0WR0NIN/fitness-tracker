@@ -50,6 +50,8 @@ type ProfileWeekScore = {
 type ProfileUser = {
   id: string;
   name: string;
+  email: string;
+  stravaAthleteId: string | null;
   createdAt: Date;
   column: { id: string; name: string } | null;
   weeklyScores: ProfileWeekScore[];
@@ -60,20 +62,27 @@ type RankedScore = {
   _sum: { totalPoints: number | null };
 };
 
-type CategoryScore = {
-  category: ActivityCategory;
-  _sum: { points: number | null };
+type ProfileActivitySummary = {
+  activityCount: number;
+  friendActivities: number;
+  runPoints: number;
+  cyclePoints: number;
+  swimPoints: number;
+  hikePoints: number;
+  troopGamePoints: number;
 };
 
 export async function getParticipantProfile(userId: string, options: { includeActivities?: boolean } = {}) {
   const includeActivities = options.includeActivities ?? true;
   const activityWhere = { userId, status: 'APPROVED' as const };
-  const [userResult, rankedScoresResult, profileSettings, activityCount, friendActivities, categoryScoresResult, activitiesResult] = await Promise.all([
+  const [userResult, rankedScoresResult, profileSettings, activitySummaryRows, activitiesResult] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
         name: true,
+        email: true,
+        stravaAthleteId: true,
         createdAt: true,
         column: { select: { id: true, name: true } },
         weeklyScores: {
@@ -97,13 +106,19 @@ export async function getParticipantProfile(userId: string, options: { includeAc
       orderBy: { _sum: { totalPoints: 'desc' } },
     }),
     getUserProfileSettings(userId),
-    prisma.activity.count({ where: activityWhere }),
-    prisma.activity.count({ where: { ...activityWhere, completedWithFriend: true } }),
-    prisma.activity.groupBy({
-      by: ['category'],
-      where: activityWhere,
-      _sum: { points: true },
-    }),
+    prisma.$queryRawUnsafe(
+      `SELECT
+        COUNT(*)::int AS "activityCount",
+        COUNT(*) FILTER (WHERE "completedWithFriend" = true)::int AS "friendActivities",
+        COALESCE(SUM("points") FILTER (WHERE "category" = 'RUN'), 0)::float8 AS "runPoints",
+        COALESCE(SUM("points") FILTER (WHERE "category" = 'CYCLE'), 0)::float8 AS "cyclePoints",
+        COALESCE(SUM("points") FILTER (WHERE "category" = 'SWIM'), 0)::float8 AS "swimPoints",
+        COALESCE(SUM("points") FILTER (WHERE "category" = 'WALK_OR_HIKE'), 0)::float8 AS "hikePoints",
+        COALESCE(SUM("points") FILTER (WHERE "category" = 'TROOP_GAMES'), 0)::float8 AS "troopGamePoints"
+       FROM "Activity"
+       WHERE "userId" = $1 AND "status" = 'APPROVED'`,
+      userId,
+    ) as Promise<ProfileActivitySummary[]>,
     includeActivities
       ? prisma.activity.findMany({
           where: activityWhere,
@@ -129,7 +144,15 @@ export async function getParticipantProfile(userId: string, options: { includeAc
 
   const user = userResult as ProfileUser | null;
   const rankedScores = rankedScoresResult as RankedScore[];
-  const categoryScores = categoryScoresResult as CategoryScore[];
+  const activitySummary = (activitySummaryRows as ProfileActivitySummary[])[0] ?? {
+    activityCount: 0,
+    friendActivities: 0,
+    runPoints: 0,
+    cyclePoints: 0,
+    swimPoints: 0,
+    hikePoints: 0,
+    troopGamePoints: 0,
+  };
   const activities = activitiesResult as ProfileActivity[];
 
   if (!user) return null;
@@ -153,7 +176,13 @@ export async function getParticipantProfile(userId: string, options: { includeAc
   const rankIndex = rankedScores.findIndex((entry) => entry.userId === user.id);
   const rank = rankIndex >= 0 ? rankIndex + 1 : null;
 
-  const scoreByCategory = new Map(categoryScores.map((row) => [row.category, row._sum.points ?? 0]));
+  const scoreByCategory = new Map<ActivityCategory, number>([
+    ['RUN', activitySummary.runPoints],
+    ['CYCLE', activitySummary.cyclePoints],
+    ['SWIM', activitySummary.swimPoints],
+    ['WALK_OR_HIKE', activitySummary.hikePoints],
+    ['TROOP_GAMES', activitySummary.troopGamePoints],
+  ]);
   const categories = (Object.keys(CATEGORY_DETAILS) as ActivityCategory[]).map((key) => ({
     key,
     ...CATEGORY_DETAILS[key],
@@ -162,6 +191,8 @@ export async function getParticipantProfile(userId: string, options: { includeAc
   const activeCategories = categories.filter((category) => category.points > 0).length;
   const bestWeek = weeklyScores.reduce<ProfileWeekScore | null>((best, week) => (!best || week.totalPoints > best.totalPoints ? week : best), null);
   const activeWeeks = weeklyScores.filter((week) => week.totalPoints > 0).length;
+  const activityCount = activitySummary.activityCount;
+  const friendActivities = activitySummary.friendActivities;
 
   const achievements: ProfileAchievement[] = [
     {
@@ -298,5 +329,7 @@ export async function getParticipantProfile(userId: string, options: { includeAc
     achievements,
     bio: profileSettings?.bio ?? '',
     profilePhotoUrl: profileSettings?.profilePhotoUrl ?? null,
+    weeklyGoal: profileSettings?.weeklyGoal ?? null,
+    hasCustomWeeklyGoal: Boolean(profileSettings),
   };
 }
