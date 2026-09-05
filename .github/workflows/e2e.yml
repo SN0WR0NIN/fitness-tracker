@@ -1,0 +1,102 @@
+name: Stay Active E2E
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fitness_tracker_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fitness_tracker_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      CI: 'true'
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/fitness_tracker_e2e?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/fitness_tracker_e2e?schema=public
+      NEXTAUTH_SECRET: e2e-nextauth-secret-only-for-ci
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      E2E_TEST_MODE: '1'
+      E2E_PASSWORD: E2E-only-Password-123!
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Prepare ephemeral database
+        run: |
+          npx prisma generate
+          npx prisma db push --skip-generate --accept-data-loss
+          node scripts/e2e-bootstrap.cjs
+
+      - name: Lint safety app changes
+        run: >-
+          npx eslint
+          src/lib/system-automation.ts
+          src/app/api/admin/backups/latest/route.ts
+          src/app/api/upload/route.ts
+          src/app/admin/page.tsx
+
+      - name: Production build
+        run: npm run build
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start application
+        run: |
+          nohup npm start > /tmp/kg-e2e-app.log 2>&1 &
+          echo $! > /tmp/kg-e2e-app.pid
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000/api/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kg-e2e-app.log
+          exit 1
+
+      - name: Run member/admin E2E
+        run: npx playwright test --config=playwright.config.cjs
+
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          mkdir -p test-results
+          cp /tmp/kg-e2e-app.log test-results/server.log || true
+
+      - name: Upload E2E report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stay-active-e2e-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7

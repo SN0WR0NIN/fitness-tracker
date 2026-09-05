@@ -1,29 +1,41 @@
 # KG Stay Active — Backup & Recovery Runbook
 
-This runbook covers recovery from the admin **Operational backup** JSON export. The export intentionally excludes passwords and Strava access/refresh tokens.
+This runbook covers recovery from the admin **Operational backup** JSON export and the automated private operational snapshots. Both intentionally exclude passwords and Strava access/refresh tokens.
 
-## 1. Before an incident
+## 1. Safety layers
 
-- Export an operational backup from **Admin → Export backup** after major scoring/settings changes and at regular challenge checkpoints.
-- Keep the file in an access-controlled location.
-- Validate the file before relying on it:
+The app now has three complementary safety layers:
+
+1. **Hourly integrity check** — Supabase Cron runs `app_internal.run_integrity_check()` at minute 10 of every hour. Results are stored privately for 90 days and surfaced in Command Centre.
+2. **Daily operational snapshot** — Supabase Cron runs `app_internal.create_operational_backup()` at 18:30 UTC (02:30 Singapore time). Snapshots are stored privately for 30 days with a SHA-256 checksum and row counts.
+3. **Provider database backups** — platform-level database backups protect against broader database incidents. The app-level operational snapshots are intended mainly for fast recovery from bad edits, imports, score changes or accidental deletes.
+
+The private `app_internal` schema is not granted to `anon` or `authenticated`. Automated snapshots can be downloaded only through the admin-protected **Download auto backup** action.
+
+## 2. Before an incident
+
+- Check **Admin → Automated safety net** for the most recent integrity status and automatic snapshot.
+- Use **Download auto backup** to save the latest scheduled snapshot when needed.
+- Continue using **Fresh backup now** before major scoring/settings/import changes; that export is also recorded in the admin audit trail.
+- Keep downloaded backup files in an access-controlled location.
+- Validate a downloaded file before relying on it:
   ```bash
   npm run validate:backup -- /path/to/kg-backup-YYYY-MM-DD.json
   ```
-- A successful export creates a `BACKUP_EXPORT` entry in the admin audit trail, so Command Centre can show the latest recorded backup.
 
-## 2. Do not restore directly into production first
+## 3. Do not restore directly into production first
 
 A restore is deliberately not exposed as a one-click web action. Recovery can overwrite valid scores and participant history, so it must be controlled.
 
 1. Put the challenge into maintenance mode.
-2. Take a fresh database snapshot/export of the damaged state for investigation.
-3. Validate the chosen backup file.
-4. Restore into a temporary/dev database first when possible.
-5. Run the reconciliation checks below.
-6. Only then apply the validated recovery to production.
+2. Take/download a fresh snapshot of the damaged state for investigation.
+3. Choose the last known-good automatic or manual operational backup.
+4. Validate the chosen backup file.
+5. Restore into a temporary/dev database first when possible.
+6. Run the reconciliation checks below.
+7. Only then apply the validated recovery to production.
 
-## 3. Restore order
+## 4. Restore order
 
 Restore records in dependency order:
 
@@ -42,9 +54,9 @@ Do **not** replace current password hashes or Strava tokens from an operational 
 
 When restoring users, use stable IDs from the backup so Activity, profile settings, goals and WeeklyScore foreign keys remain valid. Use a transaction for each recovery batch and stop on any constraint conflict rather than skipping rows silently.
 
-Older version-1 operational backups may not contain profile settings, weekly goals or ranking snapshots. The validator accepts those older backups, but recovery from them cannot recreate those optional experience/history records.
+Older version-1 operational backups may not contain profile settings, weekly goals or ranking snapshots. The validator accepts those older backups, but recovery from them cannot recreate those optional experience/history records. Automated snapshots use format version 2.
 
-## 4. Required post-restore checks
+## 5. Required post-restore checks
 
 The restore is not complete until all of these pass:
 
@@ -55,8 +67,11 @@ The restore is not complete until all of these pass:
 - No WeeklyScore category or total is negative.
 - Recomputed approved Activity totals equal the stored WeeklyScore totals for every participant/week/category.
 - Approved activities have reviewer metadata.
+- Rejected activities have a rejection reason.
+- No activity falls outside the configured challenge window.
 - The public leaderboard totals match approved activities.
-- Login, dashboard, activity submission, admin review, proof images, leaderboard and backup export all load normally.
+- Login, dashboard, activity submission, admin review, proof images, leaderboard and backup download/export all load normally.
+- The next scheduled integrity check records `HEALTHY` or only known review-only duplicate warnings.
 
 ### Score reconciliation SQL
 
@@ -88,19 +103,20 @@ WHERE COALESCE(e.total,0) <> COALESCE(w."totalPoints",0)
 
 A healthy result is **zero rows**.
 
-## 5. If the restore fails
+## 6. If the restore fails
 
 - Roll back the recovery transaction or restore the pre-recovery snapshot.
 - Keep maintenance mode enabled.
 - Do not repeatedly retry a partially applied import.
 - Identify the first constraint/reconciliation failure, correct the recovery input or procedure, then retry from a clean database state.
 
-## 6. Return to service
+## 7. Return to service
 
 After validation:
 
 1. Disable maintenance mode.
 2. Load the public home page and leaderboard.
 3. Log in as a normal participant and verify Dashboard and activity submission.
-4. Log in as an admin and verify review queue, Command Centre health, weekly recap and backup export.
-5. Record the recovery action in the admin audit trail with the incident/recovery details.
+4. Log in as an admin and verify review queue, Command Centre safety status, weekly recap and backup download/export.
+5. Confirm the next hourly integrity check completes.
+6. Record the recovery action in the admin audit trail with the incident/recovery details.
