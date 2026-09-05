@@ -13,6 +13,8 @@ import { STRAVA_INTEGRATION_ENABLED } from '@/lib/features';
 
 export const dynamic = 'force-dynamic';
 
+const INITIAL_ACTIVITY_ROWS = 8;
+
 type DashboardUser = {
   stravaAthleteId: string | null;
   email: string;
@@ -58,6 +60,7 @@ export default async function DashboardPage() {
     prisma.activity.findMany({
       where: { userId },
       orderBy: { occurredAt: 'desc' },
+      take: INITIAL_ACTIVITY_ROWS,
       select: {
         id: true,
         category: true,
