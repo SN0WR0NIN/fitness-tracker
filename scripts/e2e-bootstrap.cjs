@@ -81,6 +81,20 @@ async function main() {
     counts JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
+  await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS app_internal.duplicate_review_decision (
+    pair_key TEXT PRIMARY KEY,
+    activity_a_id TEXT NOT NULL REFERENCES "Activity"(id) ON DELETE CASCADE,
+    activity_b_id TEXT NOT NULL REFERENCES "Activity"(id) ON DELETE CASCADE,
+    status TEXT NOT NULL CHECK (status IN ('DIFFERENT','DUPLICATE','LATER')),
+    duplicate_activity_id TEXT REFERENCES "Activity"(id) ON DELETE SET NULL,
+    kept_activity_id TEXT REFERENCES "Activity"(id) ON DELETE SET NULL,
+    note TEXT,
+    reviewed_by_id TEXT REFERENCES "User"(id) ON DELETE SET NULL,
+    reviewed_by_name TEXT NOT NULL,
+    reviewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
 
   const hash = await bcrypt.hash(password, 10);
   await prisma.column.upsert({
@@ -122,14 +136,15 @@ async function main() {
       score_mismatches: 0, negative_scores: 0, orphan_activity_users: 0, orphan_activity_columns: 0,
       duplicate_proof_groups: 0, duplicate_strava_groups: 0, approved_without_reviewer: 0,
       rejected_without_reason: 0, outside_challenge_window: 0, possible_duplicate_pairs: 0,
+      open_duplicate_pairs: 0, deferred_duplicate_pairs: 0,
       latest_backup_at: new Date().toISOString(), checked_at: new Date().toISOString(),
     }));
   await prisma.$executeRawUnsafe(`INSERT INTO app_internal.operational_backup
     (id,format,version,payload,checksum_sha256,counts)
-    VALUES ('00000000-0000-0000-0000-000000000002','kg-stay-active-operational-backup',2,$1::jsonb,'e2e-checksum', $2::jsonb)
+    VALUES ('00000000-0000-0000-0000-000000000002','kg-stay-active-operational-backup',3,$1::jsonb,'e2e-checksum', $2::jsonb)
     ON CONFLICT (id) DO UPDATE SET payload=EXCLUDED.payload, counts=EXCLUDED.counts, created_at=NOW()`,
-    JSON.stringify({ format: 'kg-stay-active-operational-backup', version: 2, exportedAt: new Date().toISOString(), users: [], activities: [] }),
-    JSON.stringify({ users: 2, activities: 0, weeklyScores: 0, profileSettings: 0, weeklyGoals: 0, rankingSnapshots: 0 }));
+    JSON.stringify({ format: 'kg-stay-active-operational-backup', version: 3, exportedAt: new Date().toISOString(), users: [], activities: [], duplicateReviews: [] }),
+    JSON.stringify({ users: 2, activities: 0, weeklyScores: 0, profileSettings: 0, weeklyGoals: 0, rankingSnapshots: 0, duplicateReviews: 0 }));
 
   console.log('E2E database bootstrapped.');
 }

@@ -16,6 +16,8 @@ export type SystemHealthDetails = {
   rejected_without_reason: number;
   outside_challenge_window: number;
   possible_duplicate_pairs: number;
+  open_duplicate_pairs?: number;
+  deferred_duplicate_pairs?: number;
   latest_backup_at: string | null;
   checked_at: string;
 };
