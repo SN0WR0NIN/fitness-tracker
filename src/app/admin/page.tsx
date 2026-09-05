@@ -1,7 +1,9 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import AdminControlCenter from '@/components/AdminControlCenter';
+import { Activity, DatabaseBackup, FileClock, Megaphone, Settings, ShieldCheck, Trophy, Users } from 'lucide-react';
+import Navbar from '@/components/Navbar';
 import { requireAdmin } from '@/lib/adminGuard';
-import { getAnnouncements, getAuditEntries, getChallengeSettings, getManagedColumns } from '@/lib/admin-control';
+import { getAuditEntries } from '@/lib/admin-control';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -11,18 +13,68 @@ export default async function AdminPage() {
   if (guard.status === 401) redirect('/auth/login');
   if (guard.error) redirect('/dashboard');
 
-  const [settings, announcements, audit, columns, users, activities, pending, approvedPoints, categories] = await Promise.all([
-    getChallengeSettings(), getAnnouncements(), getAuditEntries(), getManagedColumns(),
-    prisma.user.count(), prisma.activity.count(), prisma.activity.count({ where: { status: 'PENDING' } }),
+  const [users, activities, pending, approvedPoints, audit] = await Promise.all([
+    prisma.user.count(),
+    prisma.activity.count(),
+    prisma.activity.count({ where: { status: 'PENDING' } }),
     prisma.activity.aggregate({ where: { status: 'APPROVED' }, _sum: { points: true } }),
-    prisma.activity.groupBy({ by: ['category'], _count: { _all: true }, where: { status: 'APPROVED' } }),
+    getAuditEntries(10),
   ]);
 
-  return <AdminControlCenter
-    settings={{ ...settings, startDate: settings.startDate.toISOString(), endDate: settings.endDate.toISOString(), updatedAt: settings.updatedAt.toISOString() }}
-    announcements={announcements.map((item) => ({ ...item, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }))}
-    audit={audit.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() }))}
-    columns={columns}
-    analytics={{ users, activities, pending, approvedPoints: approvedPoints._sum.points ?? 0, categories: categories.map((item: { category: string; _count: { _all: number } }) => ({ category: item.category, count: item._count._all })) }}
-  />;
+  return (
+    <div className="min-h-screen bg-slate-950 text-white">
+      <Navbar />
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+        <header className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-8">
+          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-lime-300"><ShieldCheck className="h-4 w-4" />Admin operations</p>
+          <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div><h1 className="text-3xl font-black sm:text-5xl">Command Centre 2.0</h1><p className="mt-3 text-slate-400">A faster operations-first landing page for the challenge.</p></div>
+            <div className="flex flex-wrap gap-2"><AdminLink href="/admin/activities" label="Review queue" /><AdminLink href="/admin/users" label="Manage users" /><AdminLink href="/admin/settings" label="Settings" /></div>
+          </div>
+        </header>
+
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat icon={<Users className="h-5 w-5" />} label="Participants" value={users.toString()} />
+          <Stat icon={<Activity className="h-5 w-5" />} label="Activities" value={activities.toString()} />
+          <Stat icon={<FileClock className="h-5 w-5" />} label="Pending review" value={pending.toString()} />
+          <Stat icon={<Trophy className="h-5 w-5" />} label="Approved points" value={(approvedPoints._sum.points ?? 0).toFixed(1)} />
+        </section>
+
+        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
+          <h2 className="text-lg font-black">Quick actions</h2>
+          <p className="mt-1 text-sm text-slate-500">Jump directly to the most common admin tasks.</p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <Quick href="/admin/activities" icon={<FileClock className="h-5 w-5" />} label="Review pending" />
+            <Quick href="/admin/users" icon={<Users className="h-5 w-5" />} label="Manage users" />
+            <Quick href="/admin/settings" icon={<Settings className="h-5 w-5" />} label="Settings & scoring" />
+            <Quick href="/admin/recap" icon={<Megaphone className="h-5 w-5" />} label="Weekly recap" />
+            <Quick href="/api/admin/export?type=backup" icon={<DatabaseBackup className="h-5 w-5" />} label="Export backup" />
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
+          <h2 className="text-lg font-black">Admin activity feed</h2>
+          <p className="mt-1 text-sm text-slate-500">Recent operational changes from the existing audit trail.</p>
+          <div className="mt-5 divide-y divide-white/5">
+            {audit.length ? audit.map((item) => (
+              <div key={item.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div><p className="text-sm font-bold">{item.action}</p><p className="mt-1 text-xs text-slate-500">{item.actorName} · {item.target}</p></div>
+                <time className="text-xs text-slate-600">{item.createdAt.toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</time>
+              </div>
+            )) : <p className="py-8 text-center text-sm text-slate-500">No admin audit entries yet.</p>}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><span className="text-lime-300">{icon}</span><p className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-2 text-3xl font-black">{value}</p></div>;
+}
+function Quick({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
+  return <Link href={href} className="rounded-xl border border-white/10 bg-black/10 p-4 transition hover:border-lime-300/30"><span className="text-lime-300">{icon}</span><p className="mt-4 text-sm font-black">{label}</p></Link>;
+}
+function AdminLink({ href, label }: { href: string; label: string }) {
+  return <Link href={href} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-bold transition hover:text-lime-300">{label}</Link>;
 }
