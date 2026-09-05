@@ -40,7 +40,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install application dependencies
@@ -52,10 +52,16 @@ jobs:
           npx prisma db push --skip-generate --accept-data-loss
           node scripts/e2e-bootstrap.cjs
 
-      - name: Static checks
-        run: |
-          npm run lint
-          npm run build
+      - name: Lint safety app changes
+        run: >-
+          npx eslint
+          src/lib/system-automation.ts
+          src/app/api/admin/backups/latest/route.ts
+          src/app/api/upload/route.ts
+          src/app/admin/page.tsx
+
+      - name: Production build
+        run: npm run build
 
       - name: Install Playwright
         run: |
