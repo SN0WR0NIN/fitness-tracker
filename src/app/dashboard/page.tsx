@@ -13,8 +13,6 @@ import { STRAVA_INTEGRATION_ENABLED } from '@/lib/features';
 
 export const dynamic = 'force-dynamic';
 
-const INITIAL_ACTIVITY_PAGE_SIZE = 8;
-
 type DashboardUser = {
   stravaAthleteId: string | null;
   email: string;
@@ -46,7 +44,7 @@ export default async function DashboardPage() {
   const userId = session?.user?.id;
   if (!userId) redirect('/auth/login');
 
-  const [profile, userResult, profileSettings, goalRecords, activitiesResult, activityTotal, pendingCount, usersResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
+  const [profile, userResult, profileSettings, goalRecords, activitiesResult, usersResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
     getParticipantProfile(userId, { includeActivities: false }),
     prisma.user.findUnique({
       where: { id: userId },
@@ -59,8 +57,7 @@ export default async function DashboardPage() {
     getWeeklyGoalRecords(userId),
     prisma.activity.findMany({
       where: { userId },
-      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
-      take: INITIAL_ACTIVITY_PAGE_SIZE,
+      orderBy: { occurredAt: 'desc' },
       select: {
         id: true,
         category: true,
@@ -78,8 +75,6 @@ export default async function DashboardPage() {
         stravaActivityId: true,
       },
     }),
-    prisma.activity.count({ where: { userId } }),
-    prisma.activity.count({ where: { userId, status: 'PENDING' } }),
     prisma.user.findMany({
       where: { id: { not: userId } },
       select: { id: true, name: true },
@@ -165,7 +160,6 @@ export default async function DashboardPage() {
         milestone: goalIntelligence.milestone,
         goalHistory: goalIntelligence.history,
       }}
-      activitySummary={{ total: activityTotal, approved: profile.activityCount, pending: pendingCount }}
       activities={activities.map((activity) => ({
         ...activity,
         occurredAt: activity.occurredAt.toISOString(),
