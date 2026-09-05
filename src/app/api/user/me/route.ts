@@ -5,11 +5,69 @@ import { prisma } from '@/lib/prisma';
 import { getUserProfileSettings, updateUserProfileSettings } from '@/lib/user-profile-settings';
 import { deleteProfileImage, isProfileImageUrlForUser } from '@/lib/storage';
 
-export async function GET() {
+const ACTIVITY_PAGE_SIZE = 8;
+
+export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const url = new URL(request.url);
+    const view = url.searchParams.get('view');
+
+    if (view === 'metrics') {
+      const activities = await prisma.activity.findMany({
+        where: { userId: session.user.id, status: 'APPROVED' },
+        orderBy: { occurredAt: 'desc' },
+        select: {
+          category: true,
+          distance: true,
+          pace: true,
+          points: true,
+          status: true,
+          occurredAt: true,
+          completedWithFriend: true,
+        },
+      });
+      return NextResponse.json({
+        activities: activities.map((activity) => ({ ...activity, occurredAt: activity.occurredAt.toISOString() })),
+      });
+    }
+
+    if (view === 'activities') {
+      const offsetValue = Number(url.searchParams.get('offset') ?? '0');
+      const offset = Number.isFinite(offsetValue) && offsetValue > 0 ? Math.floor(offsetValue) : 0;
+      const [activities, total] = await Promise.all([
+        prisma.activity.findMany({
+          where: { userId: session.user.id },
+          orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+          skip: offset,
+          take: ACTIVITY_PAGE_SIZE,
+          select: {
+            id: true,
+            category: true,
+            distance: true,
+            pace: true,
+            duration: true,
+            points: true,
+            completedWithFriend: true,
+            companion: true,
+            companionUserId: true,
+            status: true,
+            rejectionReason: true,
+            proofUrl: true,
+            occurredAt: true,
+            stravaActivityId: true,
+          },
+        }),
+        prisma.activity.count({ where: { userId: session.user.id } }),
+      ]);
+      return NextResponse.json({
+        activities: activities.map((activity) => ({ ...activity, occurredAt: activity.occurredAt.toISOString() })),
+        total,
+      });
     }
 
     const [user, settings] = await Promise.all([
