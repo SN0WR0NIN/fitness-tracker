@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_SCORING_RULES, type ScoringRules } from '@/lib/scoring';
@@ -35,7 +36,7 @@ export function ensureAdminControlSchema() {
   return schemaReady;
 }
 
-export async function getChallengeSettings(): Promise<ChallengeSettings> {
+async function getChallengeSettingsUncached(): Promise<ChallengeSettings> {
   await ensureAdminControlSchema();
   const rows = await prisma.$queryRawUnsafe('SELECT * FROM "ChallengeSetting" WHERE "id" = $1 LIMIT 1', 'primary') as ChallengeSettings[];
   if (rows[0]) return { ...rows[0], maintenanceMode: Boolean(rows[0].maintenanceMode), maintenanceMessage: rows[0].maintenanceMessage || 'New activity submissions are temporarily paused.', scoringRules: { ...DEFAULT_SCORING_RULES, ...rows[0].scoringRules } };
@@ -72,3 +73,5 @@ export async function recordAdminAudit(actorId: string, action: string, target: 
   const actor = await prisma.user.findUnique({ where: { id: actorId }, select: { name: true } });
   return prisma.$executeRawUnsafe('INSERT INTO "AdminAudit" ("id", "actorId", "actorName", "action", "target", "details") VALUES ($1,$2,$3,$4,$5,$6::jsonb)', randomUUID(), actorId, actor?.name || 'Administrator', action, target, JSON.stringify(details));
 }
+
+export const getChallengeSettings = cache(getChallengeSettingsUncached);

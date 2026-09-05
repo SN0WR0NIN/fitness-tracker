@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { prisma } from '@/lib/prisma';
 import { getWeekStart } from '@/lib/scoring';
 
@@ -42,7 +43,7 @@ export function ensureUserProfileSettingsSchema() {
   return schemaReady;
 }
 
-export async function getUserProfileSettings(userId: string) {
+async function getUserProfileSettingsUncached(userId: string) {
   await ensureUserProfileSettingsSchema();
   const rows = await prisma.$queryRawUnsafe(
     'SELECT "userId", "weeklyGoal", "bio", "profilePhotoUrl" FROM "UserProfileSettings" WHERE "userId"=$1 LIMIT 1',
@@ -98,3 +99,5 @@ export async function updateUserProfileSettings(userId: string, name: string, we
     ),
   ]);
 }
+
+export const getUserProfileSettings = cache(getUserProfileSettingsUncached);
