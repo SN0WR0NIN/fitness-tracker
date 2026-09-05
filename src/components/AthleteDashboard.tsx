@@ -22,7 +22,7 @@ import {
   Medal,
   Pencil,
   PartyPopper,
-  Plus,
+  KeyRound,
   Sparkles,
   Share2,
   Target,
@@ -288,13 +288,20 @@ export default function AthleteDashboard({
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         <section className="hero-stage rounded-3xl border border-white/10 bg-slate-950 p-6 shadow-2xl shadow-black/20 sm:p-8">
           <HeroAtmosphere />
-          <div className="grid items-center gap-8 lg:grid-cols-[1fr_auto]">
-            <div>
-              <div className="hero-reveal flex flex-col gap-5 sm:flex-row sm:items-center">
+          <div className="hero-reveal mb-5 flex items-start justify-between gap-3">
                 <div className="relative h-20 w-20 shrink-0">
                   <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-lime-300 via-yellow-300 to-orange-500 text-2xl font-black text-slate-950 shadow-xl shadow-orange-500/20">{profile.profilePhotoUrl ? <Image src={profile.profilePhotoUrl} alt={`${profile.name}'s profile photo`} fill sizes="80px" className="object-cover" /> : initials}</div>
                   <span className="absolute -right-1 -top-1 z-10 h-4 w-4 rounded-full border-4 border-slate-950 bg-lime-300" />
                 </div>
+            <div className="flex shrink-0 items-center gap-2" role="group" aria-label="Profile actions">
+              <button type="button" onClick={openProfileEditor} aria-label="Edit profile" title="Edit profile" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-lime-300 focus-visible:ring-2 focus-visible:ring-lime-300"><Pencil className="h-4 w-4" /></button>
+              <Link href="/account" aria-label="Email and password" title="Email & password" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-lime-300 focus-visible:ring-2 focus-visible:ring-lime-300"><KeyRound className="h-4 w-4" /></Link>
+              <ShareProfileButton iconOnly participantName={profile.name} profilePath={`/participants/${profile.id}`} />
+            </div>
+          </div>
+          <div className="grid items-center gap-8 lg:grid-cols-[1fr_auto]">
+            <div>
+              <div className="hero-reveal flex flex-col gap-5 sm:flex-row sm:items-center">
                 <div>
                   <p className="live-pulse inline-flex items-center gap-2.5 text-xs font-black uppercase tracking-[0.2em] text-lime-300">My live season</p>
                   <h1 className="athletic-display mt-3 text-4xl leading-none sm:text-6xl">{profile.name}</h1>
@@ -302,12 +309,7 @@ export default function AthleteDashboard({
                   {profile.bio ? <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">{profile.bio}</p> : null}
                 </div>
               </div>
-              <div className="hero-reveal hero-reveal-delay-2 mt-7 flex flex-wrap gap-3">
-                <button type="button" onClick={openProfileEditor} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-bold transition hover:-translate-y-0.5 hover:border-lime-300/30 hover:bg-lime-300/10"><Pencil className="h-4 w-4" />Edit profile</button>
-                <Link href="/account" className="inline-flex items-center rounded-xl border border-white/10 px-5 py-2.5 text-sm font-bold">Email &amp; password</Link>
-                <ShareProfileButton participantName={profile.name} profilePath={`/participants/${profile.id}`} />
-                <Link href="/activities/new" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold shadow-lg shadow-orange-500/20 transition hover:-translate-y-0.5 hover:bg-orange-400"><Plus className="h-4 w-4" />Log activity</Link>
-              </div>
+
             </div>
 
             <div className="hero-reveal hero-reveal-delay-1 min-w-56 rounded-3xl border border-lime-300/20 bg-lime-300/[0.07] p-6 text-left backdrop-blur sm:text-right">
