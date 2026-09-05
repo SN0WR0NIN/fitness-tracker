@@ -45,7 +45,7 @@ export default async function DashboardPage() {
   if (!userId) redirect('/auth/login');
 
   const [profile, userResult, profileSettings, goalRecords, activitiesResult, usersResult, columnScoresResult, settings, activeColumnIds] = await Promise.all([
-    getParticipantProfile(userId),
+    getParticipantProfile(userId, { includeActivities: false }),
     prisma.user.findUnique({
       where: { id: userId },
       select: {
