@@ -124,6 +124,22 @@ model WeeklyScore {
   @@index([columnId])
 }
 
+model PerformanceMetric {
+  id             BigInt   @id @default(autoincrement())
+  source         String
+  route          String
+  metric         String
+  value          Float
+  rating         String?
+  release        String?
+  navigationType String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([route, metric, createdAt])
+}
+
 enum ActivityCategory {
   RUN
   CYCLE
