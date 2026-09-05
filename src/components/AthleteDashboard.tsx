@@ -29,6 +29,7 @@ import {
   Users,
   Waves,
 } from 'lucide-react';
+import PendingActivityEditor from '@/components/PendingActivityEditor';
 import Navbar from '@/components/Navbar';
 import HeroAtmosphere from '@/components/HeroAtmosphere';
 import ShareProfileButton from '@/components/ShareProfileButton';
@@ -72,6 +73,7 @@ type DashboardActivity = {
   companionUserId: string | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   rejectionReason: string | null;
+  proofUrl: string | null;
   occurredAt: string;
   stravaActivityId: string | null;
 };
@@ -481,6 +483,7 @@ export default function AthleteDashboard({
                       <button type="button" disabled={deletingId !== null} onClick={() => void deleteSubmission(activity)} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-rose-300 hover:bg-rose-400/10 disabled:opacity-50" aria-label={`Delete ${categoryLabels[activity.category]} submission from ${new Date(activity.occurredAt).toLocaleDateString('en-SG')}`}><Trash2 className="h-4 w-4" />{deletingId === activity.id ? 'Deleting…' : 'Delete'}</button>
                       <span className="min-w-16 text-right font-black text-orange-300">+{activity.points.toFixed(1)}</span>
                     </div>
+                    {activity.status === 'PENDING' ? <PendingActivityEditor activity={activity} users={users.filter((user) => user.id !== profile.id)} /> : null}
                   </div>
                 );
               })}

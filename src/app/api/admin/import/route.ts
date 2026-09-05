@@ -1,3 +1,4 @@
+import { duplicateReason, type DuplicateCandidate } from '@/lib/activity-duplicates';
 import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { requireAdmin } from '@/lib/adminGuard';
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
         tx.activity.findMany({ select: { id: true, userId: true, category: true, distance: true, occurredAt: true, proofUrl: true } }),
       ]);
       const seen = new Set<string>();
+      const batch: DuplicateCandidate[] = [];
       const preview = input.rows.filter((row) => normalizeName(row.name) !== 'test').map((row) => {
         const prepared = prepareRow(row, settings.scoringRules, settings.startDate);
         const key = participantKey(row);
@@ -32,7 +34,9 @@ export async function POST(request: Request) {
         const userId = mapping?.userId === 'NEW' ? placeholderId(key) : mapping?.userId;
         const duplicate = seen.has(prepared.id) || existing.some((activity) => activity.id === prepared.id);
         seen.add(prepared.id);
-        const possibleDuplicate = !duplicate && existing.some((activity) => (activity.userId === userId || (row.proofUrl && activity.proofUrl === row.proofUrl)) && activity.category === prepared.category && activity.distance === row.distance && Math.abs(activity.occurredAt.getTime() - prepared.occurredAt.getTime()) < 60000);
+        const candidate = { ...prepared, userId: userId ?? key, distance: row.distance, proofUrl: row.proofUrl };
+        const possibleDuplicate = !duplicate && [...existing, ...batch].some((activity) => duplicateReason(candidate, activity));
+        if (!input.skip.includes(prepared.id)) batch.push(candidate);
         const error = !mapping || !columns.some((column) => column.id === mapping.columnId) || (mapping.userId !== 'NEW' && !users.some((user) => user.id === mapping.userId)) ? 'Choose a participant and column.' : null;
         return { ...row, ...prepared, key, userId, columnId: mapping?.columnId, duplicate, possibleDuplicate, error, skipped: input.skip.includes(prepared.id) };
       });

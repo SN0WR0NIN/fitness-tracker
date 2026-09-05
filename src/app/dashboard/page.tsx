@@ -30,6 +30,7 @@ type DashboardActivity = {
   companionUserId: string | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   rejectionReason: string | null;
+  proofUrl: string | null;
   occurredAt: Date;
   stravaActivityId: string | null;
 };
@@ -79,6 +80,7 @@ export default async function DashboardPage() {
         companionUserId: true,
         status: true,
         rejectionReason: true,
+        proofUrl: true,
         occurredAt: true,
         stravaActivityId: true,
       },
