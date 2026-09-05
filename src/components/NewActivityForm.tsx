@@ -5,12 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Camera, CheckCircle2, CloudOff, ImagePlus, Info, Save, Sparkles, Upload, Users, X } from 'lucide-react';
+import { singaporeDate, parseActivityDate } from '@/lib/activity-date';
 import Navbar from '@/components/Navbar';
 import { calculateActivityPoints, resolveEffectiveCategory, type ActivityCategory, type ScoringRules } from '@/lib/scoring';
 
 type SelectableUser = { id: string; name: string };
-type ActivityDraft = { category: ActivityCategory; distance: string; pace: string; withFriend: boolean; companionUserId: string; proofUrl: string };
-type ActivityPayload = { category: ActivityCategory; distance?: number; pace?: number; companionUserId?: string; proofUrl?: string };
+type ActivityDraft = { activityDate: string; category: ActivityCategory; distance: string; pace: string; withFriend: boolean; companionUserId: string; proofUrl: string };
+type ActivityPayload = { activityDate: string; category: ActivityCategory; distance?: number; pace?: number; companionUserId?: string; proofUrl?: string };
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const ACTIVITY_CATEGORIES: Array<{ value: ActivityCategory; label: string; icon: string }> = [
@@ -45,6 +46,7 @@ function parsePace(value: string): number | undefined {
 export default function NewActivityForm({ userId, users, scoringRules, maintenanceMode, maintenanceMessage }: { userId: string; users: SelectableUser[]; scoringRules: ScoringRules; maintenanceMode: boolean; maintenanceMessage: string }) {
   const router = useRouter();
   const [category, setCategory] = useState<ActivityCategory>('RUN');
+  const [activityDate, setActivityDate] = useState('');
   const [distance, setDistance] = useState('');
   const [pace, setPace] = useState('');
   const [withFriend, setWithFriend] = useState(false);
@@ -66,6 +68,7 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
   useEffect(() => {
     queueMicrotask(() => {
       setOnline(window.navigator.onLine);
+      setActivityDate(singaporeDate());
       try {
         const lastCategory = window.localStorage.getItem(categoryKey);
         if (ACTIVITY_CATEGORIES.some((item) => item.value === lastCategory)) setCategory(lastCategory as ActivityCategory);
@@ -73,6 +76,7 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
         if (saved) {
           const draft = JSON.parse(saved) as Partial<ActivityDraft>;
           if (ACTIVITY_CATEGORIES.some((item) => item.value === draft.category)) setCategory(draft.category!);
+          setActivityDate(draft.activityDate || singaporeDate());
           setDistance(draft.distance || '');
           setPace(draft.pace || '');
           setWithFriend(Boolean(draft.withFriend));
@@ -99,9 +103,9 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
 
   useEffect(() => {
     if (!draftReady) return;
-    const draft: ActivityDraft = { category, distance, pace, withFriend, companionUserId, proofUrl };
+    const draft: ActivityDraft = { activityDate, category, distance, pace, withFriend, companionUserId, proofUrl };
     window.localStorage.setItem(draftKey, JSON.stringify(draft));
-  }, [category, companionUserId, distance, draftKey, draftReady, pace, proofUrl, withFriend]);
+  }, [activityDate, category, companionUserId, distance, draftKey, draftReady, pace, proofUrl, withFriend]);
 
   useEffect(() => {
     if (!online || !queued || !draftReady || maintenanceMode) return;
@@ -140,12 +144,13 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
   }, scoringRules), [effectiveCategory, distanceNumber, paceNumber, withFriend, companionUserId, scoringRules]);
 
   const validationMessage = useMemo(() => {
+    if (!parseActivityDate(activityDate)) return 'Choose a valid activity date, today or earlier.';
     if (category !== 'TROOP_GAMES' && (!distanceNumber || distanceNumber <= 0)) return 'Enter a distance greater than zero.';
     if (category === 'WALK_OR_HIKE' && distanceNumber && distanceNumber < scoringRules.walkMinimumKm) return `Walks under ${scoringRules.walkMinimumKm}km do not earn points.`;
     if (category === 'RUN' && pace && (paceNumber === undefined || paceNumber <= 0)) return 'Use a positive pace such as 6:30 or 6.5.';
     if (withFriend && !companionUserId) return 'Select the registered friend who joined you.';
     return '';
-  }, [category, distanceNumber, pace, paceNumber, withFriend, companionUserId, scoringRules.walkMinimumKm]);
+  }, [activityDate, category, distanceNumber, pace, paceNumber, withFriend, companionUserId, scoringRules.walkMinimumKm]);
 
   const chooseCategory = (nextCategory: ActivityCategory) => {
     setCategory(nextCategory);
@@ -218,6 +223,7 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
     }
 
     const payload: ActivityPayload = {
+      activityDate,
       category,
       distance: category === 'TROOP_GAMES' ? undefined : distanceNumber,
       pace: category === 'RUN' ? paceNumber : undefined,
@@ -252,7 +258,7 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
   };
 
   const clearDraft = () => {
-    setCategory('RUN'); setDistance(''); setPace(''); setWithFriend(false); setCompanionUserId(''); setProofUrl(''); setQueued(false);
+    setActivityDate(singaporeDate()); setCategory('RUN'); setDistance(''); setPace(''); setWithFriend(false); setCompanionUserId(''); setProofUrl(''); setQueued(false);
     window.localStorage.removeItem(queueKey);
     window.localStorage.removeItem(draftKey);
     setDraftStatus('Draft cleared.');
@@ -278,6 +284,7 @@ export default function NewActivityForm({ userId, users, scoringRules, maintenan
             </FormSection>
 
             <FormSection number="2" title="Enter your result" subtitle="Use the figures shown in your fitness app or screenshot.">
+              <label className="mb-5 block"><span className="text-sm font-semibold text-slate-300">Activity date</span><input type="date" required value={activityDate} max={singaporeDate()} onChange={(event) => setActivityDate(event.target.value)} className="mt-2 w-full min-w-0 rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-orange-400 [color-scheme:dark]" /><span className="mt-2 block text-xs text-slate-500">When you completed the activity (Singapore time). Points count towards that week after approval.</span></label>
               <div className="grid gap-4 sm:grid-cols-2">
                 {category !== 'TROOP_GAMES' ? <label className="block"><span className="text-sm font-semibold text-slate-300">Distance ({category === 'SWIM' ? 'metres' : 'km'})</span><input type="number" min="0" step={category === 'SWIM' ? '1' : '0.01'} required value={distance} onChange={(event) => setDistance(event.target.value)} placeholder={category === 'SWIM' ? 'e.g. 1000' : 'e.g. 5.00'} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-orange-400" /></label> : <div className="rounded-xl border border-violet-400/20 bg-violet-400/10 p-4 text-sm text-violet-200 sm:col-span-2"><Info className="mb-2 h-5 w-5" />Troop Games earn {scoringRules.troopGamePoints} points per approved session. No distance is required.</div>}
                 {category === 'RUN' ? <label className="block"><span className="text-sm font-semibold text-slate-300">Average pace (min/km)</span><input type="text" inputMode="decimal" value={pace} onChange={(event) => setPace(event.target.value)} placeholder="e.g. 6:30" className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-orange-400" /><span className="mt-2 block text-xs text-slate-500">You may enter 6:30 or 6.5. Above {scoringRules.runSlowPaceThreshold}:00/km is scored as Walk / Hike.</span></label> : null}

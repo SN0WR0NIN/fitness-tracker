@@ -8,8 +8,11 @@ import type { Prisma } from '@prisma/client';
 import { getChallengeSettings } from '@/lib/admin-control';
 import { requestLog } from '@/lib/telemetry';
 
+import { parseActivityDate } from '@/lib/activity-date';
+
 // Validation schema for activity submission
 const ActivitySchema = z.object({
+  activityDate: z.string().refine((value) => !!parseActivityDate(value), "Choose a valid activity date, today or earlier.").optional(),
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']),
   distance: z.number().positive('Distance must be greater than zero').max(100000, 'Distance is too large').optional(),
   pace: z.number().positive('Pace must be greater than zero').max(60, 'Pace is too large').optional(),
@@ -71,6 +74,7 @@ export async function POST(request: NextRequest) {
       pace: validatedData.pace,
       companionUserId: validatedData.companionUserId,
       proofUrl: validatedData.proofUrl,
+      occurredAt: validatedData.activityDate ? parseActivityDate(validatedData.activityDate)! : undefined,
     });
 
     log.success({ status: 201, activityId: activity.id });
