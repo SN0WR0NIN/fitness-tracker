@@ -1,0 +1,102 @@
+name: Export Standalone EDO
+
+on:
+  push:
+    branches: [edo-tracker]
+    paths:
+      - '.github/workflows/edo-export.yml'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prepare standalone project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p standalone
+          cp -R edo-app/. standalone/
+          cd standalone
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          cat > .gitignore <<'EOF'
+          node_modules/
+          .next/
+          .env
+          .env.local
+          .vercel/
+          *.log
+          EOF
+          mkdir -p .github/workflows
+          cat > .github/workflows/build.yml <<'EOF'
+          name: Build
+
+          on:
+            push:
+              branches: [main, master]
+            pull_request:
+
+          jobs:
+            build:
+              runs-on: ubuntu-latest
+              steps:
+                - name: Checkout
+                  uses: actions/checkout@v4
+                - name: Setup Node
+                  uses: actions/setup-node@v4
+                  with:
+                    node-version: 22
+                    cache: npm
+                - name: Install dependencies
+                  run: npm ci
+                - name: Build
+                  run: npm run build
+          EOF
+          cat > README.md <<'EOF'
+          # KG EDO Tracker
+
+          Standalone Kilo Golf EDO Management System. This repository is independent of the KG Stay Active Challenge application.
+
+          ## Stack
+          - Next.js 16
+          - React 19
+          - Supabase Auth / Postgres / Edge Functions
+          - Tailwind CSS 4
+
+          ## Backend
+          Dedicated Supabase project: `otdmtwooipmvvsstyimq`.
+
+          Required public environment variables:
+          - `NEXT_PUBLIC_SUPABASE_URL`
+          - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+
+          ## Core EDO rules
+          - Maximum EDO balance: 48 hours
+          - No negative balance
+          - Warning threshold: 25 hours
+          - Critical threshold: 40 hours
+          - If a Grant would exceed 48 hours, the next eligible Claim may be moved ahead only within the same month
+          - Draft, Pending, Approved, Rejected and Void transaction states
+          - Monthly ledgers and audit history
+
+          ## Deployment
+          Deploy this repository as its own Vercel project named `kg-edo-tracker` with the repository root as the project root.
+
+          The initial administrator setup uses a separate owner setup key. Do not commit that key to this repository or any environment file.
+          EOF
+      - name: Verify standalone build
+        working-directory: standalone
+        run: npm ci --no-audit --no-fund && npm run build
+      - name: Upload standalone project
+        uses: actions/upload-artifact@v4
+        with:
+          name: kg-edo-tracker-standalone
+          path: standalone
+          include-hidden-files: true
+          if-no-files-found: error
