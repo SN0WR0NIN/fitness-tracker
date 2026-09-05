@@ -2,7 +2,18 @@
 import { useId, useMemo, useState } from 'react';
 import { personalMetrics, type MetricActivity } from '@/lib/personal-metrics';
 import { formatPace } from '@/lib/format';
-export default function PersonalAnalytics({activities,today,weeklyChart}:{activities:MetricActivity[];today:string;weeklyChart?:React.ReactNode}) {
+
+type Props = { activities: MetricActivity[]; today: string; weeklyChart?: React.ReactNode };
+
+export default function PersonalAnalytics(props: Props) {
+  const [open, setOpen] = useState(false);
+  return <details className="dashboard-fold" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <summary>Performance analytics</summary>
+    {open ? <PersonalAnalyticsContent {...props} /> : null}
+  </details>;
+}
+
+function PersonalAnalyticsContent({activities,today,weeklyChart}: Props) {
   const data=useMemo(()=>personalMetrics(activities,today),[activities,today]);
   const [day,setDay]=useState(6),[category,setCategory]=useState<string|null>(null);
   const gradient=useId();
@@ -23,7 +34,7 @@ export default function PersonalAnalytics({activities,today,weeklyChart}:{activi
     ['📅','Longest active streak',`${data.bestStreak} ${data.bestStreak===1?'day':'days'}`,'#40d4f4'],
     ['👥','Buddy sessions',`${data.buddies} ${data.buddies===1?'activity':'activities'}`,'#f472b6'],
   ];
-  return <div className="space-y-6">
+  return <div className="space-y-6 pt-3">
     <div className="space-y-6">
       <details open className="dashboard-fold"><summary>Points — last 7 days</summary><section className={panel}><h2 className="text-lg font-black">Points — last 7 days</h2><p role="status" className="mt-2 text-sm text-lime-300">{dateLabel(data.days[day].date)} · {data.days[day].points.toFixed(1)} points</p>
         <svg viewBox="0 0 620 240" role="img" aria-label="Daily approved points over the last seven Singapore dates" className="mt-3 w-full overflow-visible"><defs><linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#b4ff45" stopOpacity=".3"/><stop offset="100%" stopColor="#b4ff45" stopOpacity="0"/></linearGradient></defs>
