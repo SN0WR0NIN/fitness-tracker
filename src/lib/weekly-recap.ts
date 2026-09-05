@@ -1,7 +1,8 @@
 const DAY = 86400000;
 const OFFSET = 8 * 3600000;
+const DEFAULT_CHALLENGE_START = new Date('2026-09-01T00:00:00+08:00');
 
-export function recapWeek(date: Date, challengeStart: Date) {
+export function recapWeek(date: Date, challengeStart: Date = DEFAULT_CHALLENGE_START) {
   const local = new Date(date.getTime() + OFFSET);
   const sunday = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() - local.getUTCDay()) - OFFSET);
   const end = new Date(sunday.getTime() + 7 * DAY);
@@ -13,7 +14,7 @@ export function recapWeek(date: Date, challengeStart: Date) {
 
 export type RecapActivity = { status: string; occurredAt: Date; points: number; user: { id: string; name: string }; column: { id: string; name: string } };
 
-export function buildWeeklyRecap(rows: RecapActivity[], start: Date, end: Date, challengeStart: Date) {
+export function buildWeeklyRecap(rows: RecapActivity[], start: Date, end: Date, challengeStart: Date = DEFAULT_CHALLENGE_START) {
   const approved = rows.filter((row) => row.status === 'APPROVED');
   const current = approved.filter((row) => row.occurredAt >= start && row.occurredAt < end);
   const previousStart = recapWeek(start, challengeStart).previousStart;
