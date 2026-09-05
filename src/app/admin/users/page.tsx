@@ -38,31 +38,17 @@ export default function ManageUsersPage() {
       return;
     }
     if (status === 'authenticated') {
-      fetchUsers();
+      fetch('/api/admin/users').then(async (response) => {
+        if (response.status === 403) { setForbidden(true); return; }
+        if (!response.ok) throw new Error('Failed to fetch users');
+        setUsers(await response.json());
+      }).catch(() => setErrorMessage('Failed to fetch users')).finally(() => setLoading(false));
       fetch('/api/columns')
         .then((res) => res.json())
         .then((data) => setColumns(data))
         .catch(() => setColumns([]));
     }
   }, [status, router]);
-
-  const fetchUsers = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/admin/users');
-      if (response.status === 403) {
-        setForbidden(true);
-        return;
-      }
-      if (response.ok) {
-        setUsers(await response.json());
-      }
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const updateUser = async (id: string, changes: Partial<Pick<ManagedUser, 'role'>> & { columnId?: string | null }) => {
     setSavingId(id);
@@ -133,6 +119,8 @@ export default function ManageUsersPage() {
           <UsersIcon className="w-8 h-8 text-blue-600 dark:text-blue-400" />
           Manage Users
         </h1>
+        <Link href="/admin/import" className="mb-6 inline-block rounded-lg bg-orange-500 px-4 py-3 font-bold text-white">Import historical activities / link participants</Link>
+        <Link href="/admin/accounts" className="mb-6 ml-3 inline-block rounded-lg border border-orange-500 px-4 py-3 font-bold text-orange-500">Create logins / confirm emails</Link>
 
         {errorMessage && (
           <div className="mb-4 p-3 bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 rounded-lg text-sm">
@@ -175,7 +163,7 @@ export default function ManageUsersPage() {
                         {user.name}
                       </td>
                       <td className="px-6 py-3 text-sm text-gray-600 dark:text-gray-400">
-                        {user.email}
+                        {user.email.endsWith('@participants.invalid') ? 'No confirmed email' : user.email}
                       </td>
                       <td className="px-6 py-3">
                         <select

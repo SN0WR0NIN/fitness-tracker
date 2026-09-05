@@ -27,7 +27,8 @@ export default function LoginPage() {
     setLoading(false);
 
     if (result?.error) {
-      setError('Invalid email or password');
+      if (result.error === 'SETUP_REQUIRED') { router.push('/auth/setup'); return; }
+      setError('Invalid credentials, expired temporary password, or attempt limit reached. Try again after 15 minutes or contact your admin.');
       return;
     }
 
@@ -57,15 +58,16 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Email
+                Username or email
               </label>
               <input
-                type="email"
+                type="text"
+                autoComplete="username"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                placeholder="you@example.com"
+                placeholder="Your username or email"
               />
             </div>
 
@@ -93,6 +95,7 @@ export default function LoginPage() {
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
+            <Link href="/auth/setup" className="mb-4 block text-blue-500">Have temporary credentials? Set up your account</Link>
             Don&apos;t have an account?{' '}
             <Link href="/auth/signup" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium">
               Sign up
