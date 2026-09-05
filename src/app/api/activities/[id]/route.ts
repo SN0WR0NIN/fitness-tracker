@@ -1,3 +1,5 @@
+import { editOwnActivityDate } from '@/lib/edit-activity-date';
+import { getChallengeSettings } from '@/lib/admin-control';
 import { ActivityEditError } from '@/lib/activity-duplicates';
 import { deleteOwnActivity, ActivityDeletionError } from '@/lib/delete-activity';
 import { NextResponse } from 'next/server';
@@ -20,7 +22,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     const { id } = await params;
-    const data = EditSchema.parse(await request.json());
+    const body = await request.json();
+    if (body && typeof body === 'object' && 'activityDate' in body) {
+      const { activityDate } = z.object({ activityDate: z.string() }).strict().parse(body);
+      const settings = await getChallengeSettings();
+      return NextResponse.json(await editOwnActivityDate(prisma, id, session.user.id, activityDate, settings.startDate));
+    }
+    const data = EditSchema.parse(body);
     if (data.category && data.category !== 'TROOP_GAMES' && data.distance === undefined) return NextResponse.json({ error: 'Distance is required.' }, { status: 400 });
     const updated = await updateActivity(id, data, session.user.id);
     return NextResponse.json(updated);

@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import { useState, useSyncExternalStore } from 'react';
-import { BarChart3, BookOpen, Home, Menu, Moon, Plus, Settings, ShieldCheck, Sun, Trophy, Users, X } from 'lucide-react';
+import { UserRound, BookOpen, Home, Menu, Moon, Plus, Settings, ShieldCheck, Sun, Trophy, Users, X } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import AnnouncementBanner from '@/components/AnnouncementBanner';
 import AppStatusBanner from '@/components/AppStatusBanner';
@@ -69,12 +69,12 @@ export default function Navbar() {
 }
 
 function MobileDock({ pathname, authenticated }: { pathname: string; authenticated: boolean }) {
-  const statsHref = authenticated ? '/dashboard' : '/auth/login';
+  const profileHref = authenticated ? '/dashboard' : '/auth/login';
   const isActive = (href: string) => href === '/' ? pathname === '/' : pathname.startsWith(href);
   const links = [
     { href: '/', label: 'Home', icon: Home },
     { href: '/leaderboard', label: 'Board', icon: Trophy },
-    { href: statsHref, activeHref: '/dashboard', label: 'Stats', icon: BarChart3 },
+    { href: profileHref, activeHref: '/dashboard', label: 'Profile', icon: UserRound },
     { href: '/rules', label: 'Rules', icon: BookOpen },
   ];
 
