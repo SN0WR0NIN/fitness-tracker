@@ -11,3 +11,32 @@ export function requestLog(request: Request, route: string) {
     },
   };
 }
+
+export function performanceLog(event: string, durationMs: number, extra: Record<string, unknown> = {}) {
+  console.log(JSON.stringify({
+    level: 'info',
+    event,
+    durationMs: Math.round(durationMs * 10) / 10,
+    release: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || 'local',
+    ...extra,
+  }));
+}
+
+export async function timed<T>(event: string, operation: () => Promise<T>, extra: Record<string, unknown> = {}): Promise<T> {
+  const startedAt = Date.now();
+  try {
+    const value = await operation();
+    performanceLog(event, Date.now() - startedAt, extra);
+    return value;
+  } catch (error) {
+    console.error(JSON.stringify({
+      level: 'error',
+      event,
+      durationMs: Date.now() - startedAt,
+      release: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || 'local',
+      error: error instanceof Error ? error.message : String(error),
+      ...extra,
+    }));
+    throw error;
+  }
+}
