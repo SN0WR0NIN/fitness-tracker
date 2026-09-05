@@ -3,7 +3,10 @@ import type { Prisma } from '@prisma/client';
 import { requireAdmin } from '@/lib/adminGuard';
 import { prisma } from '@/lib/prisma';
 import { getChallengeSettings } from '@/lib/admin-control';
-import { ImportSchema, participantKey, placeholderId, prepareRow, hash, categoryField, normalizeName } from '@/lib/historical-import';
+import { ImportSchema, participantKey, placeholderId, prepareRow, hash, normalizeName } from '@/lib/historical-import';
+import { writeHistoricalImport } from '@/lib/historical-import-writer';
+
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const guard = await requireAdmin();
@@ -38,21 +41,16 @@ export async function POST(request: Request) {
       if (input.previewHash !== previewHash) throw new Error('Data changed. Preview again before importing.');
       const selected = preview.filter((row) => !row.duplicate && !row.skipped);
       if (selected.some((row) => row.error || row.possibleDuplicate)) throw new Error('Resolve mappings and skip possible duplicates before importing.');
-      for (const row of selected) {
-        const userId = row.userId!;
-        const columnId = row.columnId!;
-        if (input.mappings[row.key].userId === 'NEW') {
-          await tx.user.upsert({ where: { id: userId }, update: {}, create: { id: userId, name: row.name, email: `${userId}@participants.invalid`, password: '!UNCLAIMED', columnId } });
-        }
-        await tx.activity.create({ data: { id: row.id, userId, columnId, category: row.category, distance: row.distance, pace: row.pace, companion: row.companion, completedWithFriend: Boolean(row.companion), proofUrl: row.proofUrl, points: row.points, occurredAt: row.occurredAt, weekStart: row.weekStart, weekNumber: row.weekNumber, status: 'APPROVED', reviewedById: guard.userId, reviewedAt: new Date() } });
-        await tx.weeklyScore.upsert({ where: { userId_weekStart: { userId, weekStart: row.weekStart } }, create: { userId, columnId, weekStart: row.weekStart, weekNumber: row.weekNumber, totalPoints: row.points, [categoryField[row.category]]: row.points }, update: { totalPoints: { increment: row.points }, [categoryField[row.category]]: { increment: row.points } } });
-      }
+      await writeHistoricalImport(tx, selected.map((row) => ({ ...row, userId: row.userId!, columnId: row.columnId!, createParticipant: input.mappings[row.key].userId === 'NEW' })), guard.userId);
       return { imported: selected.length, skipped: preview.length - selected.length };
-    }, { isolationLevel: 'Serializable', timeout: 60000 });
+    }, { isolationLevel: 'Serializable', timeout: 40000, maxWait: 5000 });
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     const safe = ['Data changed.', 'Resolve mappings'].some((prefix) => message.startsWith(prefix));
-    return NextResponse.json({ error: safe ? message : 'Import could not finish. No changes were saved. Preview again and retry.' }, { status: 409 });
+    const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'UNKNOWN';
+    if (!safe) console.error('Historical import failed', { code });
+    const reason = code === 'P2028' ? 'The database transaction timed out.' : code === 'P2034' || code === 'P2002' ? 'Another update conflicted with this import.' : 'Import could not finish.';
+    return NextResponse.json({ error: safe ? message : `${reason} Preview again to check what remains before retrying.`, code: safe ? undefined : code }, { status: 409 });
   }
 }
