@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminGuard';
 import { prisma } from '@/lib/prisma';
-import { getAnnouncements, getAuditEntries, getChallengeSettings, getManagedColumns } from '@/lib/admin-control';
+import { getAnnouncements, getAuditEntries, getChallengeSettings, getManagedColumns, recordAdminAudit } from '@/lib/admin-control';
 import { requestLog } from '@/lib/telemetry';
 
 const csvCell = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
@@ -27,6 +27,11 @@ export async function GET(request: NextRequest) {
         getAuditEntries(10000),
       ]);
       const backup = { format: 'kg-stay-active-operational-backup', version: 1, exportedAt: new Date().toISOString(), excludes: ['passwords', 'Strava access tokens', 'Strava refresh tokens'], challenge: settings, announcements, columns, users, activities, weeklyScores, audit };
+      try {
+        await recordAdminAudit(guard.userId, 'BACKUP_EXPORT', 'Operational backup', { users: users.length, activities: activities.length, weeklyScores: weeklyScores.length });
+      } catch (auditError) {
+        console.warn('Backup export completed but audit entry could not be recorded.', auditError);
+      }
       log.success({ status: 200, type, users: users.length, activities: activities.length });
       return new NextResponse(JSON.stringify(backup, null, 2), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="kg-backup-${new Date().toISOString().slice(0, 10)}.json"`, 'Cache-Control': 'no-store' } });
     } catch (error) {
