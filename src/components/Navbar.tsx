@@ -79,19 +79,16 @@ function MobileDock({ pathname, authenticated }: { pathname: string; authenticat
   ];
 
   return (
-    <>
-      <div aria-hidden="true" className="h-24 md:hidden" />
-      <nav aria-label="Mobile primary navigation" className="mobile-dock-safe fixed inset-x-3 z-50 mx-auto max-w-md rounded-2xl border border-white/10 bg-slate-950/95 px-2 pb-2 pt-2 shadow-2xl shadow-black/60 backdrop-blur-xl md:hidden">
-        <div className="grid grid-cols-5 items-end">
-          {links.slice(0, 2).map((item) => <DockLink key={item.label} href={item.href} label={item.label} icon={item.icon} active={isActive(item.activeHref ?? item.href)} />)}
-          <Link href="/activities/new" aria-label="Log a new activity" aria-current={pathname.startsWith('/activities/new') ? 'page' : undefined} className="group -mt-7 flex flex-col items-center gap-1 text-[0.65rem] font-black text-lime-300">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-lime-300 text-slate-950 shadow-lg shadow-lime-300/25 transition group-active:scale-95"><Plus className="h-7 w-7" /></span>
-            <span>Log</span>
-          </Link>
-          {links.slice(2).map((item) => <DockLink key={item.label} href={item.href} label={item.label} icon={item.icon} active={isActive(item.activeHref ?? item.href)} />)}
-        </div>
-      </nav>
-    </>
+    <nav aria-label="Mobile primary navigation" className="mobile-dock-safe fixed inset-x-3 z-50 mx-auto max-w-md rounded-2xl border border-white/10 bg-slate-950/95 px-2 pb-2 pt-2 shadow-2xl shadow-black/60 backdrop-blur-xl md:hidden">
+      <div className="grid grid-cols-5 items-end">
+        {links.slice(0, 2).map((item) => <DockLink key={item.label} href={item.href} label={item.label} icon={item.icon} active={isActive(item.activeHref ?? item.href)} />)}
+        <Link href="/activities/new" aria-label="Log a new activity" aria-current={pathname.startsWith('/activities/new') ? 'page' : undefined} className="group -mt-7 flex flex-col items-center gap-1 text-[0.65rem] font-black text-lime-300">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-lime-300 text-slate-950 shadow-lg shadow-lime-300/25 transition group-active:scale-95"><Plus className="h-7 w-7" /></span>
+          <span>Log</span>
+        </Link>
+        {links.slice(2).map((item) => <DockLink key={item.label} href={item.href} label={item.label} icon={item.icon} active={isActive(item.activeHref ?? item.href)} />)}
+      </div>
+    </nav>
   );
 }
 

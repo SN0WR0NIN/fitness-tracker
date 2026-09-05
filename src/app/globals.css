@@ -29,6 +29,12 @@ body {
   bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
+@media (max-width: 767px) {
+  body:has(.mobile-dock-safe) {
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+  }
+}
+
 @keyframes hero-grid-drift {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(40px, 40px, 0); }
