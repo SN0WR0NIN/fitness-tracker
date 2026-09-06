@@ -34,6 +34,14 @@ function normalizeIdentifier(identifier: string) {
   return identifier.trim().toLowerCase().slice(0, 254);
 }
 
+async function expireStalePasswordResets() {
+  await prisma.$executeRawUnsafe(`
+    UPDATE app_internal.password_reset_request
+    SET status='EXPIRED', updated_at=now()
+    WHERE status='ISSUED' AND expires_at IS NOT NULL AND expires_at <= now()
+  `);
+}
+
 export async function requestPasswordReset(identifier: string) {
   const login = normalizeIdentifier(identifier);
   if (!login) return;
@@ -117,6 +125,7 @@ export async function hasIssuedPasswordReset(userId: string) {
 }
 
 export async function getPasswordResetRequests(): Promise<PasswordResetRequest[]> {
+  await expireStalePasswordResets();
   return prisma.$queryRawUnsafe<PasswordResetRequest[]>(`
     SELECT
       r.id,
@@ -149,6 +158,7 @@ export async function getPasswordResetRequests(): Promise<PasswordResetRequest[]
 }
 
 export async function getActivePasswordResetCount() {
+  await expireStalePasswordResets();
   const rows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
     `SELECT count(*)::bigint AS count
      FROM app_internal.password_reset_request
@@ -238,7 +248,7 @@ export async function cancelPasswordReset(requestId: string, adminId: string) {
       requestId,
     );
     const request = rows[0];
-    if (!request || !['OPEN','ISSUED'].includes(request.status)) throw new Error('RESET_REQUEST_CHANGED');
+    if (!request || request.status !== 'OPEN') throw new Error('RESET_REQUEST_CHANGED');
     const admin = await tx.user.findUnique({ where: { id: adminId }, select: { name: true } });
     if (!admin) throw new Error('ADMIN_NOT_FOUND');
 
