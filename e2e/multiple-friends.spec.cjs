@@ -62,11 +62,16 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     expect(one.points-solo.points).toBeCloseTo(bonus,8);
 
     await page.goto('/activities/new');
-    await page.getByLabel(/^Activity date/).fill('2026-09-03');
-    await page.getByPlaceholder('e.g. 5.00').fill('5');
-    await page.getByPlaceholder('e.g. 6:30').fill('6');
-    await page.getByRole('checkbox',{name:'I completed this with friends',exact:true}).check();
-    const picker = page.getByRole('group',{name:'Friends',exact:true});
+    // The failure trace showed a hidden Next streaming container (S:0) with
+    // a second copy of the form. Interact with the one visible to the user;
+    // still fail if more than one visible form is present.
+    const form = page.locator('form:visible');
+    await expect(form).toHaveCount(1);
+    await form.getByLabel(/^Activity date/).fill('2026-09-03');
+    await form.getByPlaceholder('e.g. 5.00').fill('5');
+    await form.getByPlaceholder('e.g. 6:30').fill('6');
+    await form.getByRole('checkbox',{name:'I completed this with friends',exact:true}).check();
+    const picker = form.getByRole('group',{name:'Friends',exact:true});
     await picker.getByLabel('Search friends',{exact:true}).fill('Group friend1');
     await picker.getByRole('checkbox',{name:'Group friend1',exact:true}).check();
     await picker.getByLabel('Search friends',{exact:true}).fill('Group friend2');
@@ -81,7 +86,7 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     await expect(picker).toContainText('1 friend selected');
     await picker.getByRole('checkbox',{name:'Group friend1',exact:true}).check();
     const submitted = page.waitForResponse(r => new URL(r.url()).pathname==='/api/activities' && r.request().method()==='POST');
-    await page.getByRole('button',{name:'Submit for review',exact:true}).click();
+    await form.getByRole('button',{name:'Submit for review',exact:true}).click();
     let group = await json(await submitted,201);
     await expect(page).toHaveURL(/\/dashboard/);
     expect(group.companionUserIds).toEqual([...friendIds].sort());
@@ -108,14 +113,15 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     const approvedPoints = group.points;
 
     await page.goto(`/activities/${group.id}/correction`);
-    const correctionPicker = page.getByRole('group',{name:'Friends',exact:true});
+    await expect(form).toHaveCount(1);
+    const correctionPicker = form.getByRole('group',{name:'Friends',exact:true});
     await expect(correctionPicker.getByRole('checkbox',{name:'Group friend1',exact:true})).toBeChecked();
     await expect(correctionPicker.getByRole('checkbox',{name:'Group friend2',exact:true})).toBeChecked();
     await correctionPicker.getByLabel('Search friends',{exact:true}).fill('Group friend3');
     await correctionPicker.getByRole('checkbox',{name:'Group friend3',exact:true}).check();
-    await page.getByLabel('Reason for correction').fill('A third registered friend also joined this workout.');
+    await form.getByLabel('Reason for correction').fill('A third registered friend also joined this workout.');
     const requested = page.waitForResponse(r => new URL(r.url()).pathname==='/api/corrections' && r.request().method()==='POST');
-    await page.getByRole('button',{name:'Send correction request',exact:true}).click();
+    await form.getByRole('button',{name:'Send correction request',exact:true}).click();
     const correction = await json(await requested,201);
     expect((await db.activity.findUnique({where:{id:group.id}})).companionUserIds).toHaveLength(2);
     expect((await db.activity.findUnique({where:{id:group.id}})).points).toBe(approvedPoints);
@@ -133,23 +139,25 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     // The admin picker excludes the selected participant, not merely the admin.
     const adminPage = await admin.newPage();
     await adminPage.goto('/admin/activities/new');
-    await adminPage.getByRole('combobox').first().selectOption(accounts.member.id);
-    const adminPicker = adminPage.getByRole('group',{name:'Friends',exact:true});
+    const adminForm = adminPage.locator('form:visible');
+    await expect(adminForm).toHaveCount(1);
+    await adminForm.getByRole('combobox').first().selectOption(accounts.member.id);
+    const adminPicker = adminForm.getByRole('group',{name:'Friends',exact:true});
     await adminPicker.getByLabel('Search friends',{exact:true}).fill('Group friend1');
     await adminPicker.getByRole('checkbox',{name:'Group friend1',exact:true}).check();
     await adminPicker.getByLabel('Search friends',{exact:true}).fill('Group friend2');
     await adminPicker.getByRole('checkbox',{name:'Group friend2',exact:true}).check();
-    await adminPage.getByRole('combobox').first().selectOption(accounts.friend1.id);
+    await adminForm.getByRole('combobox').first().selectOption(accounts.friend1.id);
     await expect(adminPicker).toContainText('1 friend selected');
     await adminPicker.getByLabel('Search friends',{exact:true}).fill('');
     await expect(adminPicker.getByRole('checkbox',{name:'Group friend1',exact:true})).toHaveCount(0);
-    await adminPage.getByRole('combobox').first().selectOption(accounts.member.id);
+    await adminForm.getByRole('combobox').first().selectOption(accounts.member.id);
     await adminPicker.getByRole('checkbox',{name:'Group friend1',exact:true}).check();
-    await adminPage.getByLabel('Activity date',{exact:true}).fill('2026-09-05');
-    await adminPage.getByLabel('Distance (km)',{exact:true}).fill('3');
-    await adminPage.getByPlaceholder('6:30 or 6.5').fill('6');
+    await adminForm.getByLabel('Activity date',{exact:true}).fill('2026-09-05');
+    await adminForm.getByLabel('Distance (km)',{exact:true}).fill('3');
+    await adminForm.getByPlaceholder('6:30 or 6.5').fill('6');
     const adminSubmitted = adminPage.waitForResponse(r => new URL(r.url()).pathname==='/api/admin/activities/create' && r.request().method()==='POST');
-    await adminPage.locator('form button:not([type])').click();
+    await adminForm.locator('button:not([type])').click();
     const adminCreated = await json(await adminSubmitted,201);
     expect(adminCreated.activity.userId).toBe(accounts.member.id);
     expect(adminCreated.activity.companionUserIds).toEqual([...friendIds].sort());
