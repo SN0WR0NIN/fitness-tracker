@@ -55,6 +55,7 @@ jobs:
           src/app/api/admin/maintenance/route.ts src/app/api/admin/corrections/route.ts src/app/api/corrections/route.ts
           src/app/admin/page.tsx src/app/admin/duplicates/page.tsx src/app/admin/awards/page.tsx src/app/results/page.tsx src/app/notifications/page.tsx
           src/components/DuplicateReviewCentre.tsx src/components/NotificationBell.tsx src/components/Navbar.tsx src/components/WeeklyAwardsAdminControls.tsx
+          src/components/NotificationPreferencesForm.tsx
       - name: Production build
         run: npm run build
       - name: Install Playwright
