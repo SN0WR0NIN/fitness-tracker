@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminGuard';
 import { prisma } from '@/lib/prisma';
 import { getAnnouncements, getAuditEntries, getChallengeSettings, getManagedColumns, recordAdminAudit } from '@/lib/admin-control';
+import { getFocusedBackupData } from '@/lib/focused-backup';
 import { requestLog } from '@/lib/telemetry';
 
 const csvCell = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
   const type = request.nextUrl.searchParams.get('type') || 'activities';
   if (type === 'backup') {
     try {
-      const [settings, announcements, columns, users, activities, weeklyScores, profileSettings, weeklyGoals, rankingSnapshots, duplicateReviews, weeklyResults, notifications, passwordResetRequests, audit] = await Promise.all([
+      const [settings, announcements, columns, users, activities, weeklyScores, profileSettings, weeklyGoals, rankingSnapshots, duplicateReviews, weeklyResults, notifications, passwordResetRequests, audit, focused] = await Promise.all([
         getChallengeSettings(),
         getAnnouncements(),
         getManagedColumns(),
@@ -32,10 +33,11 @@ export async function GET(request: NextRequest) {
         prisma.$queryRawUnsafe('SELECT id, user_id, kind, level, title, message, href, metadata, dedupe_key, created_at FROM app_internal.notification ORDER BY created_at'),
         prisma.$queryRawUnsafe('SELECT id, user_id, status, request_count, requested_at, last_requested_at, issued_at, expires_at, completed_at, cancelled_at, issued_by_id, issued_by_name, created_at, updated_at FROM app_internal.password_reset_request ORDER BY created_at'),
         getAuditEntries(10000),
+        getFocusedBackupData(),
       ]);
       const backup = {
         format: 'kg-stay-active-operational-backup',
-        version: 5,
+        version: 6,
         exportedAt: new Date().toISOString(),
         excludes: ['passwords', 'Strava access tokens', 'Strava refresh tokens', 'temporary password reset secrets'],
         challenge: settings,
@@ -52,6 +54,7 @@ export async function GET(request: NextRequest) {
         notifications,
         passwordResetRequests,
         audit,
+        ...focused,
       };
       try {
         await recordAdminAudit(guard.userId, 'BACKUP_EXPORT', 'Operational backup', {
@@ -65,6 +68,7 @@ export async function GET(request: NextRequest) {
           weeklyResults: Array.isArray(weeklyResults) ? weeklyResults.length : 0,
           notifications: Array.isArray(notifications) ? notifications.length : 0,
           passwordResetRequests: Array.isArray(passwordResetRequests) ? passwordResetRequests.length : 0,
+          ...Object.fromEntries(Object.entries(focused).map(([key, value]) => [key, Array.isArray(value) ? value.length : 0])),
         });
       } catch (auditError) {
         console.warn('Backup export completed but audit entry could not be recorded.', auditError);
