@@ -6,6 +6,20 @@ import { NewPasswordSchema, verifyCredentials } from '@/lib/account-credentials'
 
 export type PasswordResetStatus = 'OPEN' | 'ISSUED' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED';
 
+type ActiveResetRow = { id: string; status: PasswordResetStatus; expiresAt: Date | null };
+type IdRow = { id: string };
+type CountRow = { count: bigint };
+type IssueResetRow = {
+  id: string;
+  status: PasswordResetStatus;
+  userId: string;
+  name: string;
+  username: string | null;
+  email: string;
+  role: string;
+};
+type CancelResetRow = { userId: string; status: PasswordResetStatus };
+
 export type PasswordResetRequest = {
   id: string;
   userId: string;
@@ -59,16 +73,16 @@ export async function requestPasswordReset(identifier: string) {
   if (!user) return;
 
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const rows = await tx.$queryRawUnsafe<Array<{ id: string; status: PasswordResetStatus; expiresAt: Date | null }>>(
+    const rows = await tx.$queryRawUnsafe(
       `SELECT id, status, expires_at AS "expiresAt"
        FROM app_internal.password_reset_request
        WHERE user_id=$1 AND status IN ('OPEN','ISSUED')
        ORDER BY created_at DESC
        FOR UPDATE`,
       user.id,
-    );
+    ) as ActiveResetRow[];
 
-    let active = rows[0] ?? null;
+    let active: ActiveResetRow | null = rows[0] ?? null;
     if (active?.status === 'ISSUED' && active.expiresAt && active.expiresAt.getTime() <= Date.now()) {
       await tx.$executeRawUnsafe(
         `UPDATE app_internal.password_reset_request
@@ -89,12 +103,13 @@ export async function requestPasswordReset(identifier: string) {
         active.id,
       );
     } else {
-      const inserted = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+      const inserted = await tx.$queryRawUnsafe(
         `INSERT INTO app_internal.password_reset_request(user_id)
          VALUES ($1)
          RETURNING id`,
         user.id,
-      );
+      ) as IdRow[];
+      if (!inserted[0]) throw new Error('RESET_REQUEST_CREATE_FAILED');
       requestId = inserted[0].id;
     }
 
@@ -115,18 +130,18 @@ export async function requestPasswordReset(identifier: string) {
 }
 
 export async function hasIssuedPasswordReset(userId: string) {
-  const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+  const rows = await prisma.$queryRawUnsafe(
     `SELECT id FROM app_internal.password_reset_request
      WHERE user_id=$1 AND status='ISSUED' AND expires_at > now()
      ORDER BY issued_at DESC LIMIT 1`,
     userId,
-  );
+  ) as IdRow[];
   return rows.length > 0;
 }
 
 export async function getPasswordResetRequests(): Promise<PasswordResetRequest[]> {
   await expireStalePasswordResets();
-  return prisma.$queryRawUnsafe<PasswordResetRequest[]>(`
+  return await prisma.$queryRawUnsafe(`
     SELECT
       r.id,
       r.user_id AS "userId",
@@ -154,16 +169,16 @@ export async function getPasswordResetRequests(): Promise<PasswordResetRequest[]
       CASE r.status WHEN 'OPEN' THEN 0 WHEN 'ISSUED' THEN 1 ELSE 2 END,
       r.last_requested_at DESC
     LIMIT 150
-  `);
+  `) as PasswordResetRequest[];
 }
 
 export async function getActivePasswordResetCount() {
   await expireStalePasswordResets();
-  const rows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+  const rows = await prisma.$queryRawUnsafe(
     `SELECT count(*)::bigint AS count
      FROM app_internal.password_reset_request
      WHERE status IN ('OPEN','ISSUED')`,
-  );
+  ) as CountRow[];
   return Number(rows[0]?.count ?? 0);
 }
 
@@ -173,22 +188,14 @@ export async function issuePasswordReset(requestId: string, adminId: string) {
   const expiresAt = new Date(Date.now() + RESET_TTL_MS);
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const rows = await tx.$queryRawUnsafe<Array<{
-      id: string;
-      status: PasswordResetStatus;
-      userId: string;
-      name: string;
-      username: string | null;
-      email: string;
-      role: string;
-    }>>(
+    const rows = await tx.$queryRawUnsafe(
       `SELECT r.id, r.status, u.id AS "userId", u.name, u.username, u.email, u.role
        FROM app_internal.password_reset_request r
        JOIN public."User" u ON u.id=r.user_id
        WHERE r.id=$1
        FOR UPDATE OF r, u`,
       requestId,
-    );
+    ) as IssueResetRow[];
     const request = rows[0];
     if (!request || !['OPEN','ISSUED'].includes(request.status)) throw new Error('RESET_REQUEST_CHANGED');
     if (request.role !== 'MEMBER') throw new Error('RESET_MEMBER_ONLY');
@@ -240,13 +247,13 @@ export async function issuePasswordReset(requestId: string, adminId: string) {
 
 export async function cancelPasswordReset(requestId: string, adminId: string) {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const rows = await tx.$queryRawUnsafe<Array<{ userId: string; status: PasswordResetStatus }>>(
+    const rows = await tx.$queryRawUnsafe(
       `SELECT user_id AS "userId", status
        FROM app_internal.password_reset_request
        WHERE id=$1
        FOR UPDATE`,
       requestId,
-    );
+    ) as CancelResetRow[];
     const request = rows[0];
     if (!request || request.status !== 'OPEN') throw new Error('RESET_REQUEST_CHANGED');
     const admin = await tx.user.findUnique({ where: { id: adminId }, select: { name: true } });
@@ -277,24 +284,24 @@ export async function completePasswordReset(identifier: string, temporaryPasswor
   if (!user?.mustChangePassword) throw new Error('INVALID_RESET_CREDENTIALS');
   if (await bcrypt.compare(parsedNewPassword, user.password)) throw new Error('PASSWORD_REUSE');
 
-  const resetRows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+  const resetRows = await prisma.$queryRawUnsafe(
     `SELECT id FROM app_internal.password_reset_request
      WHERE user_id=$1 AND status='ISSUED' AND expires_at > now()
      ORDER BY issued_at DESC LIMIT 1`,
     user.id,
-  );
+  ) as IdRow[];
   const reset = resetRows[0];
   if (!reset) throw new Error('INVALID_RESET_CREDENTIALS');
 
   const passwordHash = await bcrypt.hash(parsedNewPassword, 12);
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const locked = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+    const locked = await tx.$queryRawUnsafe(
       `SELECT id FROM app_internal.password_reset_request
        WHERE id=$1 AND user_id=$2 AND status='ISSUED' AND expires_at > now()
        FOR UPDATE`,
       reset.id,
       user.id,
-    );
+    ) as IdRow[];
     if (!locked.length) throw new Error('INVALID_RESET_CREDENTIALS');
 
     const changed = await tx.user.updateMany({
