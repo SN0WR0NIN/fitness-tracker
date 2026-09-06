@@ -102,9 +102,13 @@ test('admin review refreshes sibling bonuses and safely recovers when the post-s
 
     const page = await accounts.admin.context.newPage();
     await page.goto('/admin/activities');
-    await page.locator('main').getByRole('button', { name: /^All \d/ }).click();
-    await page.getByPlaceholder('Search athlete or column').fill(key);
-    const row = id => page.locator(`article[data-activity-id="${id}"]:visible`);
+    // Next also creates an empty route-announcer alert outside main. Check
+    // the actual review panel, while still rejecting duplicate visible panels.
+    const main = page.locator('main:visible');
+    await expect(main).toHaveCount(1);
+    await main.getByRole('button', { name: /^All \d/ }).click();
+    await main.getByPlaceholder('Search athlete or column').fill(key);
+    const row = id => main.locator(`article[data-activity-id="${id}"]:visible`);
     const points = (id, value) => expect(row(id).getByTestId('activity-points')).toHaveText(value);
     await points(first.id, '10.5');
     await points(second.id, '12.0');
@@ -132,17 +136,17 @@ test('admin review refreshes sibling bonuses and safely recovers when the post-s
     await row(second.id).getByRole('button', { name: 'Correct details', exact: true }).click();
     await row(second.id).getByRole('combobox', { name: 'Friend entry type' }).selectOption('');
     await row(second.id).getByRole('button', { name: 'Save correction', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('Your correction was saved, but latest scores could not be loaded');
+    await expect(main.getByRole('alert')).toContainText('Your correction was saved, but latest scores could not be loaded');
     await points(second.id, '—');
     await points(third.id, '—');
     await expect(row(third.id).getByRole('button', { name: 'Reset', exact: true })).toBeDisabled();
     expect((await db.activity.findUniqueOrThrow({ where: { id: second.id } })).points).toBe(12);
     expect((await db.activity.findUniqueOrThrow({ where: { id: third.id } })).points).toBe(21);
-    await page.getByRole('button', { name: 'Refresh scores', exact: true }).click();
+    await main.getByRole('button', { name: 'Refresh scores', exact: true }).click();
     await points(second.id, '12.0');
     await points(third.id, '21.0');
     expect(edits).toBe(1); // Retrying the read must not replay the successful mutation.
-    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(main.getByRole('alert')).toHaveCount(0);
 
     await row(third.id).getByRole('button', { name: 'Reset', exact: true }).click();
     await expect(row(third.id)).toContainText('PENDING');
