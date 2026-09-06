@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kg-stay-active-v3';
+const CACHE_NAME = 'kg-stay-active-v4';
 const CACHE_PREFIX = 'kg-stay-active-';
 const OFFLINE_URL = '/offline';
 const STATIC_ASSETS = [OFFLINE_URL, '/kg-gorilla-192.png', '/kg-gorilla-512.png', '/kg-gorilla-maskable-512.png', '/kg-gorilla-apple.png', '/manifest.webmanifest'];
@@ -18,9 +18,10 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) return;
-  // No navigation response, private page, proof image or RSC payload is cached.
+  // Never store navigation/private responses. Avoid the HTTP cache as well so
+  // a stale authenticated redirect cannot replace the offline fallback.
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).catch(async () => (await caches.match(OFFLINE_URL)) || new Response('You are offline. Reconnect to use KG Active.', {status:503,headers:{'Content-Type':'text/plain'}})));
+    event.respondWith(fetch(request, {cache:'no-store'}).catch(async () => (await caches.match(OFFLINE_URL)) || new Response('You are offline. Reconnect to use KG Active.', {status:503,headers:{'Content-Type':'text/plain'}})));
     return;
   }
   if (url.pathname.startsWith('/_next/static/') || STATIC_ASSETS.includes(url.pathname)) {
