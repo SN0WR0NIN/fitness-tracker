@@ -77,11 +77,36 @@ export default function AdminActivityReview({ initialActivities, users }: { init
   const [query, setQuery] = useState('');
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
+  const [refreshRequired, setRefreshRequired] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedProof, setSelectedProof] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [editForm, setEditForm] = useState({ category: 'RUN' as ActivityCategory, distance: '', pace: '', companionSelect: '', companionUserIds: [] as string[], companionName: '' });
+  const mutationDisabled = actioningId !== null || refreshRequired;
+
+  // One review can move a daily bonus to a different activity. Reload the
+  // complete authorized snapshot, not only the actioned card's status/points.
+  const refreshActivities = async () => {
+    const response = await fetch('/api/admin/activities?status=ALL', { cache: 'no-store' });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !Array.isArray(data)) throw new Error('Latest activity scores could not be loaded.');
+    setActivities(data as ReviewActivity[]);
+    setRefreshRequired(false);
+  };
+
+  const retryRefresh = async () => {
+    setActioningId('__refresh__');
+    setActionError('');
+    try {
+      await refreshActivities();
+    } catch {
+      setRefreshRequired(true);
+      setActionError('Latest scores could not be loaded. Check your connection and refresh scores before reviewing more activities.');
+    } finally {
+      setActioningId(null);
+    }
+  };
 
   const counts = useMemo(() => ({
     ALL: activities.length,
@@ -105,6 +130,7 @@ export default function AdminActivityReview({ initialActivities, users }: { init
   const runStatusAction = async (activityId: string, action: 'approve' | 'reject' | 'reset', reason?: string, duplicateOverrideReason?: string) => {
     setActioningId(activityId);
     setActionError('');
+    let saved = false;
     try {
       const response = await fetch(`/api/admin/activities/${activityId}/${action}`, {
         method: 'POST',
@@ -119,16 +145,15 @@ export default function AdminActivityReview({ initialActivities, users }: { init
         return;
       }
       if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : `Failed to ${action} activity.`);
-      setActivities((current) => current.map((activity) => activity.id === activityId ? {
-        ...activity,
-        status: data.status,
-        reviewedAt: data.reviewedAt ?? null,
-        rejectionReason: data.rejectionReason ?? null,
-      } : activity));
+      saved = true;
       setRejectingId(null);
       setRejectionReason('');
+      await refreshActivities();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : `Failed to ${action} activity.`);
+      if (saved) {
+        setRefreshRequired(true);
+        setActionError('Your review was saved, but latest scores could not be loaded. Refresh scores before reviewing more activities; do not repeat the saved action.');
+      } else setActionError(error instanceof Error ? error.message : `Failed to ${action} activity.`);
     } finally {
       setActioningId(null);
     }
@@ -149,6 +174,7 @@ export default function AdminActivityReview({ initialActivities, users }: { init
   const saveEdit = async (activity: ReviewActivity) => {
     setActioningId(activity.id);
     setActionError('');
+    let saved = false;
     try {
       const body: Record<string, unknown> = {
         category: editForm.category,
@@ -165,10 +191,14 @@ export default function AdminActivityReview({ initialActivities, users }: { init
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Failed to update activity.');
-      setActivities((current) => current.map((item) => item.id === activity.id ? { ...item, ...data } : item));
+      saved = true;
       setEditingId(null);
+      await refreshActivities();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to update activity.');
+      if (saved) {
+        setRefreshRequired(true);
+        setActionError('Your correction was saved, but latest scores could not be loaded. Refresh scores before reviewing more activities; do not repeat the saved action.');
+      } else setActionError(error instanceof Error ? error.message : 'Failed to update activity.');
     } finally {
       setActioningId(null);
     }
@@ -198,21 +228,22 @@ export default function AdminActivityReview({ initialActivities, users }: { init
         </section>
 
         {actionError ? <div role="alert" className="mt-5 rounded-xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-200">{actionError}</div> : null}
+        {refreshRequired ? <button type="button" onClick={retryRefresh} disabled={actioningId !== null} className="mt-3 min-h-11 rounded-xl bg-sky-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50">{actioningId === '__refresh__' ? 'Refreshing…' : 'Refresh scores'}</button> : null}
 
-        <section className="mt-5 space-y-4">
+        <section className="mt-5 space-y-4" aria-busy={actioningId !== null}>
           {filteredActivities.length ? filteredActivities.map((activity) => (
-            <article key={activity.id} className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+            <article key={activity.id} data-activity-id={activity.id} className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
               <div className="grid lg:grid-cols-[14rem_1fr]">
                 <div className="relative flex min-h-48 items-center justify-center overflow-hidden bg-black/20 lg:min-h-full">
                   {activity.proofUrl ? <button type="button" onClick={() => setSelectedProof(activity.proofUrl)} aria-label={`Enlarge ${activity.user.name}'s proof`} className="group relative h-full min-h-48 w-full"><Image src={activity.proofUrl} alt={`${activity.user.name}'s activity proof`} fill unoptimized sizes="(max-width: 1024px) 100vw, 224px" className="object-cover transition duration-500 group-hover:scale-105" /><span className="absolute bottom-3 right-3 rounded-lg bg-black/70 p-2 text-white"><Eye className="h-4 w-4" /></span></button> : activity.stravaActivityId ? <div className="text-center text-orange-300"><ExternalLink className="mx-auto h-8 w-8" /><p className="mt-2 text-xs font-bold">Strava activity</p></div> : <div className="text-center text-slate-600"><Activity className="mx-auto h-8 w-8" /><p className="mt-2 text-xs">No proof attached</p></div>}
                 </div>
                 <div className="p-5 sm:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div><div className="flex flex-wrap items-center gap-2"><Link href={`/participants/${activity.user.id}`} className="text-lg font-black transition hover:text-orange-300">{activity.user.name}</Link><StatusPill status={activity.status} /></div><p className="mt-1 text-sm text-slate-500">{activity.column.name} · {new Date(activity.occurredAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
-                    <div className="text-right"><p className="text-3xl font-black text-orange-300">{activity.points.toFixed(1)}</p><p className="text-xs text-slate-500">points</p></div>
+                    <div><div className="flex flex-wrap items-center gap-2"><Link href={`/participants/${activity.user.id}`} className="text-lg font-black transition hover:text-orange-300">{activity.user.name}</Link><StatusPill status={activity.status} /></div><p className="mt-1 text-sm text-slate-500">{activity.column.name} · {new Date(activity.occurredAt).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+                    <div className="text-right"><p data-testid="activity-points" className="text-3xl font-black text-orange-300">{refreshRequired ? '—' : activity.points.toFixed(1)}</p><p className="text-xs text-slate-500">{refreshRequired ? 'Refresh scores' : 'points'}</p></div>
                   </div>
 
-                  {editingId === activity.id ? <EditPanel activity={activity} users={users} editForm={editForm} setEditForm={setEditForm} save={() => saveEdit(activity)} cancel={() => setEditingId(null)} saving={actioningId === activity.id} /> : (
+                  {editingId === activity.id ? <EditPanel activity={activity} users={users} editForm={editForm} setEditForm={setEditForm} save={() => saveEdit(activity)} cancel={() => setEditingId(null)} saving={mutationDisabled} /> : (
                     <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
                       <Detail label="Activity" value={categoryLabels[activity.category]} />
                       <Detail label="Distance" value={activity.distance ? `${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}` : 'Not required'} />
@@ -226,13 +257,13 @@ export default function AdminActivityReview({ initialActivities, users }: { init
                   <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5">
                     <div className="flex flex-wrap gap-3 text-xs">
                       {activity.stravaActivityId ? <a href={`https://www.strava.com/activities/${activity.stravaActivityId}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-bold text-orange-300 hover:underline"><ExternalLink className="h-3.5 w-3.5" />Open Strava</a> : null}
-                      {editingId !== activity.id ? <button type="button" onClick={() => startEdit(activity)} className="inline-flex items-center gap-1 font-bold text-slate-400 transition hover:text-white"><Pencil className="h-3.5 w-3.5" />Correct details</button> : null}
+                      {editingId !== activity.id ? <button type="button" onClick={() => startEdit(activity)} disabled={mutationDisabled} className="inline-flex items-center gap-1 font-bold text-slate-400 transition hover:text-white disabled:opacity-50"><Pencil className="h-3.5 w-3.5" />Correct details</button> : null}
                       {activity.reviewedBy ? <span className="text-slate-600">Reviewed by {activity.reviewedBy.name}</span> : null}
                     </div>
                     <div className="sticky bottom-2 z-20 -mx-2 flex flex-wrap gap-2 rounded-xl bg-slate-950/95 p-2 shadow-xl backdrop-blur sm:static sm:mx-0 sm:bg-transparent sm:p-0 sm:shadow-none">
-                      {activity.status !== 'APPROVED' ? <button type="button" onClick={() => runStatusAction(activity.id, 'approve')} disabled={actioningId === activity.id} className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"><CheckCircle2 className="h-4 w-4" />Approve</button> : null}
-                      {activity.status !== 'REJECTED' ? <button type="button" onClick={() => { setRejectingId(activity.id); setRejectionReason(''); }} disabled={actioningId === activity.id} className="inline-flex items-center gap-2 rounded-xl bg-rose-500 px-4 py-2 text-sm font-bold transition hover:bg-rose-400 disabled:opacity-50"><XCircle className="h-4 w-4" />Reject</button> : null}
-                      {activity.status !== 'PENDING' ? <button type="button" onClick={() => runStatusAction(activity.id, 'reset')} disabled={actioningId === activity.id} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm font-bold text-slate-300 transition hover:bg-white/5 disabled:opacity-50"><RotateCcw className="h-4 w-4" />Reset</button> : null}
+                      {activity.status !== 'APPROVED' ? <button type="button" onClick={() => runStatusAction(activity.id, 'approve')} disabled={mutationDisabled} className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"><CheckCircle2 className="h-4 w-4" />Approve</button> : null}
+                      {activity.status !== 'REJECTED' ? <button type="button" onClick={() => { setRejectingId(activity.id); setRejectionReason(''); }} disabled={mutationDisabled} className="inline-flex items-center gap-2 rounded-xl bg-rose-500 px-4 py-2 text-sm font-bold transition hover:bg-rose-400 disabled:opacity-50"><XCircle className="h-4 w-4" />Reject</button> : null}
+                      {activity.status !== 'PENDING' ? <button type="button" onClick={() => runStatusAction(activity.id, 'reset')} disabled={mutationDisabled} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm font-bold text-slate-300 transition hover:bg-white/5 disabled:opacity-50"><RotateCcw className="h-4 w-4" />Reset</button> : null}
                     </div>
                   </div>
                 </div>
@@ -244,7 +275,7 @@ export default function AdminActivityReview({ initialActivities, users }: { init
 
       {selectedProof ? <div role="dialog" aria-modal="true" aria-label="Activity proof preview" className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setSelectedProof(null)}><button type="button" onClick={() => setSelectedProof(null)} aria-label="Close proof preview" className="absolute right-5 top-5 z-10 rounded-full bg-white/10 p-2 text-white"><X className="h-5 w-5" /></button><div className="relative h-full w-full"><Image src={selectedProof} alt="Activity proof enlarged" fill unoptimized sizes="100vw" className="object-contain" /></div></div> : null}
 
-      {rejectingId ? <div role="dialog" aria-modal="true" aria-labelledby="reject-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"><div className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 id="reject-title" className="text-xl font-black">Reject activity</h2><p className="mt-2 text-sm text-slate-400">Explain what the participant should correct before resubmitting.</p></div><button type="button" onClick={() => setRejectingId(null)} aria-label="Close rejection dialog" className="rounded-lg p-2 text-slate-500 hover:bg-white/5 hover:text-white"><X className="h-5 w-5" /></button></div><label className="mt-5 block"><span className="text-sm font-bold text-slate-300">Reason</span><textarea value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} maxLength={300} rows={4} autoFocus placeholder="Example: The screenshot does not show the activity distance." className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-slate-950 p-3 text-sm outline-none placeholder:text-slate-600 focus:border-rose-400" /><span className="mt-1 block text-right text-xs text-slate-600">{rejectionReason.length}/300</span></label><div className="mt-5 flex justify-end gap-3"><button type="button" onClick={() => setRejectingId(null)} className="rounded-xl border border-white/10 px-4 py-2 text-sm font-bold text-slate-300">Cancel</button><button type="button" onClick={() => runStatusAction(rejectingId, 'reject', rejectionReason.trim())} disabled={rejectionReason.trim().length < 3 || actioningId === rejectingId} className="rounded-xl bg-rose-500 px-4 py-2 text-sm font-bold transition hover:bg-rose-400 disabled:opacity-40">{actioningId === rejectingId ? 'Rejecting…' : 'Confirm rejection'}</button></div></div></div> : null}
+      {rejectingId ? <div role="dialog" aria-modal="true" aria-labelledby="reject-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"><div className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 id="reject-title" className="text-xl font-black">Reject activity</h2><p className="mt-2 text-sm text-slate-400">Explain what the participant should correct before resubmitting.</p></div><button type="button" onClick={() => setRejectingId(null)} aria-label="Close rejection dialog" className="rounded-lg p-2 text-slate-500 hover:bg-white/5 hover:text-white"><X className="h-5 w-5" /></button></div><label className="mt-5 block"><span className="text-sm font-bold text-slate-300">Reason</span><textarea value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} maxLength={300} rows={4} autoFocus placeholder="Example: The screenshot does not show the activity distance." className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-slate-950 p-3 text-sm outline-none placeholder:text-slate-600 focus:border-rose-400" /><span className="mt-1 block text-right text-xs text-slate-600">{rejectionReason.length}/300</span></label><div className="mt-5 flex justify-end gap-3"><button type="button" onClick={() => setRejectingId(null)} className="rounded-xl border border-white/10 px-4 py-2 text-sm font-bold text-slate-300">Cancel</button><button type="button" onClick={() => runStatusAction(rejectingId, 'reject', rejectionReason.trim())} disabled={rejectionReason.trim().length < 3 || mutationDisabled} className="rounded-xl bg-rose-500 px-4 py-2 text-sm font-bold transition hover:bg-rose-400 disabled:opacity-40">{actioningId === rejectingId ? 'Rejecting…' : 'Confirm rejection'}</button></div></div></div> : null}
     </div>
   );
 }

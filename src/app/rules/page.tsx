@@ -50,7 +50,7 @@ export default async function RulesPage() {
           <section>
             <SectionTitle icon={<Medal />} title="Bonus points" />
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <RuleCard icon={<Users />} tone="text-fuchsia-300 bg-fuchsia-300/10" title="With a friend" score={`+${rules.friendBonus} pts`} detail="Choose a registered participant who completed the same activity. Both participants should log it." />
+              <RuleCard icon={<Users />} tone="text-fuchsia-300 bg-fuchsia-300/10" title="With a friend" score={`+${rules.friendBonus} pts`} detail="Select the registered friends who joined you. Earn the friend bonus once per sport per Singapore calendar day: running, cycling, swimming and walking/hiking. Repeated same-sport entries and additional friends do not add another bonus. Each participant must log their own activity. Troop Games has no friend bonus." />
               <RuleCard icon={<Medal />} tone="text-yellow-300 bg-yellow-300/10" title="Troop activity / games" score={`+${rules.troopGamePoints} pts`} detail="Official group physical activities and organised sports games count as one session." />
             </div>
           </section>

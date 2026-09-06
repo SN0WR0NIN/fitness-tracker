@@ -19,7 +19,7 @@ export default function FriendMultiSelect({ users, value, onChange, disabled = f
   }
   return <fieldset disabled={disabled || loading} className="min-w-0 space-y-3 rounded-xl border border-sky-300/20 bg-slate-950/40 p-4">
     <legend className="px-1 text-sm font-bold text-slate-200">Friends</legend>
-    <p id={`${id}-help`} className="text-xs leading-5 text-slate-400">Select everyone who joined this activity. The friend bonus is awarded once per activity, not per person.</p>
+    <p id={`${id}-help`} className="text-xs leading-5 text-slate-400">Select everyone who joined this activity. The friend bonus is awarded once per sport per Singapore day, not per entry or per person. Troop Games has no friend bonus.</p>
     <div aria-live="polite" className="text-sm font-bold text-sky-200">{value.length ? `${value.length} ${value.length === 1 ? 'friend' : 'friends'} selected` : 'No friends selected'}</div>
     {value.length ? <div className="flex flex-wrap gap-2">{value.map((userId) => {
       const name = available.find((user) => user.id === userId)?.name ?? 'Unavailable participant';

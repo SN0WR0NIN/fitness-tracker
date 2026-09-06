@@ -1,351 +1,121 @@
-import { resolveActivityFriends } from '@/lib/activity-friends';
-import { activityFriendIds } from '@/lib/friend-selection';
-import { duplicateReason, DuplicateApprovalError, ActivityEditError } from '@/lib/activity-duplicates';
-import { prisma } from '@/lib/prisma';
-import { calculateActivityPoints, resolveEffectiveCategory, getWeekStart, getWeekNumber, ActivityCategory } from '@/lib/scoring';
-import { getChallengeSettings } from '@/lib/admin-control';
-import type { ScoringRules } from '@/lib/scoring';
-import type { Prisma } from '@prisma/client';
-
-function getCategoryScoreField(category: string): string {
-  const mapping: Record<string, string> = {
-    RUN: 'runPoints',
-    CYCLE: 'cyclePoints',
-    SWIM: 'swimPoints',
-    WALK_OR_HIKE: 'hikePoints',
-    TROOP_GAMES: 'troopGamePoints',
-  };
-  return mapping[category] || 'totalPoints';
-}
+import type { Activity, Prisma } from '@prisma/client';
+import { resolveActivityFriends } from './activity-friends';
+import { activityFriendIds } from './friend-selection';
+import { duplicateReason, DuplicateApprovalError, ActivityEditError } from './activity-duplicates';
+import { calculateActivityPoints, resolveEffectiveCategory, getWeekStart, getWeekNumber, type ActivityCategory, type ScoringRules } from './scoring';
+import { scoringTransaction, ledgerSettings, reconcileParticipantScores } from './scoring-ledger';
+import { assertCompetitionWritable } from './operating-mode';
 
 interface CreateActivityInput {
-  userId: string;
-  columnId: string;
-  category: ActivityCategory;
-  distance?: number;
-  pace?: number;
-  companionUserId?: string;
-  companionUserIds?: string[];
-  proofUrl?: string;
-  stravaActivityId?: string;
-  occurredAt?: Date;
-  mapPolyline?: string;
-  elevationGain?: number;
-  duration?: number;
+  userId: string; columnId: string; category: ActivityCategory; distance?: number; pace?: number;
+  companionUserId?: string; companionUserIds?: string[]; proofUrl?: string; stravaActivityId?: string;
+  occurredAt?: Date; mapPolyline?: string; elevationGain?: number; duration?: number;
 }
 
-/**
- * Creates an activity in PENDING status. Points are computed and stored on the
- * record, but never applied to the weekly score until a reviewer approves it.
- * Slow "runs" (pace > 9 min/km) are auto-recategorized as Walk/Hike per the
- * official rules, and the friend bonus only applies when a real registered
- * companion user is selected (verifies they're an actual troop member).
- */
 export async function createActivity(input: CreateActivityInput) {
-  const settings = await getChallengeSettings();
-  const effectiveCategory = resolveEffectiveCategory(input.category, input.pace, settings.scoringRules);
-  const friends = await resolveActivityFriends(prisma, input.userId, input);
-  const completedWithFriend = friends.completedWithFriend;
-
-  const scoring = calculateActivityPoints({
-    category: effectiveCategory,
-    distance: input.distance,
-    pace: input.pace,
-    completedWithFriend,
-  }, settings.scoringRules);
-
-  const occurredAt = input.occurredAt ?? new Date();
-  const weekStart = getWeekStart(occurredAt);
-  const weekNumber = getWeekNumber(occurredAt, settings.startDate);
-
-  return prisma.activity.create({
-    data: {
-      userId: input.userId,
-      columnId: input.columnId,
-      category: effectiveCategory,
-      // Distance is required by the database, while Troop Games do not ask
-      // participants for one. Store zero for that distance-free category.
-      distance: effectiveCategory === 'TROOP_GAMES' ? (input.distance ?? 0) : input.distance,
-      pace: input.pace,
-      ...friends,
-      proofUrl: input.proofUrl,
-      stravaActivityId: input.stravaActivityId,
-      mapPolyline: input.mapPolyline,
-      elevationGain: input.elevationGain,
-      duration: input.duration,
-      points: scoring.totalPoints,
-      status: 'PENDING',
-      occurredAt,
-      weekStart,
-      weekNumber,
-    },
+  return scoringTransaction(async tx => {
+    await assertCompetitionWritable(tx);
+    const settings = await ledgerSettings(tx);
+    const category = resolveEffectiveCategory(input.category, input.pace, settings.rules);
+    const friends = await resolveActivityFriends(tx, input.userId, input);
+    const occurredAt = input.occurredAt ?? new Date();
+    const created = await tx.activity.create({ data: {
+      userId: input.userId, columnId: input.columnId, category,
+      distance: category === 'TROOP_GAMES' ? (input.distance ?? 0) : input.distance!, pace: input.pace,
+      ...friends, proofUrl: input.proofUrl, stravaActivityId: input.stravaActivityId,
+      mapPolyline: input.mapPolyline, elevationGain: input.elevationGain, duration: input.duration,
+      points: calculateActivityPoints({ category, distance: input.distance, pace: input.pace }, settings.rules).totalPoints,
+      status: 'PENDING', occurredAt, weekStart: getWeekStart(occurredAt), weekNumber: getWeekNumber(occurredAt, settings.startDate),
+    } });
+    await reconcileParticipantScores(tx, input.userId, settings);
+    return tx.activity.findUniqueOrThrow({ where: { id: created.id } });
   });
 }
 
-/**
- * Approves a pending (or previously rejected) activity and applies its points
- * to the weekly score. Idempotent if already approved.
- */
+async function changeActivity(activityId: string, change: (tx: Prisma.TransactionClient, activity: Activity) => Promise<void>) {
+  return scoringTransaction(async tx => {
+    await assertCompetitionWritable(tx);
+    const rows = await tx.$queryRaw<Activity[]>`SELECT * FROM "Activity" WHERE id=${activityId} FOR UPDATE`;
+    const activity = rows[0];
+    if (!activity) throw new ActivityEditError('Activity not found.', 404);
+    await change(tx, activity);
+    await reconcileParticipantScores(tx, activity.userId);
+    return tx.activity.findUniqueOrThrow({ where: { id: activityId } });
+  });
+}
+
 export async function approveActivity(activityId: string, reviewerId: string, duplicateOverrideReason?: string) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const locked = await tx.$queryRaw<import('@prisma/client').Activity[]>`SELECT * FROM "Activity" WHERE id = ${activityId} FOR UPDATE`;
-    const activity = locked[0];
-    if (!activity) {
-      throw new Error('Activity not found');
-    }
-    if (activity.status === 'APPROVED') {
-      return activity;
-    }
-
+  return changeActivity(activityId, async (tx, activity) => {
+    if (activity.status === 'APPROVED') return;
     const candidates = await tx.activity.findMany({ where: { userId: activity.userId, id: { not: activity.id }, status: { not: 'REJECTED' } } });
-    const matches = candidates.flatMap((other) => { const reason = duplicateReason(activity, other); return reason ? [{ id: other.id, reason }] : []; });
+    const matches = candidates.flatMap(other => { const reason = duplicateReason(activity, other); return reason ? [{ id: other.id, reason }] : []; });
     if (matches.length && !duplicateOverrideReason?.trim()) throw new DuplicateApprovalError(matches);
-
-    await tx.weeklyScore.upsert({
-      where: {
-        userId_weekStart: {
-          userId: activity.userId,
-          weekStart: activity.weekStart,
-        },
-      },
-      update: {
-        totalPoints: { increment: activity.points },
-        [getCategoryScoreField(activity.category)]: { increment: activity.points },
-      },
-      create: {
-        userId: activity.userId,
-        columnId: activity.columnId,
-        weekStart: activity.weekStart,
-        weekNumber: activity.weekNumber,
-        totalPoints: activity.points,
-        [getCategoryScoreField(activity.category)]: activity.points,
-      },
-    });
-
-    return tx.activity.update({
-      where: { id: activityId },
-      data: {
-        status: 'APPROVED',
-        reviewedById: reviewerId,
-        reviewedAt: new Date(),
-        rejectionReason: null,
-      },
-    });
-  }, { isolationLevel: 'Serializable' });
-}
-
-/**
- * Rejects an activity. If it was previously approved, its points are first
- * reversed out of the weekly score. Idempotent if already rejected.
- */
-export async function rejectActivity(activityId: string, reviewerId: string, reason?: string) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const locked = await tx.$queryRaw<import('@prisma/client').Activity[]>`SELECT * FROM "Activity" WHERE id = ${activityId} FOR UPDATE`;
-    const activity = locked[0];
-    if (!activity) {
-      throw new Error('Activity not found');
-    }
-    if (activity.status === 'REJECTED') {
-      return activity;
-    }
-
-    if (activity.status === 'APPROVED') {
-      await tx.weeklyScore.update({
-        where: {
-          userId_weekStart: {
-            userId: activity.userId,
-            weekStart: activity.weekStart,
-          },
-        },
-        data: {
-          totalPoints: { decrement: activity.points },
-          [getCategoryScoreField(activity.category)]: { decrement: activity.points },
-        },
-      });
-    }
-
-    return tx.activity.update({
-      where: { id: activityId },
-      data: {
-        status: 'REJECTED',
-        reviewedById: reviewerId,
-        reviewedAt: new Date(),
-        rejectionReason: reason,
-      },
-    });
+    await tx.activity.update({ where: { id: activityId }, data: {
+      status: 'APPROVED', reviewedById: reviewerId, reviewedAt: new Date(), rejectionReason: null,
+    } });
   });
 }
 
-/**
- * Resets an already-reviewed activity (Approved or Rejected) back to Pending
- * for re-review. If it was Approved, its points are first reversed out of the
- * weekly score. Idempotent if already pending.
- */
+export async function rejectActivity(activityId: string, reviewerId: string, reason?: string) {
+  return changeActivity(activityId, async (tx, activity) => {
+    if (activity.status === 'REJECTED') return;
+    await tx.activity.update({ where: { id: activityId }, data: {
+      status: 'REJECTED', reviewedById: reviewerId, reviewedAt: new Date(), rejectionReason: reason,
+    } });
+  });
+}
+
 export async function resetActivityToPending(activityId: string) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const locked = await tx.$queryRaw<import('@prisma/client').Activity[]>`SELECT * FROM "Activity" WHERE id = ${activityId} FOR UPDATE`;
-    const activity = locked[0];
-    if (!activity) {
-      throw new Error('Activity not found');
-    }
-    if (activity.status === 'PENDING') {
-      return activity;
-    }
-
-    if (activity.status === 'APPROVED') {
-      await tx.weeklyScore.update({
-        where: {
-          userId_weekStart: {
-            userId: activity.userId,
-            weekStart: activity.weekStart,
-          },
-        },
-        data: {
-          totalPoints: { decrement: activity.points },
-          [getCategoryScoreField(activity.category)]: { decrement: activity.points },
-        },
-      });
-    }
-
-    return tx.activity.update({
-      where: { id: activityId },
-      data: {
-        status: 'PENDING',
-        reviewedById: null,
-        reviewedAt: null,
-        rejectionReason: null,
-      },
-    });
+  return changeActivity(activityId, async (tx, activity) => {
+    if (activity.status === 'PENDING') return;
+    await tx.activity.update({ where: { id: activityId }, data: {
+      status: 'PENDING', reviewedById: null, reviewedAt: null, rejectionReason: null,
+    } });
   });
 }
 
 interface UpdateActivityInput {
-  category?: ActivityCategory;
-  distance?: number;
-  pace?: number | null;
-  proofUrl?: string | null;
-  // undefined = leave companion unchanged, null = remove companion, string = set a verified companion
-  companionUserId?: string | null;
-  companionUserIds?: string[];
-  // admin-only manual override for a friend who hasn't registered an account yet;
-  // only takes effect when companionUserId is NOT present in the same request
-  companionName?: string | null;
+  category?: ActivityCategory; distance?: number; pace?: number | null; proofUrl?: string | null;
+  companionUserId?: string | null; companionUserIds?: string[]; companionName?: string | null;
 }
 
-/**
- * Edits an activity's category/distance/pace/companion and recomputes its points.
- * If the activity is currently APPROVED, the weekly score is corrected
- * in the same transaction (reversing the old contribution, applying the new one).
- */
 export async function updateActivity(activityId: string, input: UpdateActivityInput, ownerId?: string) {
-  const settings = await getChallengeSettings();
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const locked = await tx.$queryRaw<import('@prisma/client').Activity[]>`SELECT * FROM "Activity" WHERE id = ${activityId} FOR UPDATE`;
-    const activity = locked[0];
-    if (!activity) {
-      throw new Error('Activity not found');
-    }
-
+  return changeActivity(activityId, async (tx, activity) => {
     if (ownerId && activity.userId !== ownerId) throw new ActivityEditError('Not your activity', 403);
     if (ownerId && activity.status !== 'PENDING') throw new ActivityEditError('This submission has been reviewed. Refresh to see its status.', 409);
-    if (ownerId && activity.stravaActivityId && (input.category !== undefined || input.distance !== undefined || input.pace !== undefined || input.proofUrl !== undefined)) throw new ActivityEditError('Strava workout details must be corrected in Strava. You can update the companion here.', 400);
-    const requestedCategory = input.category ?? activity.category;
-    const newDistance = input.distance ?? activity.distance;
-    const newPace = input.pace === undefined ? activity.pace : input.pace;
-    const newCategory = resolveEffectiveCategory(requestedCategory, newPace ?? undefined, settings.scoringRules);
-
-    let newCompanionUserIds = activityFriendIds(activity);
-    let newCompanionUserId = activity.companionUserId;
-    let newCompanionName = activity.companion;
-    let newCompletedWithFriend = activity.completedWithFriend;
+    if (ownerId) await assertCompetitionWritable(tx, true);
+    if (ownerId && activity.stravaActivityId && (input.category !== undefined || input.distance !== undefined || input.pace !== undefined || input.proofUrl !== undefined)) {
+      throw new ActivityEditError('Strava workout details must be corrected in Strava. You can update friends here.', 400);
+    }
+    const settings = await ledgerSettings(tx);
+    const pace = input.pace === undefined ? activity.pace : input.pace;
+    const category = resolveEffectiveCategory(input.category ?? activity.category, pace ?? undefined, settings.rules);
+    let friends = { companionUserIds: activityFriendIds(activity), companionUserId: activity.companionUserId,
+      companion: activity.companion, completedWithFriend: activity.completedWithFriend };
     if (input.companionUserIds !== undefined || input.companionUserId !== undefined) {
-      const friends = await resolveActivityFriends(tx, activity.userId, input);
-      newCompanionUserIds = friends.companionUserIds;
-      newCompanionUserId = friends.companionUserId;
-      newCompanionName = friends.companion;
-      newCompletedWithFriend = friends.completedWithFriend;
+      friends = await resolveActivityFriends(tx, activity.userId, input);
     } else if (input.companionName !== undefined) {
-      const trimmed = input.companionName?.trim() || null;
-      newCompanionUserIds = [];
-      newCompanionUserId = null;
-      newCompanionName = trimmed;
-      newCompletedWithFriend = !!trimmed;
+      const companion = input.companionName?.trim() || null;
+      friends = { companionUserIds: [], companionUserId: null, companion, completedWithFriend: Boolean(companion) };
     }
-
-    const scoring = calculateActivityPoints({
-      category: newCategory,
-      distance: newDistance,
-      pace: newPace ?? undefined,
-      completedWithFriend: newCompletedWithFriend,
-    }, settings.scoringRules);
-
-    if (activity.status === 'APPROVED') {
-      const oldField = getCategoryScoreField(activity.category);
-      const newField = getCategoryScoreField(newCategory);
-      const pointsDelta = scoring.totalPoints - activity.points;
-
-      const weeklyScoreData: Record<string, { increment: number } | { decrement: number }> = {
-        totalPoints: { increment: pointsDelta },
-      };
-      if (oldField === newField) {
-        weeklyScoreData[oldField] = { increment: pointsDelta };
-      } else {
-        weeklyScoreData[oldField] = { decrement: activity.points };
-        weeklyScoreData[newField] = { increment: scoring.totalPoints };
-      }
-
-      await tx.weeklyScore.update({
-        where: {
-          userId_weekStart: {
-            userId: activity.userId,
-            weekStart: activity.weekStart,
-          },
-        },
-        data: weeklyScoreData,
-      });
-    }
-
-    return tx.activity.update({
-      where: { id: activityId },
-      data: {
-        category: newCategory,
-        proofUrl: input.proofUrl,
-        distance: newCategory === 'TROOP_GAMES' ? 0 : newDistance,
-        pace: newPace,
-        completedWithFriend: newCompletedWithFriend,
-        companionUserIds: newCompanionUserIds,
-        companionUserId: newCompanionUserId,
-        companion: newCompanionName,
-        points: scoring.totalPoints,
-      },
-    });
+    await tx.activity.update({ where: { id: activityId }, data: {
+      category, distance: category === 'TROOP_GAMES' ? 0 : input.distance ?? activity.distance,
+      pace, proofUrl: input.proofUrl, ...friends,
+    } });
   });
 }
 
-type RecalculationActivity = { id: string; userId: string; columnId: string; category: ActivityCategory; distance: number; pace: number | null; completedWithFriend: boolean; occurredAt: Date; status: 'PENDING' | 'APPROVED' | 'REJECTED' };
-
+/** Explicit admin scoring rebuild, including past daily bonus allocations.
+ * The caller's existing backup/audit workflow remains responsible for rollout. */
 export async function recalculateAllScores(rules: ScoringRules, periodStart: Date) {
-  const activities = await prisma.activity.findMany({ select: { id: true, userId: true, columnId: true, category: true, distance: true, pace: true, completedWithFriend: true, occurredAt: true, status: true } }) as RecalculationActivity[];
-  const rows = new Map<string, { userId: string; columnId: string; weekStart: Date; weekNumber: number; totalPoints: number; runPoints: number; cyclePoints: number; swimPoints: number; hikePoints: number; troopGamePoints: number }>();
-  const recalculated = activities.map((activity) => {
-    const category = resolveEffectiveCategory(activity.category, activity.pace ?? undefined, rules);
-    const points = calculateActivityPoints({ category, distance: activity.distance, pace: activity.pace ?? undefined, completedWithFriend: activity.completedWithFriend }, rules).totalPoints;
-    const weekStart = getWeekStart(activity.occurredAt);
-    const weekNumber = getWeekNumber(activity.occurredAt, periodStart);
-    if (activity.status === 'APPROVED') {
-      const key = `${activity.userId}:${weekStart.toISOString()}`;
-      const row = rows.get(key) ?? { userId: activity.userId, columnId: activity.columnId, weekStart, weekNumber, totalPoints: 0, runPoints: 0, cyclePoints: 0, swimPoints: 0, hikePoints: 0, troopGamePoints: 0 };
-      row.totalPoints += points;
-      const field = getCategoryScoreField(category) as 'runPoints' | 'cyclePoints' | 'swimPoints' | 'hikePoints' | 'troopGamePoints';
-      row[field] += points;
-      rows.set(key, row);
+  return scoringTransaction(async tx => {
+    await assertCompetitionWritable(tx);
+    const users = await tx.user.findMany({ select: { id: true }, orderBy: { id: 'asc' } });
+    let activities = 0; let weeklyScores = 0;
+    for (const user of users) {
+      const result = await reconcileParticipantScores(tx, user.id, { rules, startDate: periodStart });
+      activities += result.activities; weeklyScores += result.weeklyScores;
     }
-    return { ...activity, category, points, weekStart, weekNumber };
+    return { activities, weeklyScores };
   });
-  await prisma.$transaction([
-    prisma.weeklyScore.deleteMany(),
-    ...recalculated.map((activity) => prisma.activity.update({ where: { id: activity.id }, data: { category: activity.category, points: activity.points, weekStart: activity.weekStart, weekNumber: activity.weekNumber } })),
-    ...Array.from(rows.values()).map((row) => prisma.weeklyScore.create({ data: row })),
-  ]);
-  return { activities: recalculated.length, weeklyScores: rows.size };
 }

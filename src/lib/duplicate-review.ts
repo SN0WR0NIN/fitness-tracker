@@ -1,3 +1,4 @@
+import { reconcileParticipantScores, scoringTransaction } from '@/lib/scoring-ledger';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { duplicateReason } from '@/lib/activity-duplicates';
@@ -62,14 +63,6 @@ export class DuplicateReviewError extends Error {
     super(message);
   }
 }
-
-const categoryScoreField = {
-  RUN: 'runPoints',
-  CYCLE: 'cyclePoints',
-  SWIM: 'swimPoints',
-  WALK_OR_HIKE: 'hikePoints',
-  TROOP_GAMES: 'troopGamePoints',
-} as const;
 
 export function duplicatePairKey(activityAId: string, activityBId: string) {
   const [a, b] = [activityAId, activityBId].sort();
@@ -270,7 +263,7 @@ export async function saveDuplicateReviewDecision(input: {
     throw new DuplicateReviewError('Add a short note explaining why these are different workouts (at least 5 characters).');
   }
 
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  return scoringTransaction(async (tx: Prisma.TransactionClient) => {
     const pair = await loadLockedPair(tx, input.activityAId, input.activityBId);
     const reviewer = await getReviewer(tx, input.reviewerId);
     const pairKey = await writeDecision(tx, {
@@ -290,7 +283,7 @@ export async function saveDuplicateReviewDecision(input: {
       { reason: pair.reason, note },
     );
     return { pairKey, status: input.status };
-  }, { isolationLevel: 'Serializable' });
+  });
 }
 
 export async function markActivityAsDuplicate(input: {
@@ -302,7 +295,7 @@ export async function markActivityAsDuplicate(input: {
 }) {
   const note = input.note?.trim().slice(0, 500) || null;
 
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  return scoringTransaction(async (tx: Prisma.TransactionClient) => {
     const pair = await loadLockedPair(tx, input.activityAId, input.activityBId);
     if (![pair.firstId, pair.secondId].includes(input.duplicateActivityId)) {
       throw new DuplicateReviewError('Choose which of the two entries is the duplicate.');
@@ -310,18 +303,6 @@ export async function markActivityAsDuplicate(input: {
     const duplicate = pair.first.id === input.duplicateActivityId ? pair.first : pair.second;
     const kept = duplicate.id === pair.first.id ? pair.second : pair.first;
     const reviewer = await getReviewer(tx, input.reviewerId);
-
-    if (duplicate.status === 'APPROVED') {
-      const field = categoryScoreField[duplicate.category];
-      const scoreUpdate = {
-        totalPoints: { decrement: duplicate.points },
-        [field]: { decrement: duplicate.points },
-      } as Prisma.WeeklyScoreUpdateInput;
-      await tx.weeklyScore.update({
-        where: { userId_weekStart: { userId: duplicate.userId, weekStart: duplicate.weekStart } },
-        data: scoreUpdate,
-      });
-    }
 
     const rejectionReason = `Duplicate of activity ${kept.id}${note ? ` — ${note}` : ''}`.slice(0, 300);
     const updated = await tx.activity.update({
@@ -334,6 +315,7 @@ export async function markActivityAsDuplicate(input: {
       },
     });
 
+    await reconcileParticipantScores(tx, duplicate.userId);
     const pairKey = await writeDecision(tx, {
       firstId: pair.firstId,
       secondId: pair.secondId,
@@ -352,8 +334,8 @@ export async function markActivityAsDuplicate(input: {
       note,
     });
 
-    return { pairKey, duplicateActivityId: duplicate.id, keptActivityId: kept.id, activity: updated };
-  }, { isolationLevel: 'Serializable' });
+    return { pairKey, duplicateActivityId: duplicate.id, keptActivityId: kept.id, activity: await tx.activity.findUniqueOrThrow({where:{id:updated.id}}) };
+  });
 }
 
 export async function refreshDuplicateReviewHealth() {

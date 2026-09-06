@@ -1,4 +1,5 @@
 'use client';
+import { useDailyFriendBonus } from '@/components/useDailyFriendBonus';
 import FriendMultiSelect from '@/components/FriendMultiSelect';
 
 
@@ -168,12 +169,13 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
   const distanceNumber = distance ? Number(distance) : undefined;
   const paceNumber = parsePace(pace);
   const effectiveCategory = resolveEffectiveCategory(category, paceNumber, scoringRules);
+  const dailyBonus = useDailyFriendBonus(userId, activityDate, effectiveCategory);
   const preview = useMemo(() => calculateActivityPoints({
     category: effectiveCategory,
     distance: distanceNumber,
     pace: paceNumber,
-    completedWithFriend: withFriend && companionUserIds.length > 0,
-  }, scoringRules), [effectiveCategory, distanceNumber, paceNumber, withFriend, companionUserIds, scoringRules]);
+    completedWithFriend: withFriend && companionUserIds.length > 0 && dailyBonus.available,
+  }, scoringRules), [effectiveCategory, distanceNumber, paceNumber, withFriend, companionUserIds, scoringRules, dailyBonus.available]);
 
   const validationMessage = useMemo(() => {
     if (!parseActivityDate(activityDate)) return 'Choose a valid activity date, today or earlier.';
@@ -335,11 +337,12 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
             </div>
           </FormSection>
 
-          <FormSection number="3" title="Run with friends" subtitle={`Select the friends who joined you. The official ${scoringRules.friendBonus}-point bonus is awarded once per activity.`}>
+          <FormSection number="3" title="Run with friends" subtitle={`Select the friends who joined you. The ${scoringRules.friendBonus}-point bonus is awarded once per sport per Singapore day, up to ${4 * scoringRules.friendBonus} points across four sports.`}>
             <label className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition ${withFriend ? 'border-sky-400/30 bg-sky-400/10' : 'border-white/10 bg-black/10'}`}><input type="checkbox" checked={withFriend} onChange={(event) => { setWithFriend(event.target.checked); if (!event.target.checked) setCompanionUserIds([]); }} className="h-4 w-4 accent-sky-400" /><Users className="h-5 w-5 text-sky-300" /><span className="text-sm font-bold">I completed this with friends</span></label>
             {withFriend ? <div className="mt-4"><FriendMultiSelect users={users} value={companionUserIds} onChange={setCompanionUserIds} excludeUserId={userId} loading={usersLoading} disabled={submitting || maintenanceMode || Boolean(usersError)} />{usersError ? <p role="alert" className="mt-2 text-xs text-rose-300">{usersError} <button type="button" onClick={() => setUsersLoadAttempt((attempt) => attempt + 1)} className="min-h-11 font-black underline">Retry</button></p> : null}</div> : null}
           </FormSection>
 
+          {withFriend ? <p role="status" className="text-sm text-sky-200">{dailyBonus.message}</p> : null}
           <FormSection number="4" title="Attach proof" subtitle="Upload a clear screenshot from Strava, Garmin, or another fitness app.">
             {proofUrl ? (
               <div className="relative h-60 overflow-hidden rounded-2xl border border-white/10 bg-black/20"><Image src={proofUrl} alt="Uploaded activity proof" fill unoptimized sizes="(max-width: 1024px) 100vw, 700px" className="object-contain" /><button type="button" onClick={() => setProofUrl('')} aria-label="Remove proof image" className="absolute right-3 top-3 rounded-full bg-rose-500 p-2 text-white shadow-lg transition hover:bg-rose-400"><X className="h-4 w-4" /></button></div>

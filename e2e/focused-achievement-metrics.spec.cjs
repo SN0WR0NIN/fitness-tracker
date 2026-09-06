@@ -10,6 +10,12 @@ test('goal streaks use completed consecutive weeks and corrected awards require 
     const privacy = await db.$queryRaw`SELECT c.relname,c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app_internal' AND c.relname IN ('activity_correction','notification_preference','weekly_result_dirty','achievement_definition','user_achievement')`;
     expect(privacy).toHaveLength(5);
     expect(privacy.every((r) => r.relrowsecurity)).toBe(true);
+    const triggers = await db.$queryRaw`SELECT tgname,tgdeferrable,tginitdeferred FROM pg_trigger
+      WHERE (tgrelid='public."Activity"'::regclass AND tgname='zz_focused_achievements')
+      OR (tgrelid='public."WeeklyGoal"'::regclass AND tgname='zz_focused_goal_achievements')
+      OR (tgrelid='app_internal.weekly_result'::regclass AND tgname='zz_focused_award_achievements')`;
+    expect(triggers).toHaveLength(3);
+    expect(triggers.every((r) => r.tgdeferrable && r.tginitdeferred)).toBe(true);
     // All historical fixtures and the temporary season roll back together.
     await expect(db.$transaction(async (tx) => {
       const userId = `focused_metrics_${randomUUID()}`;
@@ -19,7 +25,15 @@ test('goal streaks use completed consecutive weeks and corrected awards require 
         await tx.activity.create({ data: { userId, columnId: 'e2e_column', category: 'RUN', distance: 20, pace: 6, points: 30, status: 'APPROVED', reviewedById: 'e2e_admin', reviewedAt: new Date(), occurredAt: new Date(`${date}T04:00:00Z`), weekStart: new Date(`${date}T00:00:00Z`), weekNumber: index + 3 } });
         await tx.$executeRaw`INSERT INTO "WeeklyGoal" ("userId","weekStart",target) VALUES (${userId},${new Date(`${date}T00:00:00Z`)},25)`;
       }
-      const badge = async (id) => (await tx.$queryRaw`SELECT unlocked,current_value FROM app_internal.user_achievement WHERE user_id=${userId} AND season_key='2026-08-01' AND achievement_id=${id}`)[0];
+      const badge = async (id) => {
+        // This rollback-only metrics fixture deliberately checks several final
+        // states in one transaction. Flush at those explicit assertion boundaries,
+        // then restore the production default. HTTP tests verify actual commits.
+        await tx.$executeRaw`SET CONSTRAINTS public.zz_focused_achievements, public.zz_focused_goal_achievements, app_internal.zz_focused_award_achievements IMMEDIATE`;
+        const rows = await tx.$queryRaw`SELECT unlocked,current_value FROM app_internal.user_achievement WHERE user_id=${userId} AND season_key='2026-08-01' AND achievement_id=${id}`;
+        await tx.$executeRaw`SET CONSTRAINTS public.zz_focused_achievements, public.zz_focused_goal_achievements, app_internal.zz_focused_award_achievements DEFERRED`;
+        return rows[0];
+      };
       expect(await badge('goal-streak-3')).toMatchObject({ unlocked: true, current_value: 3 });
       expect((await badge('goal-streak-5')).unlocked).toBe(false);
       await tx.$executeRaw`UPDATE "WeeklyGoal" SET target=100 WHERE "userId"=${userId} AND "weekStart"='2026-08-16'::timestamp`;

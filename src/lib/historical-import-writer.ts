@@ -1,3 +1,4 @@
+import { reconcileParticipantScores } from './scoring-ledger';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { categoryField, type ImportRow, type prepareRow } from './historical-import';
@@ -59,4 +60,5 @@ export async function writeHistoricalImport(tx: Prisma.TransactionClient, rows: 
       "troopGamePoints" = "WeeklyScore"."troopGamePoints" + EXCLUDED."troopGamePoints",
       "updatedAt" = CURRENT_TIMESTAMP
   `);
+  for (const userId of [...new Set(rows.map(row => row.userId))].sort()) await reconcileParticipantScores(tx, userId);
 }
