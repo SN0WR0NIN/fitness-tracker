@@ -114,8 +114,8 @@ export async function requestPasswordReset(identifier: string) {
     }
 
     await tx.$executeRawUnsafe(
-      `INSERT INTO app_internal.notification(user_id, kind, level, title, message, href, metadata, dedupe_key)
-       SELECT u.id, 'ACCOUNT_RESET_REQUEST', 'info', 'Password reset requested', $1, '/admin/password-resets',
+      `INSERT INTO app_internal.notification(id, user_id, kind, level, title, message, href, metadata, dedupe_key)
+       SELECT gen_random_uuid(), u.id, 'ACCOUNT_RESET_REQUEST', 'info', 'Password reset requested', $1, '/admin/password-resets',
          jsonb_build_object('requestId',$2,'participantId',$3),
          'password-reset-request:' || $2 || ':' || u.id
        FROM public."User" u
