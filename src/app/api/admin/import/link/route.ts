@@ -1,3 +1,5 @@
+import { resolveActivityFriends } from '@/lib/activity-friends';
+import { activityFriendIds } from '@/lib/friend-selection';
 import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -21,7 +23,12 @@ export async function POST(request: Request) {
         await tx.weeklyScore.upsert({ where: { userId_weekStart: { userId: targetId, weekStart: score.weekStart } }, create: { ...data, userId: targetId }, update: { totalPoints: { increment: score.totalPoints }, runPoints: { increment: score.runPoints }, cyclePoints: { increment: score.cyclePoints }, swimPoints: { increment: score.swimPoints }, hikePoints: { increment: score.hikePoints }, troopGamePoints: { increment: score.troopGamePoints } } });
       }
       await tx.activity.updateMany({ where: { userId: sourceId }, data: { userId: targetId } });
-      await tx.activity.updateMany({ where: { companionUserId: sourceId }, data: { companionUserId: targetId, companion: target.name } });
+      const related = await tx.activity.findMany({ where: { OR: [{ companionUserId: sourceId }, { companionUserIds: { has: sourceId } }] } });
+      for (const activity of related) {
+        const companionUserIds = activityFriendIds(activity).map((id) => id === sourceId ? targetId : id);
+        const friends = await resolveActivityFriends(tx, activity.userId, { companionUserIds });
+        await tx.activity.update({ where: { id: activity.id }, data: friends });
+      }
       await tx.activity.updateMany({ where: { reviewedById: sourceId }, data: { reviewedById: targetId } });
       await tx.weeklyScore.deleteMany({ where: { userId: sourceId } });
       // The empty, login-disabled placeholder is removed only after its history is transferred.

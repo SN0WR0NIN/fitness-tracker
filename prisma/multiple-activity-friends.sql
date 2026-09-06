@@ -24,7 +24,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;
-REVOKE ALL ON FUNCTION app_internal.validate_activity_friends() FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION app_internal.validate_activity_friends() FROM PUBLIC;
 CREATE TRIGGER validate_multi_friends BEFORE INSERT OR UPDATE OF "companionUserIds","companionUserId","completedWithFriend","userId" ON public."Activity" FOR EACH ROW EXECUTE FUNCTION app_internal.validate_activity_friends();
 
 -- Do not silently orphan secondary friends when an admin deletes a user.
@@ -37,7 +37,7 @@ BEGIN
   END IF;
   RETURN OLD;
 END $$;
-REVOKE ALL ON FUNCTION app_internal.guard_activity_friend_delete() FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION app_internal.guard_activity_friend_delete() FROM PUBLIC;
 CREATE TRIGGER guard_multi_friend_delete BEFORE DELETE ON public."User" FOR EACH ROW EXECUTE FUNCTION app_internal.guard_activity_friend_delete();
 
 -- Backward-compatible optional field in v6 backups. Run after the existing
@@ -53,5 +53,13 @@ BEGIN
   NEW.checksum_sha256:=encode(sha256(convert_to(NEW.payload::text,'UTF8')),'hex');
   RETURN NEW;
 END $$;
-REVOKE ALL ON FUNCTION app_internal.enrich_multi_friend_backup() FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION app_internal.enrich_multi_friend_backup() FROM PUBLIC;
 CREATE TRIGGER zz_multi_friend_backup BEFORE INSERT OR UPDATE ON app_internal.operational_backup FOR EACH ROW EXECUTE FUNCTION app_internal.enrich_multi_friend_backup();
+
+DO $$ DECLARE r text; BEGIN
+  FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
+    IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN
+      EXECUTE format('REVOKE ALL ON FUNCTION app_internal.validate_activity_friends(), app_internal.guard_activity_friend_delete(), app_internal.enrich_multi_friend_backup() FROM %I',r);
+    END IF;
+  END LOOP;
+END $$;

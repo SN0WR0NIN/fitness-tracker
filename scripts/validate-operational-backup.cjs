@@ -68,6 +68,20 @@ for (const a of arrays.userAchievements) {
 }
 unique(arrays.weeklyResultRebuilds, (r) => `${r?.season_key}|${r?.week_number}`, 'Result rebuild markers');
 for (const w of arrays.weeklyResultRebuilds) check(results.has(`${w.season_key}|${w.week_number}`), 'Rebuild marker references missing finalized result');
+// The additional array is optional so earlier v6 backups remain valid.
+function checkFriends(row, ownerId, liveReferences) {
+  const ids = row?.companionUserIds;
+  if (ids === undefined) return;
+  check(Array.isArray(ids), 'Activity friends must be an array');
+  if (!Array.isArray(ids)) return;
+  check(ids.length <= 100 && new Set(ids).size === ids.length, 'Activity friend selection is too large or duplicated');
+  for (const id of ids) check(typeof id === 'string' && id.length > 0 && id !== ownerId && (!liveReferences || users.has(id)), 'Activity friend reference is invalid');
+  if (ids.length) check(row.companionUserId === ids[0], 'Legacy first companion must match the selected friends');
+}
+for (const activity of backup.activities) checkFriends(activity, activity.userId, true);
+for (const correction of arrays.activityCorrections) {
+  for (const snapshot of [correction.original,correction.proposed,correction.applied]) if (snapshot) checkFriends(snapshot, correction.user_id, false);
+}
 const forbidden = new Set(['password', 'passwordHash', 'temporaryPassword', 'stravaAccessToken', 'stravaRefreshToken']);
 function inspect(value) {
   if (!value || typeof value !== 'object') return;

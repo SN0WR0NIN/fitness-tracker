@@ -29,6 +29,7 @@ type DashboardActivity = {
   completedWithFriend: boolean;
   companion: string | null;
   companionUserId: string | null;
+  companionUserIds: string[];
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   rejectionReason: string | null;
   proofUrl: string | null;
@@ -70,6 +71,7 @@ export default async function DashboardPage() {
         completedWithFriend: true,
         companion: true,
         companionUserId: true,
+        companionUserIds: true,
         status: true,
         rejectionReason: true,
         proofUrl: true,
@@ -92,7 +94,7 @@ export default async function DashboardPage() {
 
   const users = activities.some((activity) => activity.status === 'PENDING')
     ? await timed('perf.dashboard.participant_options', () => prisma.user.findMany({
-        where: { id: { not: userId } },
+        where: { id: { not: userId }, role: 'MEMBER', columnId: { not: null } },
         select: { id: true, name: true },
         orderBy: { name: 'asc' },
       }), { route: '/dashboard' }) as SelectableUser[]

@@ -1,4 +1,7 @@
 'use client';
+import FriendMultiSelect from '@/components/FriendMultiSelect';
+import { activityFriendIds } from '@/lib/friend-selection';
+
 
 import { duplicateReason } from '@/lib/activity-duplicates';
 import Image from 'next/image';
@@ -35,6 +38,7 @@ type ReviewActivity = {
   completedWithFriend: boolean;
   companion: string | null;
   companionUserId: string | null;
+  companionUserIds?: string[];
   proofUrl: string | null;
   stravaActivityId: string | null;
   status: ActivityStatus;
@@ -77,7 +81,7 @@ export default function AdminActivityReview({ initialActivities, users }: { init
   const [selectedProof, setSelectedProof] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
-  const [editForm, setEditForm] = useState({ category: 'RUN' as ActivityCategory, distance: '', pace: '', companionSelect: '', companionName: '' });
+  const [editForm, setEditForm] = useState({ category: 'RUN' as ActivityCategory, distance: '', pace: '', companionSelect: '', companionUserIds: [] as string[], companionName: '' });
 
   const counts = useMemo(() => ({
     ALL: activities.length,
@@ -136,7 +140,8 @@ export default function AdminActivityReview({ initialActivities, users }: { init
       category: activity.category,
       distance: activity.distance?.toString() ?? '',
       pace: activity.pace?.toString() ?? '',
-      companionSelect: activity.companionUserId ?? (activity.completedWithFriend ? '__manual__' : ''),
+      companionSelect: activityFriendIds(activity).length ? '__registered__' : (activity.completedWithFriend ? '__manual__' : ''),
+      companionUserIds: activityFriendIds(activity),
       companionName: activity.companionUserId ? '' : activity.companion ?? '',
     });
   };
@@ -151,7 +156,7 @@ export default function AdminActivityReview({ initialActivities, users }: { init
         pace: editForm.category === 'RUN' && editForm.pace ? Number(editForm.pace) : undefined,
       };
       if (editForm.companionSelect === '__manual__') body.companionName = editForm.companionName.trim() || null;
-      else body.companionUserId = editForm.companionSelect || null;
+      else body.companionUserIds = editForm.companionSelect === '__registered__' ? editForm.companionUserIds : [];
 
       const response = await fetch(`/api/admin/activities/${activity.id}`, {
         method: 'PATCH',
@@ -212,7 +217,7 @@ export default function AdminActivityReview({ initialActivities, users }: { init
                       <Detail label="Activity" value={categoryLabels[activity.category]} />
                       <Detail label="Distance" value={activity.distance ? `${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}` : 'Not required'} />
                       <Detail label="Pace / duration" value={[activity.pace ? `${formatPace(activity.pace)}/km` : null, activity.duration ? formatDuration(activity.duration) : null].filter(Boolean).join(' · ') || 'Not provided'} />
-                      <Detail label="Companion" value={activity.completedWithFriend ? activity.companion || 'Friend recorded' : 'Solo activity'} />
+                      <Detail label="Friends" value={activity.completedWithFriend ? activity.companion || 'Friend recorded' : 'Solo activity'} />
                     </div>
                   )}
 
@@ -244,8 +249,8 @@ export default function AdminActivityReview({ initialActivities, users }: { init
   );
 }
 
-function EditPanel({ activity, users, editForm, setEditForm, save, cancel, saving }: { activity: ReviewActivity; users: SelectableUser[]; editForm: { category: ActivityCategory; distance: string; pace: string; companionSelect: string; companionName: string }; setEditForm: React.Dispatch<React.SetStateAction<{ category: ActivityCategory; distance: string; pace: string; companionSelect: string; companionName: string }>>; save: () => void; cancel: () => void; saving: boolean }) {
-  return <div className="mt-5 rounded-2xl border border-sky-400/20 bg-sky-400/5 p-4"><p className="mb-4 text-sm font-black text-sky-200">Correct activity details</p><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><label className="text-xs text-slate-500">Activity<select value={editForm.category} onChange={(event) => setEditForm((current) => ({ ...current, category: event.target.value as ActivityCategory }))} className="mt-1 block w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white">{categories.filter((category) => category.value !== 'ALL').map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}</select></label><label className="text-xs text-slate-500">Distance<input type="number" min="0" step="0.01" value={editForm.distance} disabled={editForm.category === 'TROOP_GAMES'} onChange={(event) => setEditForm((current) => ({ ...current, distance: event.target.value }))} className="mt-1 block w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-40" /></label><label className="text-xs text-slate-500">Pace (decimal)<input type="number" min="0" step="0.01" value={editForm.pace} disabled={editForm.category !== 'RUN'} onChange={(event) => setEditForm((current) => ({ ...current, pace: event.target.value }))} className="mt-1 block w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-40" /></label><label className="text-xs text-slate-500">Companion<select value={editForm.companionSelect} onChange={(event) => setEditForm((current) => ({ ...current, companionSelect: event.target.value }))} className="mt-1 block w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white"><option value="">No companion</option><option value="__manual__">Friend not registered</option>{users.filter((user) => user.id !== activity.user.id).map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label></div>{editForm.companionSelect === '__manual__' ? <label className="mt-3 block text-xs text-slate-500">Friend&apos;s name<input value={editForm.companionName} onChange={(event) => setEditForm((current) => ({ ...current, companionName: event.target.value }))} className="mt-1 block w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white sm:max-w-xs" /></label> : null}<div className="mt-4 flex justify-end gap-2"><button type="button" onClick={cancel} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-slate-400">Cancel</button><button type="button" onClick={save} disabled={saving || (editForm.category !== 'TROOP_GAMES' && Number(editForm.distance) <= 0)} className="rounded-lg bg-sky-500 px-4 py-2 text-xs font-black text-slate-950 disabled:opacity-40">{saving ? 'Saving…' : 'Save correction'}</button></div></div>;
+function EditPanel({ activity, users, editForm, setEditForm, save, cancel, saving }: { activity: ReviewActivity; users: SelectableUser[]; editForm: { category: ActivityCategory; distance: string; pace: string; companionSelect: string; companionUserIds: string[]; companionName: string }; setEditForm: React.Dispatch<React.SetStateAction<{ category: ActivityCategory; distance: string; pace: string; companionSelect: string; companionUserIds: string[]; companionName: string }>>; save: () => void; cancel: () => void; saving: boolean }) {
+  return <div className="mt-5 rounded-2xl border border-sky-400/20 bg-sky-400/5 p-4"><p className="mb-4 text-sm font-black text-sky-200">Correct activity details</p><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><label className="text-xs text-slate-500">Activity<select value={editForm.category} onChange={(event) => setEditForm((current) => ({ ...current, category: event.target.value as ActivityCategory }))} className="mt-1 block w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white">{categories.filter((category) => category.value !== 'ALL').map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}</select></label><label className="text-xs text-slate-500">Distance<input type="number" min="0" step="0.01" value={editForm.distance} disabled={editForm.category === 'TROOP_GAMES'} onChange={(event) => setEditForm((current) => ({ ...current, distance: event.target.value }))} className="mt-1 block w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-40" /></label><label className="text-xs text-slate-500">Pace (decimal)<input type="number" min="0" step="0.01" value={editForm.pace} disabled={editForm.category !== 'RUN'} onChange={(event) => setEditForm((current) => ({ ...current, pace: event.target.value }))} className="mt-1 block w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-40" /></label><div className="sm:col-span-2 xl:col-span-4"><label className="text-xs text-slate-400">Friend entry type<select aria-label="Friend entry type" value={editForm.companionSelect} onChange={(event) => setEditForm((current) => ({ ...current, companionSelect: event.target.value }))} className="mt-1 block min-h-11 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white"><option value="">Solo activity</option><option value="__registered__">Registered friends</option><option value="__manual__">Friend not registered (admin verified)</option></select></label>{editForm.companionSelect === '__registered__' ? <div className="mt-3"><FriendMultiSelect users={users} value={editForm.companionUserIds} onChange={(ids) => setEditForm((current) => ({ ...current, companionUserIds: ids }))} excludeUserId={activity.user.id} disabled={saving} /></div> : null}</div></div>{editForm.companionSelect === '__manual__' ? <label className="mt-3 block text-xs text-slate-500">Friend&apos;s name<input value={editForm.companionName} onChange={(event) => setEditForm((current) => ({ ...current, companionName: event.target.value }))} className="mt-1 block w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white sm:max-w-xs" /></label> : null}<div className="mt-4 flex justify-end gap-2"><button type="button" onClick={cancel} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-slate-400">Cancel</button><button type="button" onClick={save} disabled={saving || (editForm.category !== 'TROOP_GAMES' && Number(editForm.distance) <= 0)} className="rounded-lg bg-sky-500 px-4 py-2 text-xs font-black text-slate-950 disabled:opacity-40">{saving ? 'Saving…' : 'Save correction'}</button></div></div>;
 }
 
 function Detail({ label, value }: { label: string; value: string }) {

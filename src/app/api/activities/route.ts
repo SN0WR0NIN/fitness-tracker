@@ -1,3 +1,4 @@
+import { ActivityEditError } from '@/lib/activity-duplicates';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -15,6 +16,7 @@ const ActivitySchema = z.object({
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']),
   distance: z.number().positive('Distance must be greater than zero').max(100000, 'Distance is too large').optional(),
   pace: z.number().positive('Pace must be greater than zero').max(60, 'Pace is too large').optional(),
+  companionUserIds: z.array(z.string().min(1).max(200)).max(100).optional(),
   companionUserId: z.string().optional(),
   proofUrl: z.preprocess((val) => (val === '' ? undefined : val), z.string().url().optional()),
 }).superRefine((data, context) => {
@@ -79,6 +81,7 @@ export async function POST(request: NextRequest) {
       distance: validatedData.distance,
       pace: validatedData.pace,
       companionUserId: validatedData.companionUserId,
+      companionUserIds: validatedData.companionUserIds,
       proofUrl: validatedData.proofUrl,
       occurredAt,
     });
@@ -87,6 +90,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(activity, { status: 201 });
   } catch (error) {
     log.failure(error);
+    if (error instanceof ActivityEditError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof ZodError) {
       return NextResponse.json({ error: error.issues[0]?.message || 'Invalid activity details' }, { status: 400 });
     }

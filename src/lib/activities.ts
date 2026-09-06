@@ -1,3 +1,5 @@
+import { resolveActivityFriends } from '@/lib/activity-friends';
+import { activityFriendIds } from '@/lib/friend-selection';
 import { duplicateReason, DuplicateApprovalError, ActivityEditError } from '@/lib/activity-duplicates';
 import { prisma } from '@/lib/prisma';
 import { calculateActivityPoints, resolveEffectiveCategory, getWeekStart, getWeekNumber, ActivityCategory } from '@/lib/scoring';
@@ -23,6 +25,7 @@ interface CreateActivityInput {
   distance?: number;
   pace?: number;
   companionUserId?: string;
+  companionUserIds?: string[];
   proofUrl?: string;
   stravaActivityId?: string;
   occurredAt?: Date;
@@ -41,13 +44,8 @@ interface CreateActivityInput {
 export async function createActivity(input: CreateActivityInput) {
   const settings = await getChallengeSettings();
   const effectiveCategory = resolveEffectiveCategory(input.category, input.pace, settings.scoringRules);
-  const completedWithFriend = !!input.companionUserId;
-
-  let companionName: string | undefined;
-  if (input.companionUserId) {
-    const companionUser = await prisma.user.findUnique({ where: { id: input.companionUserId } });
-    companionName = companionUser?.name;
-  }
+  const friends = await resolveActivityFriends(prisma, input.userId, input);
+  const completedWithFriend = friends.completedWithFriend;
 
   const scoring = calculateActivityPoints({
     category: effectiveCategory,
@@ -69,9 +67,7 @@ export async function createActivity(input: CreateActivityInput) {
       // participants for one. Store zero for that distance-free category.
       distance: effectiveCategory === 'TROOP_GAMES' ? (input.distance ?? 0) : input.distance,
       pace: input.pace,
-      completedWithFriend,
-      companionUserId: input.companionUserId,
-      companion: companionName,
+      ...friends,
       proofUrl: input.proofUrl,
       stravaActivityId: input.stravaActivityId,
       mapPolyline: input.mapPolyline,
@@ -230,6 +226,7 @@ interface UpdateActivityInput {
   proofUrl?: string | null;
   // undefined = leave companion unchanged, null = remove companion, string = set a verified companion
   companionUserId?: string | null;
+  companionUserIds?: string[];
   // admin-only manual override for a friend who hasn't registered an account yet;
   // only takes effect when companionUserId is NOT present in the same request
   companionName?: string | null;
@@ -257,27 +254,19 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
     const newPace = input.pace === undefined ? activity.pace : input.pace;
     const newCategory = resolveEffectiveCategory(requestedCategory, newPace ?? undefined, settings.scoringRules);
 
+    let newCompanionUserIds = activityFriendIds(activity);
     let newCompanionUserId = activity.companionUserId;
     let newCompanionName = activity.companion;
     let newCompletedWithFriend = activity.completedWithFriend;
-    if (input.companionUserId !== undefined) {
-      if (input.companionUserId === null) {
-        newCompanionUserId = null;
-        newCompanionName = null;
-        newCompletedWithFriend = false;
-      } else {
-        const companionUser = await tx.user.findUnique({ where: { id: input.companionUserId } });
-        if (ownerId && (!companionUser || input.companionUserId === ownerId)) throw new ActivityEditError('Choose another registered participant as companion.', 400);
-        newCompanionUserId = input.companionUserId;
-        newCompanionName = companionUser?.name ?? null;
-        newCompletedWithFriend = true;
-      }
+    if (input.companionUserIds !== undefined || input.companionUserId !== undefined) {
+      const friends = await resolveActivityFriends(tx, activity.userId, input);
+      newCompanionUserIds = friends.companionUserIds;
+      newCompanionUserId = friends.companionUserId;
+      newCompanionName = friends.companion;
+      newCompletedWithFriend = friends.completedWithFriend;
     } else if (input.companionName !== undefined) {
-      // Manual override: an admin can grant the friend bonus for a companion who
-      // hasn't registered an account yet (e.g. Strava-synced rides, or a friend
-      // that isn't a troop member). No identity verification is possible here,
-      // it's the reviewing admin's discretion.
       const trimmed = input.companionName?.trim() || null;
+      newCompanionUserIds = [];
       newCompanionUserId = null;
       newCompanionName = trimmed;
       newCompletedWithFriend = !!trimmed;
@@ -324,6 +313,7 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
         distance: newCategory === 'TROOP_GAMES' ? 0 : newDistance,
         pace: newPace,
         completedWithFriend: newCompletedWithFriend,
+        companionUserIds: newCompanionUserIds,
         companionUserId: newCompanionUserId,
         companion: newCompanionName,
         points: scoring.totalPoints,

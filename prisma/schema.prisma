@@ -63,6 +63,7 @@ model Activity {
   duration        Int?       // in minutes
   completedWithFriend Boolean @default(false)
   companion       String?
+  companionUserIds String[]   @default([])
   companionUserId String?
   companionUser   User?      @relation("ActivityCompanion", fields: [companionUserId], references: [id])
   proofUrl        String?

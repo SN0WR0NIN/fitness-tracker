@@ -1,3 +1,4 @@
+import { ActivityEditError } from '@/lib/activity-duplicates';
 import { NextResponse } from 'next/server';
 import { z, ZodError } from 'zod';
 import { requireAdmin } from '@/lib/adminGuard';
@@ -13,6 +14,7 @@ const AdminActivitySchema = z.object({
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']),
   distance: z.number().positive('Distance must be greater than zero').max(100000, 'Distance is too large').optional(),
   pace: z.number().positive('Pace must be greater than zero').max(60, 'Pace is too large').optional(),
+  companionUserIds: z.array(z.string().min(1).max(200)).max(100).optional(),
   companionUserId: z.string().min(1).optional(),
   proofUrl: z.preprocess((value) => value === '' ? undefined : value, z.string().url().optional()),
   approvalMode: z.enum(['PENDING', 'APPROVED']).default('PENDING'),
@@ -56,6 +58,7 @@ export async function POST(request: Request) {
       distance: data.distance,
       pace: data.pace,
       companionUserId: data.companionUserId,
+      companionUserIds: data.companionUserIds,
       proofUrl: data.proofUrl,
       occurredAt,
     });
@@ -64,6 +67,7 @@ export async function POST(request: Request) {
       participantId: target.id,
       participantName: target.name,
       requestedStatus: data.approvalMode,
+      companionUserIds: created.companionUserIds,
       points: created.points,
     });
 
@@ -96,6 +100,7 @@ export async function POST(request: Request) {
       }, { status: 201 });
     }
   } catch (error) {
+    if (error instanceof ActivityEditError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof ZodError) {
       return NextResponse.json({ error: error.issues[0]?.message || 'Invalid activity details.' }, { status: 400 });
     }
