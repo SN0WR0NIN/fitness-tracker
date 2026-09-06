@@ -45,7 +45,7 @@ test('admin can create pending and approved activities for a participant', async
   await form.locator('input[type="date"]').fill('2026-09-05');
   await selects.nth(1).selectOption('CYCLE');
   await form.locator('input[type="number"]').fill('10');
-  await form.locator('input[type="radio"][value="APPROVED"]').check();
+  await form.locator('input[type="radio"]').nth(1).check();
   await form.getByRole('button', { name: 'Create & approve' }).click();
   await expect(page.getByText('Approved activity created')).toBeVisible();
 
