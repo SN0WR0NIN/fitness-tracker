@@ -3,6 +3,7 @@ import { prisma } from './prisma';
 import { DEFAULT_SCORING_RULES, type ScoringRules } from './scoring';
 import { planDailyActivityScores } from './daily-friend-bonus';
 import { assertCompetitionWritable, FeatureError } from './operating-mode';
+import { isRetryableScoringConflict } from './scoring-conflicts';
 
 const fields = { RUN: 'runPoints', CYCLE: 'cyclePoints', SWIM: 'swimPoints', WALK_OR_HIKE: 'hikePoints', TROOP_GAMES: 'troopGamePoints' } as const;
 export async function scoringTransaction<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
@@ -10,9 +11,7 @@ export async function scoringTransaction<T>(work: (tx: Prisma.TransactionClient)
     try {
       return await prisma.$transaction(work, { isolationLevel: 'Serializable', timeout: 40000, maxWait: 5000 });
     } catch (error) {
-      const known = error as { code?: string; meta?: { code?: string } };
-      const retry = known.code === 'P2034' || (known.code === 'P2010' && ['40001', '40P01'].includes(known.meta?.code ?? ''));
-      if (!retry) throw error;
+      if (!isRetryableScoringConflict(error)) throw error;
       if (attempt === 3) throw new FeatureError('Another review changed these scores. Refresh and retry.', 409);
       await new Promise(resolve => setTimeout(resolve, 30 * (attempt + 1)));
     }
@@ -28,7 +27,7 @@ export async function ledgerSettings(tx: Prisma.TransactionClient) {
 
 /** Must execute INSIDE the same serializable transaction as the activity
  * mutation. Rebuild from approved facts, never increment a guessed bonus.
- * Existing achievement/result-dirty triggers still see the final changes. */
+ * Deferred achievement triggers evaluate the final committed allocation. */
 export async function reconcileParticipantScores(tx: Prisma.TransactionClient, userId: string,
   settings?: { rules: ScoringRules; startDate: Date }) {
   await assertCompetitionWritable(tx);
@@ -36,8 +35,8 @@ export async function reconcileParticipantScores(tx: Prisma.TransactionClient, u
   const activities = await tx.activity.findMany({ where: { userId }, include: { pointsLog: true } });
   const existingScores = await tx.weeklyScore.findMany({ where: { userId } });
   const plan = planDailyActivityScores(activities, configuration.rules, configuration.startDate);
-  // Remove displaced bonuses before awarding replacements to avoid an
-  // intermediate inflated points balance in achievement triggers.
+  // Remove displaced bonuses before awarding replacements. Achievement checks
+  // are deferred until commit as mutations before this loop can also reallocate.
   plan.sort((a,b) => (a.scoring.totalPoints-a.activity.points)-(b.scoring.totalPoints-b.activity.points));
   const changed: Array<{ activityId: string; oldPoints: number; newPoints: number; friendBonus: number }> = [];
   const totals = new Map<string, { columnId: string; weekStart: Date; weekNumber: number; totalPoints: number;

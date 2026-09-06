@@ -47,6 +47,7 @@ jobs:
           npx prisma db execute --schema prisma/schema.prisma --file prisma/focused-controls.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/achievement-engine.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/multiple-activity-friends.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/achievement-final-state.sql
       - name: Lint safety app changes
         run: >-
           npx eslint src/lib/system-automation.ts src/lib/duplicate-review.ts src/lib/competition-results.ts src/lib/notifications.ts
@@ -77,7 +78,7 @@ jobs:
       - name: Run member/admin E2E
         run: npx playwright test --config=playwright.config.cjs
       - name: Repeat daily bonus release checks without retries
-        run: npx playwright test --config=playwright.config.cjs e2e/daily-friend-bonus.spec.cjs e2e/daily-friend-bonus-release.spec.cjs --repeat-each=3 --retries=0
+        run: npx playwright test --config=playwright.config.cjs e2e/daily-friend-bonus.spec.cjs e2e/daily-friend-bonus-release.spec.cjs e2e/daily-friend-bonus-achievements.spec.cjs --repeat-each=3 --retries=0
       - name: Collect diagnostics
         if: always()
         run: |
