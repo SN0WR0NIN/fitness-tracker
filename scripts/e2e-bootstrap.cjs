@@ -124,6 +124,24 @@ async function main() {
     dedupe_key TEXT NOT NULL UNIQUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
+  await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS app_internal.password_reset_request (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','ISSUED','COMPLETED','CANCELLED','EXPIRED')),
+    request_count INTEGER NOT NULL DEFAULT 1 CHECK (request_count > 0),
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    issued_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    cancelled_at TIMESTAMPTZ,
+    issued_by_id TEXT REFERENCES "User"(id) ON DELETE SET NULL,
+    issued_by_name TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS password_reset_request_one_active_idx
+    ON app_internal.password_reset_request(user_id) WHERE status IN ('OPEN','ISSUED')`);
 
   const hash = await bcrypt.hash(password, 10);
   await prisma.column.upsert({
@@ -138,6 +156,14 @@ async function main() {
     update: { password: hash, role: 'MEMBER', columnId: 'e2e_column', mustChangePassword: false },
     create: {
       id: 'e2e_member', name: 'E2E Member', email: 'member-e2e@example.test', username: 'e2e-member',
+      password: hash, role: 'MEMBER', columnId: 'e2e_column', mustChangePassword: false,
+    },
+  });
+  await prisma.user.upsert({
+    where: { email: 'reset-e2e@example.test' },
+    update: { password: hash, role: 'MEMBER', columnId: 'e2e_column', mustChangePassword: false, temporaryPasswordExpiresAt: null, loginAttempts: 0, loginWindowStartedAt: null },
+    create: {
+      id: 'e2e_reset_member', name: 'E2E Reset Member', email: 'reset-e2e@example.test', username: 'e2e-reset',
       password: hash, role: 'MEMBER', columnId: 'e2e_column', mustChangePassword: false,
     },
   });
@@ -175,7 +201,7 @@ async function main() {
   await prisma.$executeRawUnsafe(`INSERT INTO app_internal.system_health_check (id,status,details)
     VALUES ('00000000-0000-0000-0000-000000000001','HEALTHY',$1::jsonb)
     ON CONFLICT (id) DO UPDATE SET status=EXCLUDED.status, details=EXCLUDED.details, created_at=NOW()`, JSON.stringify({
-      users: 2, activities: 0, pending: 0, approved: 0, rejected: 0,
+      users: 3, activities: 0, pending: 0, approved: 0, rejected: 0,
       score_mismatches: 0, negative_scores: 0, orphan_activity_users: 0, orphan_activity_columns: 0,
       duplicate_proof_groups: 0, duplicate_strava_groups: 0, approved_without_reviewer: 0,
       rejected_without_reason: 0, outside_challenge_window: 0, possible_duplicate_pairs: 0,
@@ -184,10 +210,10 @@ async function main() {
     }));
   await prisma.$executeRawUnsafe(`INSERT INTO app_internal.operational_backup
     (id,format,version,payload,checksum_sha256,counts)
-    VALUES ('00000000-0000-0000-0000-000000000002','kg-stay-active-operational-backup',4,$1::jsonb,'e2e-checksum', $2::jsonb)
-    ON CONFLICT (id) DO UPDATE SET payload=EXCLUDED.payload, counts=EXCLUDED.counts, version=4, created_at=NOW()`,
-    JSON.stringify({ format: 'kg-stay-active-operational-backup', version: 4, exportedAt: new Date().toISOString(), users: [], activities: [], duplicateReviews: [], weeklyResults: [], notifications: [] }),
-    JSON.stringify({ users: 2, activities: 0, weeklyScores: 0, profileSettings: 0, weeklyGoals: 0, rankingSnapshots: 0, duplicateReviews: 0, weeklyResults: 1, notifications: 1 }));
+    VALUES ('00000000-0000-0000-0000-000000000002','kg-stay-active-operational-backup',5,$1::jsonb,'e2e-checksum', $2::jsonb)
+    ON CONFLICT (id) DO UPDATE SET payload=EXCLUDED.payload, counts=EXCLUDED.counts, version=5, created_at=NOW()`,
+    JSON.stringify({ format: 'kg-stay-active-operational-backup', version: 5, exportedAt: new Date().toISOString(), users: [], activities: [], duplicateReviews: [], weeklyResults: [], notifications: [], passwordResetRequests: [] }),
+    JSON.stringify({ users: 3, activities: 0, weeklyScores: 0, profileSettings: 0, weeklyGoals: 0, rankingSnapshots: 0, duplicateReviews: 0, weeklyResults: 1, notifications: 1, passwordResetRequests: 0 }));
 
   console.log('E2E database bootstrapped.');
 }

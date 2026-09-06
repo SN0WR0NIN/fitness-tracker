@@ -27,8 +27,9 @@ export default function LoginPage() {
     setLoading(false);
 
     if (result?.error) {
+      if (result.error === 'PASSWORD_RESET_REQUIRED') { router.push(`/auth/reset-password?identifier=${encodeURIComponent(email)}`); return; }
       if (result.error === 'SETUP_REQUIRED') { router.push('/auth/setup'); return; }
-      setError('Invalid credentials, expired temporary password, or attempt limit reached. Try again after 15 minutes or contact your admin.');
+      setError('Invalid credentials, expired temporary password, or attempt limit reached. Try again after 15 minutes or use Forgot password.');
       return;
     }
 
@@ -72,9 +73,10 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Password
-              </label>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+                <Link href="/auth/forgot-password" className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400">Forgot password?</Link>
+              </div>
               <input
                 type="password"
                 required
@@ -95,7 +97,8 @@ export default function LoginPage() {
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
-            <Link href="/auth/setup" className="mb-4 block text-blue-500">Have temporary credentials? Set up your account</Link>
+            <Link href="/auth/setup" className="mb-3 block text-blue-500">Have first-time temporary credentials? Set up your account</Link>
+            <Link href="/auth/reset-password" className="mb-4 block text-blue-500">Have a password-reset temporary password?</Link>
             Don&apos;t have an account?{' '}
             <Link href="/auth/signup" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium">
               Sign up

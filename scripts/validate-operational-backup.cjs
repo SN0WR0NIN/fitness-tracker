@@ -35,7 +35,7 @@ const uniqueIds = (rows, name) => {
 const pick = (row, camel, snake) => row?.[camel] ?? row?.[snake];
 
 assert(backup?.format === 'kg-stay-active-operational-backup', 'Unexpected backup format');
-assert([1, 2, 3, 4].includes(backup?.version), 'Unsupported backup version');
+assert([1, 2, 3, 4, 5].includes(backup?.version), 'Unsupported backup version');
 assert(typeof backup?.exportedAt === 'string' && Number.isFinite(Date.parse(backup.exportedAt)), 'exportedAt must be an ISO date');
 assert(backup?.challenge && typeof backup.challenge === 'object', 'challenge settings are missing');
 
@@ -49,6 +49,7 @@ const rankingSnapshots = optionalArray(backup?.rankingSnapshots, 'rankingSnapsho
 const duplicateReviews = optionalArray(backup?.duplicateReviews, 'duplicateReviews');
 const weeklyResults = optionalArray(backup?.weeklyResults, 'weeklyResults');
 const notifications = optionalArray(backup?.notifications, 'notifications');
+const passwordResetRequests = optionalArray(backup?.passwordResetRequests, 'passwordResetRequests');
 array(backup?.announcements, 'announcements');
 array(backup?.audit, 'audit');
 
@@ -111,10 +112,7 @@ for (const review of duplicateReviews) {
   const duplicateActivityId = pick(review, 'duplicateActivityId', 'duplicate_activity_id') ?? null;
   const keptActivityId = pick(review, 'keptActivityId', 'kept_activity_id') ?? null;
   assert(typeof pairKey === 'string' && pairKey.length > 0, 'Duplicate review is missing pair key');
-  if (typeof pairKey === 'string') {
-    assert(!reviewKeys.has(pairKey), `Duplicate review contains duplicate pair key ${pairKey}`);
-    reviewKeys.add(pairKey);
-  }
+  if (typeof pairKey === 'string') { assert(!reviewKeys.has(pairKey), `Duplicate review contains duplicate pair key ${pairKey}`); reviewKeys.add(pairKey); }
   assert(activityIds.has(activityAId), `Duplicate review ${pairKey} references missing activity ${activityAId}`);
   assert(activityIds.has(activityBId), `Duplicate review ${pairKey} references missing activity ${activityBId}`);
   assert(['DIFFERENT', 'DUPLICATE', 'LATER'].includes(status), `Duplicate review ${pairKey} has invalid status ${status}`);
@@ -160,6 +158,20 @@ for (const notification of notifications) {
   if (typeof dedupeKey === 'string') { assert(!notificationKeys.has(dedupeKey), `Duplicate notification dedupe key ${dedupeKey}`); notificationKeys.add(dedupeKey); }
 }
 
+const resetIds = new Set();
+for (const reset of passwordResetRequests) {
+  const id = String(reset?.id ?? '');
+  const userId = pick(reset, 'userId', 'user_id');
+  const issuedById = pick(reset, 'issuedById', 'issued_by_id');
+  assert(id.length > 0, 'Password reset request is missing id');
+  if (id) { assert(!resetIds.has(id), `Duplicate password reset request id ${id}`); resetIds.add(id); }
+  assert(userIds.has(userId), `Password reset request ${id} references missing user ${userId}`);
+  if (issuedById != null) assert(userIds.has(issuedById), `Password reset request ${id} references missing issuing admin ${issuedById}`);
+  assert(['OPEN','ISSUED','COMPLETED','CANCELLED','EXPIRED'].includes(reset?.status), `Password reset request ${id} has invalid status ${reset?.status}`);
+  assert(Number.isInteger(pick(reset, 'requestCount', 'request_count')) && pick(reset, 'requestCount', 'request_count') > 0, `Password reset request ${id} has invalid request count`);
+  assert(reset?.temporaryPassword === undefined && reset?.password === undefined && reset?.passwordHash === undefined, `Password reset request ${id} contains a password secret`);
+}
+
 if (errors.length) {
   console.error(`Backup validation failed with ${errors.length} problem(s):`);
   for (const error of errors) console.error(`- ${error}`);
@@ -180,5 +192,6 @@ console.log(JSON.stringify({
   duplicateReviews: duplicateReviews.length,
   weeklyResults: weeklyResults.length,
   notifications: notifications.length,
+  passwordResetRequests: passwordResetRequests.length,
   excludes: backup.excludes || [],
 }, null, 2));

@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Activity, Award, CheckCircle2, DatabaseBackup, FileClock, Link2, Megaphone, Settings, ShieldCheck, TriangleAlert, Trophy, Users } from 'lucide-react';
+import { Activity, Award, CheckCircle2, DatabaseBackup, FileClock, KeyRound, Link2, Megaphone, Settings, ShieldCheck, TriangleAlert, Trophy, Users } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import SystemStatusCard from '@/components/SystemStatusCard';
 import { requireAdmin } from '@/lib/adminGuard';
 import { getAuditEntries } from '@/lib/admin-control';
+import { getActivePasswordResetCount } from '@/lib/password-reset';
 import { prisma } from '@/lib/prisma';
 import { getLatestOperationalBackupSummary, getLatestScheduledHealth } from '@/lib/system-automation';
 
@@ -15,7 +16,7 @@ export default async function AdminPage() {
   if (guard.status === 401) redirect('/auth/login');
   if (guard.error) redirect('/dashboard');
 
-  const [users, activities, pending, approvedPoints, audit, stravaConnected, scheduledHealth, automatedBackup] = await Promise.all([
+  const [users, activities, pending, approvedPoints, audit, stravaConnected, scheduledHealth, automatedBackup, passwordResets] = await Promise.all([
     prisma.user.count(),
     prisma.activity.count(),
     prisma.activity.count({ where: { status: 'PENDING' } }),
@@ -24,6 +25,7 @@ export default async function AdminPage() {
     prisma.user.count({ where: { stravaAthleteId: { not: null } } }),
     getLatestScheduledHealth(),
     getLatestOperationalBackupSummary(),
+    getActivePasswordResetCount(),
   ]);
 
   const integrity = scheduledHealth?.details;
@@ -40,7 +42,7 @@ export default async function AdminPage() {
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-lime-300"><ShieldCheck className="h-4 w-4" />Admin operations</p>
           <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div><h1 className="text-3xl font-black sm:text-5xl">Command Centre 2.0</h1><p className="mt-3 text-slate-400">A faster operations-first landing page for the challenge.</p></div>
-            <div className="flex flex-wrap gap-2"><AdminLink href="/admin/activities" label="Review queue" /><AdminLink href="/admin/duplicates" label="Duplicate review" /><AdminLink href="/admin/awards" label="Weekly awards" /><AdminLink href="/admin/users" label="Manage users" /><AdminLink href="/admin/settings" label="Settings" /></div>
+            <div className="flex flex-wrap gap-2"><AdminLink href="/admin/activities" label="Review queue" /><AdminLink href="/admin/password-resets" label={`Password resets${passwordResets ? ` (${passwordResets})` : ''}`} /><AdminLink href="/admin/duplicates" label="Duplicate review" /><AdminLink href="/admin/awards" label="Weekly awards" /><AdminLink href="/admin/users" label="Manage users" /><AdminLink href="/admin/settings" label="Settings" /></div>
           </div>
         </header>
 
@@ -59,28 +61,10 @@ export default async function AdminPage() {
             <span className="text-xs text-slate-600">{checkTime ? `Last check ${formatSg(checkTime)}` : 'No scheduled check recorded'}</span>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <HealthStat
-              icon={(integrity?.score_mismatches ?? 1) === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />}
-              label="Score reconciliation"
-              value={integrity ? (integrity.score_mismatches === 0 ? 'Balanced' : `${integrity.score_mismatches} mismatch${integrity.score_mismatches === 1 ? '' : 'es'}`) : 'No result'}
-              detail={scheduledHealth ? `Scheduled status: ${scheduledHealth.status}` : 'Waiting for scheduler'}
-              good={Boolean(integrity && integrity.score_mismatches === 0)}
-            />
-            <HealthStat
-              icon={(integrity?.possible_duplicate_pairs ?? 1) === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />}
-              label="Duplicate review"
-              value={integrity ? `${openDuplicatePairs} open` : 'No result'}
-              detail={`${deferredDuplicatePairs} deferred · decisions are tracked`}
-              good={Boolean(integrity && integrity.possible_duplicate_pairs === 0)}
-            />
+            <HealthStat icon={(integrity?.score_mismatches ?? 1) === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />} label="Score reconciliation" value={integrity ? (integrity.score_mismatches === 0 ? 'Balanced' : `${integrity.score_mismatches} mismatch${integrity.score_mismatches === 1 ? '' : 'es'}`) : 'No result'} detail={scheduledHealth ? `Scheduled status: ${scheduledHealth.status}` : 'Waiting for scheduler'} good={Boolean(integrity && integrity.score_mismatches === 0)} />
+            <HealthStat icon={(integrity?.possible_duplicate_pairs ?? 1) === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />} label="Duplicate review" value={integrity ? `${openDuplicatePairs} open` : 'No result'} detail={`${deferredDuplicatePairs} deferred · decisions are tracked`} good={Boolean(integrity && integrity.possible_duplicate_pairs === 0)} />
             <HealthStat icon={<Link2 className="h-5 w-5" />} label="Strava connected" value={`${stravaConnected} / ${users}`} detail="Participant accounts" good />
-            <HealthStat
-              icon={<DatabaseBackup className="h-5 w-5" />}
-              label="Automated backup"
-              value={automatedBackup ? automatedBackup.createdAt.toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short' }) : 'Not recorded'}
-              detail={automatedBackup ? `${automatedBackup.counts.activities ?? 0} activities · checksum ${automatedBackup.checksumSha256.slice(0, 8)}…` : 'Waiting for first snapshot'}
-              good={Boolean(automatedBackup)}
-            />
+            <HealthStat icon={<DatabaseBackup className="h-5 w-5" />} label="Automated backup" value={automatedBackup ? automatedBackup.createdAt.toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short' }) : 'Not recorded'} detail={automatedBackup ? `${automatedBackup.counts.activities ?? 0} activities · checksum ${automatedBackup.checksumSha256.slice(0, 8)}…` : 'Waiting for first snapshot'} good={Boolean(automatedBackup)} />
           </div>
         </section>
 
@@ -89,6 +73,7 @@ export default async function AdminPage() {
           <p className="mt-1 text-sm text-slate-500">Jump directly to the most common admin tasks.</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Quick href="/admin/activities" icon={<FileClock className="h-5 w-5" />} label="Review pending" />
+            <Quick href="/admin/password-resets" icon={<KeyRound className="h-5 w-5" />} label={`Password resets (${passwordResets})`} />
             <Quick href="/admin/duplicates" icon={<TriangleAlert className="h-5 w-5" />} label={`Duplicate review (${openDuplicatePairs})`} />
             <Quick href="/admin/awards" icon={<Award className="h-5 w-5" />} label="Weekly awards" />
             <Quick href="/results" icon={<Trophy className="h-5 w-5" />} label="Public results" />
@@ -101,34 +86,16 @@ export default async function AdminPage() {
         </section>
 
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
-          <h2 className="text-lg font-black">Admin activity feed</h2>
-          <p className="mt-1 text-sm text-slate-500">Recent operational changes from the existing audit trail.</p>
-          <div className="mt-5 divide-y divide-white/5">
-            {recentAudit.length ? recentAudit.map((item) => (
-              <div key={item.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div><p className="text-sm font-bold">{item.action}</p><p className="mt-1 text-xs text-slate-500">{item.actorName} · {item.target}</p></div>
-                <time className="text-xs text-slate-600">{item.createdAt.toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</time>
-              </div>
-            )) : <p className="py-8 text-center text-sm text-slate-500">No admin audit entries yet.</p>}
-          </div>
+          <h2 className="text-lg font-black">Admin activity feed</h2><p className="mt-1 text-sm text-slate-500">Recent operational changes from the existing audit trail.</p>
+          <div className="mt-5 divide-y divide-white/5">{recentAudit.length ? recentAudit.map((item) => <div key={item.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold">{item.action}</p><p className="mt-1 text-xs text-slate-500">{item.actorName} · {item.target}</p></div><time className="text-xs text-slate-600">{item.createdAt.toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</time></div>) : <p className="py-8 text-center text-sm text-slate-500">No admin audit entries yet.</p>}</div>
         </section>
       </main>
     </div>
   );
 }
 
-function formatSg(value: Date) {
-  return value.toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-}
-function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><span className="text-lime-300">{icon}</span><p className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-2 text-3xl font-black">{value}</p></div>;
-}
-function HealthStat({ icon, label, value, detail, good }: { icon: React.ReactNode; label: string; value: string; detail: string; good: boolean }) {
-  return <div className={`rounded-xl border p-4 ${good ? 'border-emerald-400/15 bg-emerald-400/[0.06]' : 'border-amber-400/20 bg-amber-400/[0.07]'}`}><span className={good ? 'text-emerald-300' : 'text-amber-300'}>{icon}</span><p className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-1 text-lg font-black">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>;
-}
-function Quick({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
-  return <Link href={href} className="rounded-xl border border-white/10 bg-black/10 p-4 transition hover:border-lime-300/30"><span className="text-lime-300">{icon}</span><p className="mt-4 text-sm font-black">{label}</p></Link>;
-}
-function AdminLink({ href, label }: { href: string; label: string }) {
-  return <Link href={href} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-bold transition hover:text-lime-300">{label}</Link>;
-}
+function formatSg(value: Date) { return value.toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) { return <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><span className="text-lime-300">{icon}</span><p className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-2 text-3xl font-black">{value}</p></div>; }
+function HealthStat({ icon, label, value, detail, good }: { icon: React.ReactNode; label: string; value: string; detail: string; good: boolean }) { return <div className={`rounded-xl border p-4 ${good ? 'border-emerald-400/15 bg-emerald-400/[0.06]' : 'border-amber-400/20 bg-amber-400/[0.07]'}`}><span className={good ? 'text-emerald-300' : 'text-amber-300'}>{icon}</span><p className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-1 text-lg font-black">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>; }
+function Quick({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) { return <Link href={href} className="rounded-xl border border-white/10 bg-black/10 p-4 transition hover:border-lime-300/30"><span className="text-lime-300">{icon}</span><p className="mt-4 text-sm font-black">{label}</p></Link>; }
+function AdminLink({ href, label }: { href: string; label: string }) { return <Link href={href} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-bold transition hover:text-lime-300">{label}</Link>; }

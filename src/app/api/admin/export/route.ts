@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const type = request.nextUrl.searchParams.get('type') || 'activities';
   if (type === 'backup') {
     try {
-      const [settings, announcements, columns, users, activities, weeklyScores, profileSettings, weeklyGoals, rankingSnapshots, duplicateReviews, weeklyResults, notifications, audit] = await Promise.all([
+      const [settings, announcements, columns, users, activities, weeklyScores, profileSettings, weeklyGoals, rankingSnapshots, duplicateReviews, weeklyResults, notifications, passwordResetRequests, audit] = await Promise.all([
         getChallengeSettings(),
         getAnnouncements(),
         getManagedColumns(),
@@ -30,13 +30,14 @@ export async function GET(request: NextRequest) {
         prisma.$queryRawUnsafe('SELECT pair_key, activity_a_id, activity_b_id, status, duplicate_activity_id, kept_activity_id, note, reviewed_by_id, reviewed_by_name, reviewed_at, created_at, updated_at FROM app_internal.duplicate_review_decision ORDER BY updated_at'),
         prisma.$queryRawUnsafe('SELECT * FROM app_internal.weekly_result ORDER BY display_start_date, week_number'),
         prisma.$queryRawUnsafe('SELECT id, user_id, kind, level, title, message, href, metadata, dedupe_key, created_at FROM app_internal.notification ORDER BY created_at'),
+        prisma.$queryRawUnsafe('SELECT id, user_id, status, request_count, requested_at, last_requested_at, issued_at, expires_at, completed_at, cancelled_at, issued_by_id, issued_by_name, created_at, updated_at FROM app_internal.password_reset_request ORDER BY created_at'),
         getAuditEntries(10000),
       ]);
       const backup = {
         format: 'kg-stay-active-operational-backup',
-        version: 4,
+        version: 5,
         exportedAt: new Date().toISOString(),
-        excludes: ['passwords', 'Strava access tokens', 'Strava refresh tokens'],
+        excludes: ['passwords', 'Strava access tokens', 'Strava refresh tokens', 'temporary password reset secrets'],
         challenge: settings,
         announcements,
         columns,
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
         duplicateReviews,
         weeklyResults,
         notifications,
+        passwordResetRequests,
         audit,
       };
       try {
@@ -62,6 +64,7 @@ export async function GET(request: NextRequest) {
           duplicateReviews: Array.isArray(duplicateReviews) ? duplicateReviews.length : 0,
           weeklyResults: Array.isArray(weeklyResults) ? weeklyResults.length : 0,
           notifications: Array.isArray(notifications) ? notifications.length : 0,
+          passwordResetRequests: Array.isArray(passwordResetRequests) ? passwordResetRequests.length : 0,
         });
       } catch (auditError) {
         console.warn('Backup export completed but audit entry could not be recorded.', auditError);
