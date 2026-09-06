@@ -1,0 +1,9 @@
+# Daily friend bonus correction
+
+The participant receives the configured +3 bonus once per Singapore calendar day per eligible sport: RUN, CYCLE, SWIM and WALK_OR_HIKE. The current daily maximum is +12. Troop Games retains its fixed session score with no friend bonus. A slow run scored as walking uses the walking allowance. A below-minimum walk cannot claim a bonus. Additional friends, different friends, repeated activities, admin-created entries and replayed approvals do not multiply bonuses.
+
+Approved entries claim first; within a status, chronological activity time, then creation time and id provide a deterministic allocation. Pending points are estimates and never included in standings. Reject/reset/clear/correct operations reallocate to the next eligible entry inside the same serializable transaction. Final totals and PointsLog breakdowns are rebuilt from activities, not blindly incremented. Correction requests still change nothing until approved. Existing result-dirty and achievement triggers remain active.
+
+No new database column or runtime DDL is required. Historical records are not silently deleted. Before production release take a private operational backup, inspect the historical adjustment preview, and run the confirmed Admin Settings & scoring Recalculate action using this ledger. Rebuild any finalized weekly results flagged dirty. Do not claim historic standings are corrected until that step succeeds. Test with the disposable localhost CI database only; never seed test participants or workouts in production.
+
+Tests cover per-sport/day caps, four-sport +12, repeated runs, midnight Singapore boundaries, multi-person selection, concurrent/replayed approvals, rejections/resets, correction week movement, admin creation and complete score reconciliation. PWA offline reliability is a separate issue and is not changed in this patch.
