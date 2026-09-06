@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z, ZodError } from 'zod';
 import { requireAdmin } from '@/lib/adminGuard';
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
   try {
     requireSameOrigin(request);
     const data = schema.parse(await request.json());
-    const state = await prisma.$transaction(async (tx) => {
+    const state = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.$queryRaw`SELECT id FROM "ChallengeSetting" WHERE id='primary' FOR UPDATE`;
       const previous = await getOperatingState(tx);
       if (previous.updatedAt !== data.expectedUpdatedAt) throw new FeatureError('Settings changed in another session. Reload these controls and try again.', 409);
