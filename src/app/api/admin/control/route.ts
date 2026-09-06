@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z, ZodError } from 'zod';
 import { requireAdmin } from '@/lib/adminGuard';
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
     // The separate maintenance endpoint requires confirmation and audits them.
     if (action === 'settings.update') {
       const data = SettingsSchema.parse(payload);
-      const changed = await prisma.$transaction(async (tx) => {
+      const changed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const rows = await tx.$queryRaw<Array<{ readOnlyMode: boolean }>>`SELECT "readOnlyMode" FROM "ChallengeSetting" WHERE id='primary' FOR UPDATE`;
         if (!rows[0] || rows[0].readOnlyMode) return false;
         await tx.$executeRaw`UPDATE "ChallengeSetting" SET "challengeName"=${data.challengeName},"startDate"=${data.startDate},"endDate"=${data.endDate},"weeklyGoal"=${data.weeklyGoal},"scoringRules"=${JSON.stringify(data.scoringRules)}::jsonb,"updatedAt"=CURRENT_TIMESTAMP WHERE id='primary'`;
