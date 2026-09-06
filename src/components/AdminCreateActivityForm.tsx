@@ -1,4 +1,5 @@
 'use client';
+import { useDailyFriendBonus } from '@/components/useDailyFriendBonus';
 import FriendMultiSelect from '@/components/FriendMultiSelect';
 
 
@@ -58,12 +59,13 @@ export default function AdminCreateActivityForm({ users, scoringRules, challenge
   const distanceNumber = distance ? Number(distance) : undefined;
   const paceNumber = category === 'RUN' ? parsePace(pace) : undefined;
   const effectiveCategory = resolveEffectiveCategory(category, paceNumber, scoringRules);
+  const dailyBonus = useDailyFriendBonus(userId, activityDate, effectiveCategory);
   const points = useMemo(() => calculateActivityPoints({
     category: effectiveCategory,
     distance: distanceNumber,
     pace: paceNumber,
-    completedWithFriend: companionUserIds.length > 0,
-  }, scoringRules).totalPoints, [effectiveCategory, distanceNumber, paceNumber, companionUserIds, scoringRules]);
+    completedWithFriend: companionUserIds.length > 0 && dailyBonus.available,
+  }, scoringRules).totalPoints, [effectiveCategory, distanceNumber, paceNumber, companionUserIds, scoringRules, dailyBonus.available]);
 
   const validation = useMemo(() => {
     if (!userId) return 'Choose the participant receiving this activity.';
@@ -173,6 +175,7 @@ export default function AdminCreateActivityForm({ users, scoringRules, challenge
           {category !== 'TROOP_GAMES' ? <div className="grid gap-4 sm:grid-cols-2"><label className="block">Distance ({category === 'SWIM' ? 'metres' : 'km'})<input required type="number" min="0.01" step="0.01" value={distance} onChange={(event) => setDistance(event.target.value)} className={field} /></label>{category === 'RUN' ? <label className="block">Pace (min/km)<input value={pace} onChange={(event) => setPace(event.target.value)} placeholder="6:30 or 6.5" className={field} /></label> : <div />}</div> : <p className="rounded-xl border border-white/10 bg-black/10 p-4 text-sm text-slate-400">Troop Games uses the configured fixed points and does not require distance.</p>}
 
           <FriendMultiSelect users={users} value={companionUserIds} onChange={setCompanionUserIds} excludeUserId={userId} disabled={submitting || uploading || !userId} />
+          {companionUserIds.length ? <p role="status" className="text-sm text-sky-200">{dailyBonus.message}</p> : null}
 
           <div><p className="font-medium">Proof screenshot <span className="text-slate-500">(optional)</span></p>{proofUrl ? <div className="mt-3 overflow-hidden rounded-xl border border-white/10"><div className="relative h-56 bg-black/20"><Image src={proofUrl} alt="Uploaded activity proof" fill unoptimized sizes="(max-width: 1024px) 100vw, 640px" className="object-contain" /></div><button type="button" onClick={() => setProofUrl('')} className="w-full border-t border-white/10 p-3 text-sm text-rose-300">Remove proof</button></div> : <label className="mt-3 flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-black/10 p-5 text-center hover:border-orange-300/40"><ImagePlus className="h-7 w-7 text-orange-300" /><span className="mt-2 text-sm font-bold">{uploading ? 'Uploading…' : 'Choose proof image'}</span><span className="mt-1 text-xs text-slate-500">JPEG, PNG, WebP or GIF · max 4MB</span><input disabled={uploading} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadProof(file); event.target.value = ''; }} /></label>}</div>
         </div>

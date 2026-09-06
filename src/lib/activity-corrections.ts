@@ -1,10 +1,12 @@
 import { resolveActivityFriends } from '@/lib/activity-friends';
 import { activityFriendIds, sameFriendSelection } from '@/lib/friend-selection';
+import { reconcileParticipantScores } from '@/lib/scoring-ledger';
+import { planDailyActivityScores } from '@/lib/daily-friend-bonus';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { Activity, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { DEFAULT_SCORING_RULES, calculateActivityPoints, resolveEffectiveCategory, getWeekStart, getWeekNumber } from '@/lib/scoring';
+import { DEFAULT_SCORING_RULES, resolveEffectiveCategory, getWeekStart, getWeekNumber } from '@/lib/scoring';
 import type { ChallengeSettings } from '@/lib/admin-control';
 import { duplicateReason } from '@/lib/activity-duplicates';
 import { isWithinChallengeWindow, parseActivityDate, singaporeDate } from '@/lib/activity-date';
@@ -56,7 +58,9 @@ async function prepareChange(tx: Prisma.TransactionClient, activity: Activity, p
   }
   const category = resolveEffectiveCategory(proposed.category, proposed.pace ?? undefined, settings.scoringRules);
   const distance = category === 'TROOP_GAMES' ? 0 : proposed.distance;
-  const scoring = calculateActivityPoints({ category, distance, pace: proposed.pace ?? undefined, completedWithFriend: Boolean(companion) }, settings.scoringRules);
+  const siblings = await tx.activity.findMany({ where: { userId: activity.userId, id: { not: activity.id } } });
+  const candidate = { ...activity, category, distance, pace: proposed.pace, occurredAt, completedWithFriend: Boolean(companion) };
+  const scoring = planDailyActivityScores([...siblings, candidate], settings.scoringRules, settings.startDate).find(item => item.activity.id === activity.id)!.scoring;
   return { category, distance, pace: proposed.pace, duration: proposed.duration, occurredAt, weekStart: getWeekStart(occurredAt), weekNumber: getWeekNumber(occurredAt,settings.startDate), proofUrl: proposed.proofUrl, companionUserId: friends.companionUserId, companionUserIds: friends.companionUserIds, companion, completedWithFriend: Boolean(companion), points: scoring.totalPoints, scoring };
 }
 
@@ -147,17 +151,8 @@ export async function decideCorrection(adminId: string, input: z.infer<typeof De
       const {scoring,...data} = change;
       const updated = await tx.activity.update({where:{id:activity.id},data:{...data,reviewedById:adminId,reviewedAt:new Date()}});
       await tx.pointsLog.updateMany({where:{activityId:activity.id},data:scoring});
-      const weeks = [...new Set([activity.weekStart.toISOString(),updated.weekStart.toISOString()])].sort();
-      for (const week of weeks) {
-        const weekStart = new Date(week);
-        const approved = await tx.activity.findMany({where:{userId:activity.userId,weekStart,status:'APPROVED'},select:{category:true,points:true,columnId:true,weekNumber:true}});
-        const totals = {totalPoints:0,runPoints:0,cyclePoints:0,swimPoints:0,hikePoints:0,troopGamePoints:0};
-        const fields = {RUN:'runPoints',CYCLE:'cyclePoints',SWIM:'swimPoints',WALK_OR_HIKE:'hikePoints',TROOP_GAMES:'troopGamePoints'} as const;
-        for (const entry of approved) {totals.totalPoints+=entry.points;totals[fields[entry.category]]+=entry.points;}
-        const weekNumber = week === updated.weekStart.toISOString() ? updated.weekNumber : activity.weekNumber;
-        await tx.weeklyScore.upsert({where:{userId_weekStart:{userId:activity.userId,weekStart}},update:{...totals,weekNumber},create:{userId:activity.userId,columnId:approved[0]?.columnId ?? activity.columnId,weekStart,weekNumber,...totals}});
-      }
-      applied=correctionSnapshot(updated);
+      await reconcileParticipantScores(tx, activity.userId);
+      applied=correctionSnapshot(await tx.activity.findUniqueOrThrow({where:{id:activity.id}}));
       const dirty = await tx.$queryRaw<Array<{week_number:number}>>`SELECT week_number FROM app_internal.weekly_result_dirty WHERE (season_key,week_number) IN (SELECT season_key,week_number FROM app_internal.weekly_result WHERE week_start_key IN (${activity.weekStart}::date,${updated.weekStart}::date))`;
       dirtyWeeks=dirty.map((row)=>row.week_number);
     }

@@ -1,3 +1,4 @@
+throw new Error('Retired per-entry scoring script. Use Admin Settings & scoring: Recalculate with the daily-bonus ledger.');
 /**
  * One-off migration: recompute all Activity.points/category using the new
  * official scoring formula, and rebuild WeeklyScore from scratch based on

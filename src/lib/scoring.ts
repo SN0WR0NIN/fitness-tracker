@@ -7,7 +7,8 @@
  * - Swim: 1pt per 100m.
  * - Walk/Hike: 1pt/km, but requires a minimum 5km distance to count at all.
  * - Troop Games: 5 points flat.
- * - Friend bonus: +3pts, only when completed with a verified registered companion.
+ * - Friend bonus: +3 per participant / Singapore day / eligible sport; maximum 12 across four sports.
+ *   No extra bonus for Troop Games, repeated same-sport entries, or extra friends.
  * - Final totals are rounded UP to the nearest 0.5 point.
  */
 
@@ -127,7 +128,9 @@ export function calculateActivityPoints(input: ScoringInput, rules: ScoringRules
       break;
   }
 
-  const friendBonus = input.completedWithFriend ? rules.friendBonus : 0;
+  // Daily allocation is enforced by planDailyActivityScores in the server ledger.
+  // The standalone calculation represents a maximum eligible estimate only.
+  const friendBonus = input.completedWithFriend && input.category !== 'TROOP_GAMES' && basePoints > 0 ? rules.friendBonus : 0;
   const totalPoints = Math.ceil((basePoints + friendBonus) * 2) / 2;
 
   return {

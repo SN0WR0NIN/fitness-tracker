@@ -1,3 +1,4 @@
+import { reconcileParticipantScores } from '@/lib/scoring-ledger';
 import { resolveActivityFriends } from '@/lib/activity-friends';
 import { activityFriendIds } from '@/lib/friend-selection';
 import { NextResponse } from 'next/server';
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
       }
       await tx.activity.updateMany({ where: { reviewedById: sourceId }, data: { reviewedById: targetId } });
       await tx.weeklyScore.deleteMany({ where: { userId: sourceId } });
+      await reconcileParticipantScores(tx, targetId);
       // The empty, login-disabled placeholder is removed only after its history is transferred.
       await tx.user.delete({ where: { id: sourceId } });
     }, { isolationLevel: 'Serializable' });
