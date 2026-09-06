@@ -72,9 +72,10 @@ test('forgot password request can be safely administered and completed once', as
   await loginWith(memberPage, RESET_LOGIN, temporaryPassword);
   await expect(memberPage).toHaveURL(/\/auth\/reset-password/);
 
-  await memberPage.getByLabel('Temporary reset password').fill(temporaryPassword);
-  await memberPage.getByLabel('New password').fill(NEW_PASSWORD);
-  await memberPage.getByLabel('Confirm new password').fill(NEW_PASSWORD);
+  await memberPage.getByLabel('Temporary reset password', { exact: true }).fill(temporaryPassword);
+  const newPasswordFields = memberPage.locator('input[autocomplete="new-password"]');
+  await newPasswordFields.nth(0).fill(NEW_PASSWORD);
+  await newPasswordFields.nth(1).fill(NEW_PASSWORD);
   await memberPage.getByRole('button', { name: 'Set new password' }).click();
   await expect(memberPage.getByText('Password reset complete. Log in with your new password.')).toBeVisible();
 
