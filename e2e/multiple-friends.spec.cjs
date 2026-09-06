@@ -19,6 +19,7 @@ async function json(response, status = 200) {
 }
 async function login(browser, baseURL, user, password) {
   const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
+  context.setDefaultTimeout(10000);
   const csrf = await json(await context.request.get('/api/auth/csrf'));
   await json(await context.request.post('/api/auth/callback/credentials', { form: { csrfToken: csrf.csrfToken, email: user.email, password, callbackUrl: `${baseURL}/dashboard`, json: 'true' } }));
   expect((await json(await context.request.get('/api/auth/session'))).user.id).toBe(user.id);
@@ -59,7 +60,7 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     expect(one.points-solo.points).toBeCloseTo(bonus,8);
 
     await page.goto('/activities/new');
-    await page.getByLabel('Activity date',{exact:true}).fill('2026-09-03');
+    await page.getByLabel(/^Activity date/).fill('2026-09-03');
     await page.getByPlaceholder('e.g. 5.00').fill('5');
     await page.getByPlaceholder('e.g. 6:30').fill('6');
     await page.getByRole('checkbox',{name:'I completed this with friends',exact:true}).check();
