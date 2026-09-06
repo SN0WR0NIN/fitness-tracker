@@ -6,7 +6,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateActivity } from '@/lib/activities';
-const EditSchema=z.object({category:z.enum(['RUN','CYCLE','SWIM','WALK_OR_HIKE','TROOP_GAMES']).optional(),distance:z.number().positive().max(100000).optional(),pace:z.number().positive().max(60).nullable().optional(),companionUserId:z.string().min(1).nullable().optional(),proofUrl:z.string().url().max(2048).nullable().optional()}).strict().refine((value)=>Object.keys(value).length>0,'No changes supplied');
+const EditSchema=z.object({category:z.enum(['RUN','CYCLE','SWIM','WALK_OR_HIKE','TROOP_GAMES']).optional(),distance:z.number().positive().max(100000).optional(),pace:z.number().positive().max(60).nullable().optional(),companionUserIds: z.array(z.string().min(1).max(200)).max(100).optional(),
+  companionUserId: z.string().min(1).nullable().optional(),proofUrl:z.string().url().max(2048).nullable().optional()}).strict().refine((value)=>Object.keys(value).length>0,'No changes supplied');
 export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){
   try{
     const session=await getServerSession(authOptions);if(!session?.user?.id)return NextResponse.json({error:'Not authenticated'},{status:401});

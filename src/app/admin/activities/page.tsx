@@ -19,6 +19,7 @@ type ReviewActivity = {
   completedWithFriend: boolean;
   companion: string | null;
   companionUserId: string | null;
+  companionUserIds: string[];
   proofUrl: string | null;
   stravaActivityId: string | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -61,6 +62,7 @@ export default async function AdminActivitiesPage() {
       orderBy: { createdAt: 'desc' },
     }),
     prisma.user.findMany({
+      where: { role: 'MEMBER', columnId: { not: null } },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),

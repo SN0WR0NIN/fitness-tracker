@@ -1,3 +1,4 @@
+import { ActivityEditError } from '@/lib/activity-duplicates';
 import { NextResponse } from 'next/server';
 import { z, ZodError } from 'zod';
 import { requireAdmin } from '@/lib/adminGuard';
@@ -9,6 +10,7 @@ const EditActivitySchema = z.object({
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']).optional(),
   distance: z.number().positive('Distance must be greater than zero').max(100000).optional(),
   pace: z.number().positive('Pace must be greater than zero').max(60).optional(),
+  companionUserIds: z.array(z.string().min(1).max(200)).max(100).optional(),
   companionUserId: z.string().nullable().optional(),
   companionName: z.string().nullable().optional(),
 });
@@ -48,6 +50,7 @@ export async function PATCH(
     await recordAdminAudit(guard.userId, 'Corrected activity', id, data);
     return NextResponse.json(activity);
   } catch (error) {
+    if (error instanceof ActivityEditError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof ZodError) {
       return NextResponse.json({ error: error.issues[0]?.message || 'Invalid activity details' }, { status: 400 });
     }

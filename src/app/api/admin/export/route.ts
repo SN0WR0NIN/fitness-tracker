@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
         getAnnouncements(),
         getManagedColumns(),
         prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, columnId: true, stravaAthleteId: true, createdAt: true, updatedAt: true }, orderBy: { name: 'asc' } }),
-        prisma.activity.findMany({ select: { id: true, userId: true, columnId: true, category: true, distance: true, pace: true, duration: true, completedWithFriend: true, companion: true, companionUserId: true, proofUrl: true, points: true, status: true, reviewedById: true, reviewedAt: true, rejectionReason: true, occurredAt: true, weekStart: true, weekNumber: true, stravaActivityId: true, elevationGain: true, createdAt: true, updatedAt: true }, orderBy: { occurredAt: 'desc' } }),
+        prisma.activity.findMany({ select: { id: true, userId: true, columnId: true, category: true, distance: true, pace: true, duration: true, completedWithFriend: true, companion: true, companionUserId: true, companionUserIds: true, proofUrl: true, points: true, status: true, reviewedById: true, reviewedAt: true, rejectionReason: true, occurredAt: true, weekStart: true, weekNumber: true, stravaActivityId: true, elevationGain: true, createdAt: true, updatedAt: true }, orderBy: { occurredAt: 'desc' } }),
         prisma.weeklyScore.findMany({ orderBy: [{ weekNumber: 'asc' }, { totalPoints: 'desc' }] }),
         prisma.$queryRawUnsafe('SELECT "userId", "weeklyGoal", "bio", "profilePhotoUrl", "createdAt", "updatedAt" FROM "UserProfileSettings" ORDER BY "userId"'),
         prisma.$queryRawUnsafe('SELECT "userId", "weekStart", "target", "createdAt", "updatedAt" FROM "WeeklyGoal" ORDER BY "weekStart", "userId"'),

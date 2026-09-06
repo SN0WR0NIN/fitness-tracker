@@ -1,4 +1,6 @@
 'use client';
+import FriendMultiSelect from '@/components/FriendMultiSelect';
+
 
 import Image from 'next/image';
 import Link from 'next/link';
@@ -44,7 +46,7 @@ export default function AdminCreateActivityForm({ users, scoringRules, challenge
   const [category, setCategory] = useState<ActivityCategory>('RUN');
   const [distance, setDistance] = useState('');
   const [pace, setPace] = useState('');
-  const [companionUserId, setCompanionUserId] = useState('');
+  const [companionUserIds, setCompanionUserIds] = useState<string[]>([]);
   const [proofUrl, setProofUrl] = useState('');
   const [approvalMode, setApprovalMode] = useState<'PENDING' | 'APPROVED'>('PENDING');
   const [uploading, setUploading] = useState(false);
@@ -60,17 +62,17 @@ export default function AdminCreateActivityForm({ users, scoringRules, challenge
     category: effectiveCategory,
     distance: distanceNumber,
     pace: paceNumber,
-    completedWithFriend: Boolean(companionUserId),
-  }, scoringRules).totalPoints, [effectiveCategory, distanceNumber, paceNumber, companionUserId, scoringRules]);
+    completedWithFriend: companionUserIds.length > 0,
+  }, scoringRules).totalPoints, [effectiveCategory, distanceNumber, paceNumber, companionUserIds, scoringRules]);
 
   const validation = useMemo(() => {
     if (!userId) return 'Choose the participant receiving this activity.';
     if (!activityDate || activityDate < challengeStart || activityDate > maxDate) return `Choose a date from ${challengeStart} to ${maxDate}.`;
     if (category !== 'TROOP_GAMES' && (!distanceNumber || distanceNumber <= 0)) return 'Enter a distance greater than zero.';
     if (category === 'RUN' && pace && (!paceNumber || paceNumber <= 0)) return 'Use a pace such as 6:30 or 6.5.';
-    if (companionUserId === userId) return 'The participant cannot be their own companion.';
+    if (companionUserIds.includes(userId)) return 'The participant cannot be their own companion.';
     return '';
-  }, [activityDate, category, challengeStart, companionUserId, distanceNumber, maxDate, pace, paceNumber, userId]);
+  }, [activityDate, category, challengeStart, companionUserIds, distanceNumber, maxDate, pace, paceNumber, userId]);
 
   async function uploadProof(file: File) {
     setMessage('');
@@ -113,7 +115,7 @@ export default function AdminCreateActivityForm({ users, scoringRules, challenge
           category,
           distance: category === 'TROOP_GAMES' ? undefined : distanceNumber,
           pace: category === 'RUN' ? paceNumber : undefined,
-          companionUserId: companionUserId || undefined,
+          companionUserIds,
           proofUrl: proofUrl || undefined,
           approvalMode,
         }),
@@ -128,7 +130,7 @@ export default function AdminCreateActivityForm({ users, scoringRules, challenge
       setOutcome({ status, activityId: data.activity.id, message: data.warning || (status === 'APPROVED' ? 'Activity created and approved. Points are live on the leaderboard.' : 'Activity created as Pending and added to the review queue.') });
       setDistance('');
       setPace('');
-      setCompanionUserId('');
+      setCompanionUserIds([]);
       setProofUrl('');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not create activity.');
@@ -156,7 +158,7 @@ export default function AdminCreateActivityForm({ users, scoringRules, challenge
       <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-5 rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <label className="block">Participant
-            <select required value={userId} onChange={(event) => { setUserId(event.target.value); if (event.target.value === companionUserId) setCompanionUserId(''); }} className={field}>
+            <select required value={userId} onChange={(event) => { setUserId(event.target.value); setCompanionUserIds((current) => current.filter((id) => id !== event.target.value)); }} className={field}>
               <option value="">Choose participant</option>
               {users.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.columnName}{user.username ? ` · @${user.username}` : ''}</option>)}
             </select>
@@ -170,7 +172,7 @@ export default function AdminCreateActivityForm({ users, scoringRules, challenge
 
           {category !== 'TROOP_GAMES' ? <div className="grid gap-4 sm:grid-cols-2"><label className="block">Distance ({category === 'SWIM' ? 'metres' : 'km'})<input required type="number" min="0.01" step="0.01" value={distance} onChange={(event) => setDistance(event.target.value)} className={field} /></label>{category === 'RUN' ? <label className="block">Pace (min/km)<input value={pace} onChange={(event) => setPace(event.target.value)} placeholder="6:30 or 6.5" className={field} /></label> : <div />}</div> : <p className="rounded-xl border border-white/10 bg-black/10 p-4 text-sm text-slate-400">Troop Games uses the configured fixed points and does not require distance.</p>}
 
-          <label className="block">Companion <span className="text-slate-500">(optional)</span><select value={companionUserId} onChange={(event) => setCompanionUserId(event.target.value)} className={field}><option value="">Solo activity</option>{users.filter((user) => user.id !== userId).map((user) => <option key={user.id} value={user.id}>{user.name} · {user.columnName}</option>)}</select></label>
+          <FriendMultiSelect users={users} value={companionUserIds} onChange={setCompanionUserIds} excludeUserId={userId} disabled={submitting || uploading || !userId} />
 
           <div><p className="font-medium">Proof screenshot <span className="text-slate-500">(optional)</span></p>{proofUrl ? <div className="mt-3 overflow-hidden rounded-xl border border-white/10"><div className="relative h-56 bg-black/20"><Image src={proofUrl} alt="Uploaded activity proof" fill unoptimized sizes="(max-width: 1024px) 100vw, 640px" className="object-contain" /></div><button type="button" onClick={() => setProofUrl('')} className="w-full border-t border-white/10 p-3 text-sm text-rose-300">Remove proof</button></div> : <label className="mt-3 flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-black/10 p-5 text-center hover:border-orange-300/40"><ImagePlus className="h-7 w-7 text-orange-300" /><span className="mt-2 text-sm font-bold">{uploading ? 'Uploading…' : 'Choose proof image'}</span><span className="mt-1 text-xs text-slate-500">JPEG, PNG, WebP or GIF · max 4MB</span><input disabled={uploading} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadProof(file); event.target.value = ''; }} /></label>}</div>
         </div>

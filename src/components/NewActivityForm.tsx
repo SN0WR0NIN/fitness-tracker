@@ -1,4 +1,6 @@
 'use client';
+import FriendMultiSelect from '@/components/FriendMultiSelect';
+
 
 import Image from 'next/image';
 import Link from 'next/link';
@@ -10,8 +12,8 @@ import Navbar from '@/components/Navbar';
 import { calculateActivityPoints, resolveEffectiveCategory, type ActivityCategory, type ScoringRules } from '@/lib/scoring';
 
 type SelectableUser = { id: string; name: string };
-type ActivityDraft = { activityDate: string; category: ActivityCategory; distance: string; pace: string; withFriend: boolean; companionUserId: string; proofUrl: string };
-type ActivityPayload = { activityDate: string; category: ActivityCategory; distance?: number; pace?: number; companionUserId?: string; proofUrl?: string };
+type ActivityDraft = { activityDate: string; category: ActivityCategory; distance: string; pace: string; withFriend: boolean; companionUserIds: string[]; companionUserId?: string; proofUrl: string };
+type ActivityPayload = { activityDate: string; category: ActivityCategory; distance?: number; pace?: number; companionUserIds?: string[]; companionUserId?: string; proofUrl?: string };
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const ACTIVITY_CATEGORIES: Array<{ value: ActivityCategory; label: string; icon: string }> = [
@@ -50,7 +52,7 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
   const [distance, setDistance] = useState('');
   const [pace, setPace] = useState('');
   const [withFriend, setWithFriend] = useState(false);
-  const [companionUserId, setCompanionUserId] = useState('');
+  const [companionUserIds, setCompanionUserIds] = useState<string[]>([]);
   const [users, setUsers] = useState<SelectableUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersLoaded, setUsersLoaded] = useState(false);
@@ -85,7 +87,7 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
           setDistance(draft.distance || '');
           setPace(draft.pace || '');
           setWithFriend(Boolean(draft.withFriend));
-          setCompanionUserId(draft.companionUserId || '');
+          setCompanionUserIds(Array.isArray(draft.companionUserIds) ? draft.companionUserIds.filter((id) => typeof id === 'string' && id !== userId) : draft.companionUserId ? [draft.companionUserId] : []);
           setProofUrl(draft.proofUrl || '');
           setDraftStatus('Saved draft restored from this device.');
         }
@@ -108,9 +110,9 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
 
   useEffect(() => {
     if (!draftReady) return;
-    const draft: ActivityDraft = { activityDate, category, distance, pace, withFriend, companionUserId, proofUrl };
+    const draft: ActivityDraft = { activityDate, category, distance, pace, withFriend, companionUserIds, proofUrl };
     window.localStorage.setItem(draftKey, JSON.stringify(draft));
-  }, [activityDate, category, companionUserId, distance, draftKey, draftReady, pace, proofUrl, withFriend]);
+  }, [activityDate, category, companionUserIds, distance, draftKey, draftReady, pace, proofUrl, withFriend]);
 
   useEffect(() => {
     if (!withFriend || usersLoaded) return;
@@ -170,17 +172,17 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
     category: effectiveCategory,
     distance: distanceNumber,
     pace: paceNumber,
-    completedWithFriend: withFriend && Boolean(companionUserId),
-  }, scoringRules), [effectiveCategory, distanceNumber, paceNumber, withFriend, companionUserId, scoringRules]);
+    completedWithFriend: withFriend && companionUserIds.length > 0,
+  }, scoringRules), [effectiveCategory, distanceNumber, paceNumber, withFriend, companionUserIds, scoringRules]);
 
   const validationMessage = useMemo(() => {
     if (!parseActivityDate(activityDate)) return 'Choose a valid activity date, today or earlier.';
     if (category !== 'TROOP_GAMES' && (!distanceNumber || distanceNumber <= 0)) return 'Enter a distance greater than zero.';
     if (category === 'WALK_OR_HIKE' && distanceNumber && distanceNumber < scoringRules.walkMinimumKm) return `Walks under ${scoringRules.walkMinimumKm}km do not earn points.`;
     if (category === 'RUN' && pace && (paceNumber === undefined || paceNumber <= 0)) return 'Use a positive pace such as 6:30 or 6.5.';
-    if (withFriend && !companionUserId) return 'Select the registered friend who joined you.';
+    if (withFriend && companionUserIds.length === 0) return 'Select at least one registered friend who joined you.';
     return '';
-  }, [activityDate, category, distanceNumber, pace, paceNumber, withFriend, companionUserId, scoringRules.walkMinimumKm]);
+  }, [activityDate, category, distanceNumber, pace, paceNumber, withFriend, companionUserIds, scoringRules.walkMinimumKm]);
 
   const chooseCategory = (nextCategory: ActivityCategory) => {
     setCategory(nextCategory);
@@ -257,7 +259,7 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
       category,
       distance: category === 'TROOP_GAMES' ? undefined : distanceNumber,
       pace: category === 'RUN' ? paceNumber : undefined,
-      companionUserId: withFriend ? companionUserId : undefined,
+      companionUserIds: withFriend ? companionUserIds : [],
       proofUrl: proofUrl || undefined,
     };
     if (!online) {
@@ -288,7 +290,7 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
   };
 
   const clearDraft = () => {
-    setActivityDate(singaporeDate()); setCategory('RUN'); setDistance(''); setPace(''); setWithFriend(false); setCompanionUserId(''); setProofUrl(''); setQueued(false);
+    setActivityDate(singaporeDate()); setCategory('RUN'); setDistance(''); setPace(''); setWithFriend(false); setCompanionUserIds([]); setProofUrl(''); setQueued(false);
     window.localStorage.removeItem(queueKey);
     window.localStorage.removeItem(draftKey);
     setDraftStatus('Draft cleared.');
@@ -333,9 +335,9 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
             </div>
           </FormSection>
 
-          <FormSection number="3" title="Add a teammate" subtitle={`A registered companion adds the official ${scoringRules.friendBonus}-point friend bonus.`}>
-            <label className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition ${withFriend ? 'border-sky-400/30 bg-sky-400/10' : 'border-white/10 bg-black/10'}`}><input type="checkbox" checked={withFriend} onChange={(event) => { setWithFriend(event.target.checked); if (!event.target.checked) setCompanionUserId(''); }} className="h-4 w-4 accent-sky-400" /><Users className="h-5 w-5 text-sky-300" /><span className="text-sm font-bold">I completed this with a registered participant</span></label>
-            {withFriend ? <div className="mt-4"><label className="block"><span className="text-sm font-semibold text-slate-300">Companion</span><select required value={companionUserId} disabled={usersLoading || Boolean(usersError)} onChange={(event) => setCompanionUserId(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-sky-400 disabled:cursor-wait disabled:opacity-60"><option value="">{usersLoading ? 'Loading participants…' : usersError ? 'Participants unavailable' : 'Select a participant…'}</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label>{usersError ? <p role="alert" className="mt-2 text-xs text-rose-300">{usersError} <button type="button" onClick={() => setUsersLoadAttempt((attempt) => attempt + 1)} className="font-black underline underline-offset-2">Retry</button></p> : null}</div> : null}
+          <FormSection number="3" title="Run with friends" subtitle={`Select the friends who joined you. The official ${scoringRules.friendBonus}-point bonus is awarded once per activity.`}>
+            <label className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition ${withFriend ? 'border-sky-400/30 bg-sky-400/10' : 'border-white/10 bg-black/10'}`}><input type="checkbox" checked={withFriend} onChange={(event) => { setWithFriend(event.target.checked); if (!event.target.checked) setCompanionUserIds([]); }} className="h-4 w-4 accent-sky-400" /><Users className="h-5 w-5 text-sky-300" /><span className="text-sm font-bold">I completed this with friends</span></label>
+            {withFriend ? <div className="mt-4"><FriendMultiSelect users={users} value={companionUserIds} onChange={setCompanionUserIds} excludeUserId={userId} loading={usersLoading} disabled={submitting || maintenanceMode || Boolean(usersError)} />{usersError ? <p role="alert" className="mt-2 text-xs text-rose-300">{usersError} <button type="button" onClick={() => setUsersLoadAttempt((attempt) => attempt + 1)} className="min-h-11 font-black underline">Retry</button></p> : null}</div> : null}
           </FormSection>
 
           <FormSection number="4" title="Attach proof" subtitle="Upload a clear screenshot from Strava, Garmin, or another fitness app.">

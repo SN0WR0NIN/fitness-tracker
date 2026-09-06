@@ -100,6 +100,9 @@ export async function DELETE(
       }
     }
 
+    const friendReferences = await prisma.activity.count({ where: { userId: { not: id }, companionUserIds: { has: id } } });
+    if (friendReferences) return NextResponse.json({ error: 'This participant is recorded as a friend on existing activities. Review those friend selections before deleting this account.' }, { status: 409 });
+
     // Activities and weekly scores cascade-delete automatically via the schema's onDelete: Cascade
     await prisma.user.delete({ where: { id } });
 

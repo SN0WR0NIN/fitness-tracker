@@ -1,8 +1,10 @@
+import { ActivityEditError } from '@/lib/activity-duplicates';
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { FeatureError } from '@/lib/operating-mode';
 
 export function featureErrorResponse(error: unknown) {
+  if (error instanceof ActivityEditError) return NextResponse.json({error:error.message},{status:error.status});
   if (error instanceof FeatureError) return NextResponse.json({error:error.message,details:error.details},{status:error.status});
   if (error instanceof ZodError) return NextResponse.json({error:error.issues[0]?.message ?? 'Invalid details'},{status:400});
   if (error instanceof SyntaxError) return NextResponse.json({error:'Invalid JSON request.'},{status:400});

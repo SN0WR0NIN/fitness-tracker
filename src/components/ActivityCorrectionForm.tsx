@@ -1,4 +1,7 @@
 'use client';
+import FriendMultiSelect from '@/components/FriendMultiSelect';
+import { activityFriendIds } from '@/lib/friend-selection';
+
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -12,7 +15,7 @@ export default function ActivityCorrectionForm({ activityId, original, users, st
   const [distance,setDistance]=useState(String(original.distance));
   const [pace,setPace]=useState(original.pace === null ? '' : String(original.pace));
   const [duration,setDuration]=useState(original.duration === null ? '' : String(original.duration));
-  const [companion,setCompanion]=useState(original.companionUserId ?? '');
+  const [companion,setCompanion]=useState<string[]>(activityFriendIds(original));
   const [proof,setProof]=useState(original.proofUrl ?? '');
   const [reason,setReason]=useState('');
   const [busy,setBusy]=useState(false);
@@ -28,7 +31,7 @@ export default function ActivityCorrectionForm({ activityId, original, users, st
   async function submit(event:React.FormEvent<HTMLFormElement>) {
     event.preventDefault();setBusy(true);setMessage('');
     try {
-      const proposed={activityDate:date,category,distance:category==='TROOP_GAMES'?0:Number(distance),pace:pace===''?null:Number(pace),duration:duration===''?null:Number(duration),companionUserId:companion || null,proofUrl:proof.trim() || null};
+      const proposed={activityDate:date,category,distance:category==='TROOP_GAMES'?0:Number(distance),pace:pace===''?null:Number(pace),duration:duration===''?null:Number(duration),companionUserId:companion[0] ?? null,companionUserIds:companion,proofUrl:proof.trim() || null};
       const response=await fetch('/api/corrections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({activityId,reason,proposed})});
       const result=await response.json();if(!response.ok)throw new Error(result.error || 'Could not send request');
       setSubmitted(true);setMessage(result.message);router.refresh();
@@ -45,7 +48,7 @@ export default function ActivityCorrectionForm({ activityId, original, users, st
       {category!=='TROOP_GAMES'?<label className="text-sm font-bold">Distance ({category==='SWIM'?'metres':'km'})<input required type="number" min="0.001" max="100000" step="any" value={distance} onChange={(e)=>setDistance(e.target.value)} className={input}/></label>:null}
       <label className="text-sm font-bold">Pace (minutes per km, optional)<input type="number" min="0.001" max="60" step="any" value={pace} onChange={(e)=>setPace(e.target.value)} className={input}/><span className="mt-1 block text-xs font-normal text-slate-400">For example, 5:30/km = 5.5. Run scoring uses this value.</span></label>
       <label className="text-sm font-bold">Duration (whole minutes, optional)<input type="number" min="1" max="100000" step="1" value={duration} onChange={(e)=>setDuration(e.target.value)} className={input}/></label>
-      <label className="text-sm font-bold">Registered companion<select aria-label="Registered companion" value={companion} onChange={(e)=>setCompanion(e.target.value)} className={input}><option value="">{original.companionName && !original.companionUserId?`Keep admin-verified companion: ${original.companionName}`:'No companion'}</option>{users.map((u)=><option key={u.id} value={u.id}>{u.name}</option>)}</select></label>
+      <div className="sm:col-span-2"><FriendMultiSelect users={users} value={companion} onChange={setCompanion} disabled={busy || uploading || locked} />{original.companionName && !original.companionUserId && !companion.length ? <p className="mt-2 text-xs text-slate-400">Existing admin-verified companion: {original.companionName}. Kept unless registered friends are selected.</p> : null}</div>
       <label className="text-sm font-bold sm:col-span-2">Proof link (optional)<input type="url" maxLength={2048} value={proof} onChange={(e)=>setProof(e.target.value)} className={input}/></label>
       <label className="text-sm font-bold sm:col-span-2">Upload replacement proof<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(e)=>void upload(e.target.files?.[0])} className={input}/></label>
       <label className="text-sm font-bold sm:col-span-2">Reason for correction<textarea required minLength={5} maxLength={1000} value={reason} onChange={(e)=>setReason(e.target.value)} className={`${input} min-h-24`}/></label>
