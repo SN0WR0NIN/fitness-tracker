@@ -53,6 +53,7 @@ jobs:
           src/lib/operating-mode.ts src/lib/activity-corrections.ts src/lib/achievement-engine.ts src/lib/notification-preferences.ts src/lib/feature-response.ts
           src/lib/friend-selection.ts src/lib/activity-friends.ts src/components/FriendMultiSelect.tsx
           src/lib/daily-friend-bonus.ts src/lib/scoring-ledger.ts src/lib/activities.ts src/components/useDailyFriendBonus.ts src/app/api/activities/friend-bonus/route.ts
+          src/components/AdminActivityReview.tsx src/app/api/admin/activities/route.ts
           src/proxy.ts src/app/api/admin/backups/latest/route.ts src/app/api/admin/duplicates/decision/route.ts src/app/api/admin/awards/generate/route.ts
           src/app/api/admin/export/route.ts src/app/api/notifications/route.ts src/app/api/upload/route.ts
           src/app/api/admin/maintenance/route.ts src/app/api/admin/corrections/route.ts src/app/api/corrections/route.ts
@@ -75,6 +76,8 @@ jobs:
           exit 1
       - name: Run member/admin E2E
         run: npx playwright test --config=playwright.config.cjs
+      - name: Repeat daily bonus release checks without retries
+        run: npx playwright test --config=playwright.config.cjs e2e/daily-friend-bonus.spec.cjs e2e/daily-friend-bonus-release.spec.cjs --repeat-each=3 --retries=0
       - name: Collect diagnostics
         if: always()
         run: |

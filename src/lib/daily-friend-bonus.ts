@@ -8,6 +8,15 @@ export type DailyScoringActivity = {
   status: 'PENDING' | 'APPROVED' | 'REJECTED'; occurredAt: Date; createdAt: Date;
 };
 
+/** Shared by the allocator and the availability preview. basePoints is a
+ * two-decimal display value and can round a small positive workout to zero.
+ * Solo totalPoints uses the unchanged official half-point rounding rule. */
+export function qualifiesForFriendBonus(activity: Pick<DailyScoringActivity, 'category' | 'distance' | 'pace'>, rules: ScoringRules): boolean {
+  const category = resolveEffectiveCategory(activity.category, activity.pace ?? undefined, rules);
+  if (!FRIEND_BONUS_SPORTS.includes(category)) return false;
+  return calculateActivityPoints({ category, distance: activity.distance, pace: activity.pace ?? undefined }, rules).totalPoints > 0;
+}
+
 /** Approved workouts claim first; pending amounts are estimates only. Within
  * each status, earliest workout time, then submission time/id wins. Selection
  * of more people, different friends, or more submissions never expands a cap. */
@@ -19,9 +28,8 @@ export function planDailyActivityScores<T extends DailyScoringActivity>(activiti
     || a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id)).map(activity => {
     const category = resolveEffectiveCategory(activity.category, activity.pace ?? undefined, rules);
     const key = JSON.stringify([activity.userId, singaporeDate(activity.occurredAt), category]);
-    const base = calculateActivityPoints({ category, distance: activity.distance, pace: activity.pace ?? undefined }, rules);
     const eligible = activity.completedWithFriend && activity.status !== 'REJECTED'
-      && FRIEND_BONUS_SPORTS.includes(category) && base.basePoints > 0;
+      && qualifiesForFriendBonus(activity, rules);
     const allowed = eligible && !claimed.has(key);
     if (allowed) claimed.add(key);
     const scoring = calculateActivityPoints({ category, distance: activity.distance,
