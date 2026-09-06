@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Activity, Award, CheckCircle2, DatabaseBackup, FileClock, KeyRound, Link2, Megaphone, Settings, ShieldCheck, TriangleAlert, Trophy, Users } from 'lucide-react';
+import { Activity, Award, CheckCircle2, DatabaseBackup, FileClock, KeyRound, Link2, Megaphone, PlusCircle, Settings, ShieldCheck, TriangleAlert, Trophy, Users } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import SystemStatusCard from '@/components/SystemStatusCard';
 import { requireAdmin } from '@/lib/adminGuard';
@@ -42,7 +42,7 @@ export default async function AdminPage() {
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-lime-300"><ShieldCheck className="h-4 w-4" />Admin operations</p>
           <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div><h1 className="text-3xl font-black sm:text-5xl">Command Centre 2.0</h1><p className="mt-3 text-slate-400">A faster operations-first landing page for the challenge.</p></div>
-            <div className="flex flex-wrap gap-2"><AdminLink href="/admin/activities" label="Review queue" /><AdminLink href="/admin/password-resets" label={`Password resets${passwordResets ? ` (${passwordResets})` : ''}`} /><AdminLink href="/admin/duplicates" label="Duplicate review" /><AdminLink href="/admin/awards" label="Weekly awards" /><AdminLink href="/admin/users" label="Manage users" /><AdminLink href="/admin/settings" label="Settings" /></div>
+            <div className="flex flex-wrap gap-2"><AdminLink href="/admin/activities/new" label="Create activity" /><AdminLink href="/admin/activities" label="Review queue" /><AdminLink href="/admin/password-resets" label={`Password resets${passwordResets ? ` (${passwordResets})` : ''}`} /><AdminLink href="/admin/duplicates" label="Duplicate review" /><AdminLink href="/admin/awards" label="Weekly awards" /><AdminLink href="/admin/users" label="Manage users" /><AdminLink href="/admin/settings" label="Settings" /></div>
           </div>
         </header>
 
@@ -72,6 +72,7 @@ export default async function AdminPage() {
           <h2 className="text-lg font-black">Quick actions</h2>
           <p className="mt-1 text-sm text-slate-500">Jump directly to the most common admin tasks.</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Quick href="/admin/activities/new" icon={<PlusCircle className="h-5 w-5" />} label="Create activity" />
             <Quick href="/admin/activities" icon={<FileClock className="h-5 w-5" />} label="Review pending" />
             <Quick href="/admin/password-resets" icon={<KeyRound className="h-5 w-5" />} label={`Password resets (${passwordResets})`} />
             <Quick href="/admin/duplicates" icon={<TriangleAlert className="h-5 w-5" />} label={`Duplicate review (${openDuplicatePairs})`} />
