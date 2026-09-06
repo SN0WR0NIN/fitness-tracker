@@ -52,6 +52,7 @@ jobs:
           npx eslint src/lib/system-automation.ts src/lib/duplicate-review.ts src/lib/competition-results.ts src/lib/notifications.ts
           src/lib/operating-mode.ts src/lib/activity-corrections.ts src/lib/achievement-engine.ts src/lib/notification-preferences.ts src/lib/feature-response.ts
           src/lib/friend-selection.ts src/lib/activity-friends.ts src/components/FriendMultiSelect.tsx
+          src/lib/daily-friend-bonus.ts src/lib/scoring-ledger.ts src/lib/activities.ts src/components/useDailyFriendBonus.ts src/app/api/activities/friend-bonus/route.ts
           src/proxy.ts src/app/api/admin/backups/latest/route.ts src/app/api/admin/duplicates/decision/route.ts src/app/api/admin/awards/generate/route.ts
           src/app/api/admin/export/route.ts src/app/api/notifications/route.ts src/app/api/upload/route.ts
           src/app/api/admin/maintenance/route.ts src/app/api/admin/corrections/route.ts src/app/api/corrections/route.ts
