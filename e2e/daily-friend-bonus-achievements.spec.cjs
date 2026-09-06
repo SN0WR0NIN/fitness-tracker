@@ -84,7 +84,7 @@ async function withFixture(browser, baseURL, work) {
       expect((await badge()).notified_at).not.toBeNull();
       expect(await alerts()).toHaveLength(1);
       await json(await admin.api.post(`/api/admin/activities/${activity.id}/approve`, { data: {} }));
-      await db.$queryRaw`SELECT app_internal.refresh_user_achievements(${member.id},true)`;
+      await db.$executeRaw`SELECT app_internal.refresh_user_achievements(${member.id},true)`;
       expect(await alerts()).toHaveLength(1);
     };
     await work({ db, key, ids, accounts, create, badge, alerts, total, neverEarned, earnForReal });
