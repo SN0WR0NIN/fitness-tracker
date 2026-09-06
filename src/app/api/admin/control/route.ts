@@ -7,6 +7,7 @@ import { getChallengeSettings, recordAdminAudit } from '@/lib/admin-control';
 import { recalculateAllScores } from '@/lib/activities';
 import { prisma } from '@/lib/prisma';
 import { requestLog } from '@/lib/telemetry';
+import { FeatureError, requireSameOrigin } from '@/lib/operating-mode';
 
 const ScoringRulesSchema = z.object({
   runBasePerKm: z.number().min(0).max(20), runFastBonusPerKm: z.number().min(0).max(20), runMediumBonusPerKm: z.number().min(0).max(20), runStandardBonusPerKm: z.number().min(0).max(20),
@@ -20,12 +21,10 @@ export async function POST(request: Request) {
   const log = requestLog(request, '/api/admin/control');
   const guard = await requireAdmin();
   if (guard.error) return NextResponse.json({ error: guard.error }, { status: guard.status });
-  const origin = request.headers.get('origin');
-  if (origin && origin !== new URL(request.url).origin) return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
   try {
+    requireSameOrigin(request);
     const { action, payload } = RequestSchema.parse(await request.json());
-    // Never accept mode changes through this general-purpose endpoint.
-    // The separate maintenance endpoint requires confirmation and audits them.
+    // Mode changes require the dedicated confirmed and audited endpoint.
     if (action === 'settings.update') {
       const data = SettingsSchema.parse(payload);
       const changed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -80,6 +79,7 @@ export async function POST(request: Request) {
     log.success({ status: 200, action });
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
+    if (error instanceof FeatureError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof ZodError) return NextResponse.json({ error: error.issues[0]?.message || 'Invalid request' }, { status: 400 });
     log.failure(error);
     return NextResponse.json({ error: 'Unable to complete the admin action' }, { status: 500 });
