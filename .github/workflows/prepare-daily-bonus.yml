@@ -20,9 +20,10 @@ jobs:
           source=p.read_text().replace(r'  );\n', r'  `);\n')
           exec(compile(source,str(p),'exec'))
           PY
-          rm scripts/prepare-daily-bonus.py .github/workflows/prepare-daily-bonus.yml
+          git restore .github/workflows/e2e.yml
+          rm scripts/prepare-daily-bonus.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src scripts/recompute-scores.js MULTIPLE_FRIENDS.md .github/workflows scripts/prepare-daily-bonus.py
+          git add src scripts/recompute-scores.js MULTIPLE_FRIENDS.md scripts/prepare-daily-bonus.py
           git commit -m 'Enforce once-per-sport Singapore daily friend bonus across activity workflows'
           git push origin HEAD:fix/friend-bonus-per-sport-per-day
