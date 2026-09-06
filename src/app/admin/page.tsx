@@ -1,10 +1,11 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Activity, Award, CheckCircle2, DatabaseBackup, FileClock, KeyRound, Link2, Megaphone, PlusCircle, Settings, ShieldCheck, TriangleAlert, Trophy, Users } from 'lucide-react';
+import { Activity, CheckCircle2, DatabaseBackup, FileClock, Link2, ShieldCheck, TriangleAlert, Trophy, Users } from 'lucide-react';
+import AdminActionHub from '@/components/AdminActionHub';
 import Navbar from '@/components/Navbar';
 import SystemStatusCard from '@/components/SystemStatusCard';
 import { requireAdmin } from '@/lib/adminGuard';
 import { getAuditEntries } from '@/lib/admin-control';
+import { getLatestCompletedWeekNumber, getWeeklyCompetitionResult } from '@/lib/competition-results';
 import { getActivePasswordResetCount } from '@/lib/password-reset';
 import { prisma } from '@/lib/prisma';
 import { getLatestOperationalBackupSummary, getLatestScheduledHealth } from '@/lib/system-automation';
@@ -16,7 +17,7 @@ export default async function AdminPage() {
   if (guard.status === 401) redirect('/auth/login');
   if (guard.error) redirect('/dashboard');
 
-  const [users, activities, pending, approvedPoints, audit, stravaConnected, scheduledHealth, automatedBackup, passwordResets] = await Promise.all([
+  const [users, activities, pending, approvedPoints, audit, stravaConnected, scheduledHealth, automatedBackup, passwordResets, latestCompletedWeek] = await Promise.all([
     prisma.user.count(),
     prisma.activity.count(),
     prisma.activity.count({ where: { status: 'PENDING' } }),
@@ -26,7 +27,27 @@ export default async function AdminPage() {
     getLatestScheduledHealth(),
     getLatestOperationalBackupSummary(),
     getActivePasswordResetCount(),
+    getLatestCompletedWeekNumber(),
   ]);
+
+  let latestWeeklyResult: Awaited<ReturnType<typeof getWeeklyCompetitionResult>> = null;
+  let latestWeekPendingReviews = 0;
+  let latestWeekApprovedActivities = 0;
+  if (latestCompletedWeek > 0) {
+    [latestWeeklyResult, latestWeekPendingReviews, latestWeekApprovedActivities] = await Promise.all([
+      getWeeklyCompetitionResult(latestCompletedWeek),
+      prisma.activity.count({ where: { weekNumber: latestCompletedWeek, status: 'PENDING' } }),
+      prisma.activity.count({ where: { weekNumber: latestCompletedWeek, status: 'APPROVED' } }),
+    ]);
+  }
+
+  const weeklyAwardState = latestCompletedWeek < 1 || latestWeekApprovedActivities === 0
+    ? 'NOT_STARTED' as const
+    : latestWeeklyResult
+      ? 'FINALIZED' as const
+      : latestWeekPendingReviews > 0
+        ? 'WAITING_REVIEW' as const
+        : 'READY' as const;
 
   const integrity = scheduledHealth?.details;
   const recentAudit = audit.slice(0, 10);
@@ -40,9 +61,9 @@ export default async function AdminPage() {
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         <header className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-8">
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-lime-300"><ShieldCheck className="h-4 w-4" />Admin operations</p>
-          <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div><h1 className="text-3xl font-black sm:text-5xl">Command Centre 2.0</h1><p className="mt-3 text-slate-400">A faster operations-first landing page for the challenge.</p></div>
-            <div className="flex flex-wrap gap-2"><AdminLink href="/admin/activities/new" label="Create activity" /><AdminLink href="/admin/activities" label="Review queue" /><AdminLink href="/admin/password-resets" label={`Password resets${passwordResets ? ` (${passwordResets})` : ''}`} /><AdminLink href="/admin/duplicates" label="Duplicate review" /><AdminLink href="/admin/awards" label="Weekly awards" /><AdminLink href="/admin/users" label="Manage users" /><AdminLink href="/admin/settings" label="Settings" /></div>
+          <div className="mt-3">
+            <h1 className="text-3xl font-black sm:text-5xl">Command Centre 2.0</h1>
+            <p className="mt-3 max-w-2xl text-slate-400">Everything admins need, grouped into one simple workspace.</p>
           </div>
         </header>
 
@@ -53,30 +74,24 @@ export default async function AdminPage() {
           <Stat icon={<Trophy className="h-5 w-5" />} label="Approved points" value={(approvedPoints._sum.points ?? 0).toFixed(1)} />
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
-          <h2 className="text-lg font-black">Quick actions</h2>
-          <p className="mt-1 text-sm text-slate-500">Jump directly to the most common admin tasks.</p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Quick href="/admin/activities/new" icon={<PlusCircle className="h-5 w-5" />} label="Create activity" />
-            <Quick href="/admin/activities" icon={<FileClock className="h-5 w-5" />} label="Review pending" />
-            <Quick href="/admin/password-resets" icon={<KeyRound className="h-5 w-5" />} label={`Password resets (${passwordResets})`} />
-            <Quick href="/admin/duplicates" icon={<TriangleAlert className="h-5 w-5" />} label={`Duplicate review (${openDuplicatePairs})`} />
-            <Quick href="/admin/awards" icon={<Award className="h-5 w-5" />} label="Weekly awards" />
-            <Quick href="/results" icon={<Trophy className="h-5 w-5" />} label="Public results" />
-            <Quick href="/admin/users" icon={<Users className="h-5 w-5" />} label="Manage users" />
-            <Quick href="/admin/settings" icon={<Settings className="h-5 w-5" />} label="Settings & scoring" />
-            <Quick href="/admin/recap" icon={<Megaphone className="h-5 w-5" />} label="Weekly recap" />
-            <Quick href="/api/admin/export?type=backup" icon={<DatabaseBackup className="h-5 w-5" />} label="Fresh backup now" />
-            <Quick href="/api/admin/backups/latest" icon={<DatabaseBackup className="h-5 w-5" />} label="Download auto backup" />
-          </div>
-        </section>
+        <AdminActionHub
+          pendingReviews={pending}
+          passwordResets={passwordResets}
+          duplicateReviews={openDuplicatePairs}
+          latestCompletedWeek={latestCompletedWeek}
+          latestWeekPendingReviews={latestWeekPendingReviews}
+          weeklyAwardState={weeklyAwardState}
+          healthStatus={scheduledHealth?.status ?? null}
+        />
 
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <h2 className="text-lg font-black">Admin activity feed</h2><p className="mt-1 text-sm text-slate-500">Recent operational changes from the existing audit trail.</p>
           <div className="mt-5 divide-y divide-white/5">{recentAudit.length ? recentAudit.map((item) => <div key={item.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold">{item.action}</p><p className="mt-1 text-xs text-slate-500">{item.actorName} · {item.target}</p></div><time className="text-xs text-slate-600">{item.createdAt.toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</time></div>) : <p className="py-8 text-center text-sm text-slate-500">No admin audit entries yet.</p>}</div>
         </section>
 
-        <SystemStatusCard />
+        <div id="system-health" className="scroll-mt-6">
+          <SystemStatusCard />
+        </div>
 
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <div className="flex flex-wrap items-end justify-between gap-3">
@@ -98,5 +113,3 @@ export default async function AdminPage() {
 function formatSg(value: Date) { return value.toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
 function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) { return <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><span className="text-lime-300">{icon}</span><p className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-2 text-3xl font-black">{value}</p></div>; }
 function HealthStat({ icon, label, value, detail, good }: { icon: React.ReactNode; label: string; value: string; detail: string; good: boolean }) { return <div className={`rounded-xl border p-4 ${good ? 'border-emerald-400/15 bg-emerald-400/[0.06]' : 'border-amber-400/20 bg-amber-400/[0.07]'}`}><span className={good ? 'text-emerald-300' : 'text-amber-300'}>{icon}</span><p className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-1 text-lg font-black">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>; }
-function Quick({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) { return <Link href={href} className="rounded-xl border border-white/10 bg-black/10 p-4 transition hover:border-lime-300/30"><span className="text-lime-300">{icon}</span><p className="mt-4 text-sm font-black">{label}</p></Link>; }
-function AdminLink({ href, label }: { href: string; label: string }) { return <Link href={href} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-bold transition hover:text-lime-300">{label}</Link>; }
