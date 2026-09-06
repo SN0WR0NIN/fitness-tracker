@@ -13,6 +13,11 @@ async function adminLogin(page) {
   await expect(page).toHaveURL(/\/dashboard/);
 }
 
+async function ensureOpen(details) {
+  const isOpen = await details.evaluate((element) => element.open);
+  if (!isOpen) await details.locator('summary').click();
+}
+
 test('admin navigation exposes one Admin hub entry with grouped tools', async ({ page }) => {
   await adminLogin(page);
 
@@ -37,21 +42,21 @@ test('admin navigation exposes one Admin hub entry with grouped tools', async ({
   await expect(competition.locator('summary')).toContainText('Competition');
   await expect(system.locator('summary')).toContainText('System');
 
-  if (!(await activities.getAttribute('open'))) await activities.locator('summary').click();
+  await ensureOpen(activities);
   await expect(activities.getByRole('link', { name: /Create activity/ })).toBeVisible();
   await expect(activities.getByRole('link', { name: /Review pending/ })).toBeVisible();
   await expect(activities.getByRole('link', { name: /Duplicate review/ })).toBeVisible();
 
-  if (!(await people.getAttribute('open'))) await people.locator('summary').click();
+  await ensureOpen(people);
   await expect(people.getByRole('link', { name: /Manage users/ })).toBeVisible();
   await expect(people.getByRole('link', { name: /Password resets/ })).toBeVisible();
 
-  if (!(await competition.getAttribute('open'))) await competition.locator('summary').click();
+  await ensureOpen(competition);
   await expect(competition.getByRole('link', { name: /Weekly awards/ })).toBeVisible();
   await expect(competition.getByRole('link', { name: /Weekly recap/ })).toBeVisible();
   await expect(competition.getByRole('link', { name: /Public results/ })).toBeVisible();
 
-  if (!(await system.getAttribute('open'))) await system.locator('summary').click();
+  await ensureOpen(system);
   await expect(system.getByRole('link', { name: /Settings & scoring/ })).toBeVisible();
   await expect(system.getByRole('link', { name: /Fresh backup now/ })).toBeVisible();
 
