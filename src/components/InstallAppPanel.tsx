@@ -1,0 +1,11 @@
+'use client';
+import { usePwaInstall } from '@/components/PwaManager';
+export default function InstallAppPanel(){
+  const {installed,canInstall,showIOSInstructions,install,installMessage,updateAvailable,applyUpdate}=usePwaInstall();
+  return <section className="space-y-5 rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-7"><h2 className="text-xl font-black">{installed?'KG Active is installed':'Add KG Active to your device'}</h2>
+    {installed?<p className="text-emerald-200">You are already using the installed app. Your account and competition history are the same as on the website.</p>:canInstall?<><p className="text-slate-300">Install for a home-screen shortcut and an app-style window. No app-store account is required.</p><button type="button" onClick={()=>void install()} className="min-h-11 rounded-xl bg-lime-300 px-5 py-3 font-black text-slate-950">Install KG Active</button></>:showIOSInstructions?<div className="space-y-3"><h3 className="font-bold text-sky-200">iPhone / iPad</h3><p className="text-slate-300">Open this page in Safari, tap Share, then Add to Home Screen and Add. You may need to scroll through the Share menu to find it.</p></div>:<div className="space-y-3"><h3 className="font-bold text-sky-200">Browser installation</h3><p className="text-slate-300">In Chrome or Edge, open the browser menu and choose Install app or Add to Home screen when available. On desktop, look for the install icon in the address bar. If this browser does not offer installation, continue using the website or open it in a supported browser.</p></div>}
+    {installMessage?<p role="status" className="text-sm text-sky-200">{installMessage}</p>:null}
+    {updateAvailable?<button type="button" onClick={applyUpdate} className="min-h-11 rounded-xl border border-sky-300/30 px-4 font-bold text-sky-200">Update and reload</button>:null}
+    <div className="border-t border-white/10 pt-5"><h3 className="font-bold">Safe offline behaviour</h3><p className="mt-2 text-sm leading-6 text-slate-400">The app shows an offline fallback rather than a stale private dashboard. Saved activity drafts remain local, but uploads, corrections and submissions only complete when the server confirms them. Private account, admin and API responses are not stored in the service-worker cache.</p></div>
+  </section>;
+}
