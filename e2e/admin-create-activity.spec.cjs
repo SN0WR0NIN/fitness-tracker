@@ -28,10 +28,12 @@ test('admin can create pending and approved activities for a participant', async
   await page.goto('/admin/activities/new');
   await expect(page.getByRole('heading', { name: 'Create activity for participant' })).toBeVisible();
 
-  await page.getByLabel('Participant').selectOption(TARGET_USER_ID);
-  await page.getByLabel('Activity date').fill('2026-09-04');
-  await page.getByLabel('Activity type').selectOption('TROOP_GAMES');
-  await page.getByRole('button', { name: 'Create pending activity' }).click();
+  const form = page.locator('form');
+  const selects = form.locator('select');
+  await selects.nth(0).selectOption(TARGET_USER_ID);
+  await form.locator('input[type="date"]').fill('2026-09-04');
+  await selects.nth(1).selectOption('TROOP_GAMES');
+  await form.getByRole('button', { name: 'Create pending activity' }).click();
   await expect(page.getByText('Pending activity created')).toBeVisible();
 
   const pending = await prisma.activity.findFirst({ where: { userId: TARGET_USER_ID, category: 'TROOP_GAMES' }, orderBy: { createdAt: 'desc' } });
@@ -40,11 +42,11 @@ test('admin can create pending and approved activities for a participant', async
   expect(pending.columnId).toBe('e2e_column');
 
   await page.getByRole('button', { name: 'Add another' }).click();
-  await page.getByLabel('Activity date').fill('2026-09-05');
-  await page.getByLabel('Activity type').selectOption('CYCLE');
-  await page.getByLabel('Distance (km)').fill('10');
-  await page.getByLabel('Create & Approve').check();
-  await page.getByRole('button', { name: 'Create & approve' }).click();
+  await form.locator('input[type="date"]').fill('2026-09-05');
+  await selects.nth(1).selectOption('CYCLE');
+  await form.locator('input[type="number"]').fill('10');
+  await form.locator('input[type="radio"][value="APPROVED"]').check();
+  await form.getByRole('button', { name: 'Create & approve' }).click();
   await expect(page.getByText('Approved activity created')).toBeVisible();
 
   const approved = await prisma.activity.findFirst({ where: { userId: TARGET_USER_ID, category: 'CYCLE', status: 'APPROVED' }, orderBy: { createdAt: 'desc' } });
