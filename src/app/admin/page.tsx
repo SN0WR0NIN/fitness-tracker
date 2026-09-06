@@ -53,21 +53,6 @@ export default async function AdminPage() {
           <Stat icon={<Trophy className="h-5 w-5" />} label="Approved points" value={(approvedPoints._sum.points ?? 0).toFixed(1)} />
         </section>
 
-        <SystemStatusCard />
-
-        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div><h2 className="text-lg font-black">Automated safety net</h2><p className="mt-1 text-sm text-slate-500">Integrity runs hourly. Private operational snapshots run daily at 2:30 AM Singapore time.</p></div>
-            <span className="text-xs text-slate-600">{checkTime ? `Last check ${formatSg(checkTime)}` : 'No scheduled check recorded'}</span>
-          </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <HealthStat icon={(integrity?.score_mismatches ?? 1) === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />} label="Score reconciliation" value={integrity ? (integrity.score_mismatches === 0 ? 'Balanced' : `${integrity.score_mismatches} mismatch${integrity.score_mismatches === 1 ? '' : 'es'}`) : 'No result'} detail={scheduledHealth ? `Scheduled status: ${scheduledHealth.status}` : 'Waiting for scheduler'} good={Boolean(integrity && integrity.score_mismatches === 0)} />
-            <HealthStat icon={(integrity?.possible_duplicate_pairs ?? 1) === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />} label="Duplicate review" value={integrity ? `${openDuplicatePairs} open` : 'No result'} detail={`${deferredDuplicatePairs} deferred · decisions are tracked`} good={Boolean(integrity && integrity.possible_duplicate_pairs === 0)} />
-            <HealthStat icon={<Link2 className="h-5 w-5" />} label="Strava connected" value={`${stravaConnected} / ${users}`} detail="Participant accounts" good />
-            <HealthStat icon={<DatabaseBackup className="h-5 w-5" />} label="Automated backup" value={automatedBackup ? automatedBackup.createdAt.toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short' }) : 'Not recorded'} detail={automatedBackup ? `${automatedBackup.counts.activities ?? 0} activities · checksum ${automatedBackup.checksumSha256.slice(0, 8)}…` : 'Waiting for first snapshot'} good={Boolean(automatedBackup)} />
-          </div>
-        </section>
-
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <h2 className="text-lg font-black">Quick actions</h2>
           <p className="mt-1 text-sm text-slate-500">Jump directly to the most common admin tasks.</p>
@@ -89,6 +74,21 @@ export default async function AdminPage() {
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <h2 className="text-lg font-black">Admin activity feed</h2><p className="mt-1 text-sm text-slate-500">Recent operational changes from the existing audit trail.</p>
           <div className="mt-5 divide-y divide-white/5">{recentAudit.length ? recentAudit.map((item) => <div key={item.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold">{item.action}</p><p className="mt-1 text-xs text-slate-500">{item.actorName} · {item.target}</p></div><time className="text-xs text-slate-600">{item.createdAt.toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</time></div>) : <p className="py-8 text-center text-sm text-slate-500">No admin audit entries yet.</p>}</div>
+        </section>
+
+        <SystemStatusCard />
+
+        <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div><h2 className="text-lg font-black">Automated safety net</h2><p className="mt-1 text-sm text-slate-500">Integrity runs hourly. Private operational snapshots run daily at 2:30 AM Singapore time.</p></div>
+            <span className="text-xs text-slate-600">{checkTime ? `Last check ${formatSg(checkTime)}` : 'No scheduled check recorded'}</span>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <HealthStat icon={(integrity?.score_mismatches ?? 1) === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />} label="Score reconciliation" value={integrity ? (integrity.score_mismatches === 0 ? 'Balanced' : `${integrity.score_mismatches} mismatch${integrity.score_mismatches === 1 ? '' : 'es'}`) : 'No result'} detail={scheduledHealth ? `Scheduled status: ${scheduledHealth.status}` : 'Waiting for scheduler'} good={Boolean(integrity && integrity.score_mismatches === 0)} />
+            <HealthStat icon={(integrity?.possible_duplicate_pairs ?? 1) === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />} label="Duplicate review" value={integrity ? `${openDuplicatePairs} open` : 'No result'} detail={`${deferredDuplicatePairs} deferred · decisions are tracked`} good={Boolean(integrity && integrity.possible_duplicate_pairs === 0)} />
+            <HealthStat icon={<Link2 className="h-5 w-5" />} label="Strava connected" value={`${stravaConnected} / ${users}`} detail="Participant accounts" good />
+            <HealthStat icon={<DatabaseBackup className="h-5 w-5" />} label="Automated backup" value={automatedBackup ? automatedBackup.createdAt.toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short' }) : 'Not recorded'} detail={automatedBackup ? `${automatedBackup.counts.activities ?? 0} activities · checksum ${automatedBackup.checksumSha256.slice(0, 8)}…` : 'Waiting for first snapshot'} good={Boolean(automatedBackup)} />
+          </div>
         </section>
       </main>
     </div>
