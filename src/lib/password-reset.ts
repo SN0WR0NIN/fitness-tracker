@@ -87,7 +87,7 @@ export async function requestPasswordReset(identifier: string) {
       await tx.$executeRawUnsafe(
         `UPDATE app_internal.password_reset_request
          SET status='EXPIRED', updated_at=now()
-         WHERE id=$1`,
+         WHERE id=$1::uuid`,
         active.id,
       );
       active = null;
@@ -99,7 +99,7 @@ export async function requestPasswordReset(identifier: string) {
       await tx.$executeRawUnsafe(
         `UPDATE app_internal.password_reset_request
          SET request_count=request_count+1, last_requested_at=now(), updated_at=now()
-         WHERE id=$1`,
+         WHERE id=$1::uuid`,
         active.id,
       );
     } else {
@@ -192,7 +192,7 @@ export async function issuePasswordReset(requestId: string, adminId: string) {
       `SELECT r.id, r.status, u.id AS "userId", u.name, u.username, u.email, u.role
        FROM app_internal.password_reset_request r
        JOIN public."User" u ON u.id=r.user_id
-       WHERE r.id=$1
+       WHERE r.id=$1::uuid
        FOR UPDATE OF r, u`,
       requestId,
     ) as IssueResetRow[];
@@ -218,7 +218,7 @@ export async function issuePasswordReset(requestId: string, adminId: string) {
     await tx.$executeRawUnsafe(
       `UPDATE app_internal.password_reset_request
        SET status='ISSUED', issued_at=now(), expires_at=$2, issued_by_id=$3, issued_by_name=$4, updated_at=now()
-       WHERE id=$1`,
+       WHERE id=$1::uuid`,
       requestId,
       expiresAt,
       adminId,
@@ -250,7 +250,7 @@ export async function cancelPasswordReset(requestId: string, adminId: string) {
     const rows = await tx.$queryRawUnsafe(
       `SELECT user_id AS "userId", status
        FROM app_internal.password_reset_request
-       WHERE id=$1
+       WHERE id=$1::uuid
        FOR UPDATE`,
       requestId,
     ) as CancelResetRow[];
@@ -262,7 +262,7 @@ export async function cancelPasswordReset(requestId: string, adminId: string) {
     await tx.$executeRawUnsafe(
       `UPDATE app_internal.password_reset_request
        SET status='CANCELLED', cancelled_at=now(), updated_at=now()
-       WHERE id=$1`,
+       WHERE id=$1::uuid`,
       requestId,
     );
 
@@ -297,7 +297,7 @@ export async function completePasswordReset(identifier: string, temporaryPasswor
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const locked = await tx.$queryRawUnsafe(
       `SELECT id FROM app_internal.password_reset_request
-       WHERE id=$1 AND user_id=$2 AND status='ISSUED' AND expires_at > now()
+       WHERE id=$1::uuid AND user_id=$2 AND status='ISSUED' AND expires_at > now()
        FOR UPDATE`,
       reset.id,
       user.id,
@@ -325,7 +325,7 @@ export async function completePasswordReset(identifier: string, temporaryPasswor
     await tx.$executeRawUnsafe(
       `UPDATE app_internal.password_reset_request
        SET status='COMPLETED', completed_at=now(), updated_at=now()
-       WHERE id=$1`,
+       WHERE id=$1::uuid`,
       reset.id,
     );
   }, { isolationLevel: 'Serializable' });
