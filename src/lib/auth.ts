@@ -2,6 +2,7 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { verifyCredentials } from '@/lib/account-credentials';
+import { hasIssuedPasswordReset } from '@/lib/password-reset';
 import { prisma } from '@/lib/prisma';
 
 export const authOptions: NextAuthOptions = {
@@ -26,7 +27,10 @@ export const authOptions: NextAuthOptions = {
 
         const user = await verifyCredentials(credentials.email, credentials.password);
         if (!user) return null;
-        if (user.mustChangePassword) throw new Error('SETUP_REQUIRED');
+        if (user.mustChangePassword) {
+          if (await hasIssuedPasswordReset(user.id)) throw new Error('PASSWORD_RESET_REQUIRED');
+          throw new Error('SETUP_REQUIRED');
+        }
         await prisma.user.update({ where: { id: user.id }, data: { loginAttempts: 0 } });
 
         return {
