@@ -53,7 +53,9 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     const page = await member.newPage();
     const friendIds = [accounts.friend1.id,accounts.friend2.id];
     const [settings] = await db.$queryRaw`SELECT "scoringRules" FROM "ChallengeSetting" WHERE id='primary'`;
-    const bonus = settings.scoringRules.friendBonus;
+    // The disposable seed stores partial rules; getChallengeSettings merges
+    // these with DEFAULT_SCORING_RULES, whose friendBonus is 3.
+    const bonus = settings.scoringRules.friendBonus ?? 3;
     const solo = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-01',category:'RUN',distance:5,pace:6 } }),201);
     const one = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-02',category:'RUN',distance:5,pace:6,companionUserId:friendIds[0] } }),201);
     expect(one.companionUserIds).toEqual([friendIds[0]]);
