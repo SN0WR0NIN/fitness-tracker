@@ -9,6 +9,7 @@ import { calculateActivityPoints } from '@/lib/scoring';
 import { FRIEND_BONUS_SPORTS } from '@/lib/daily-friend-bonus';
 
 export const dynamic = 'force-dynamic';
+type BonusCandidate = { distance: number; pace: number | null; status: 'APPROVED' | 'PENDING' };
 const Query = z.object({ activityDate: z.string(), category: z.enum(['RUN','CYCLE','SWIM','WALK_OR_HIKE','TROOP_GAMES']), userId: z.string().min(1).optional() });
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
   if (!start) return NextResponse.json({ error: 'Choose a valid Singapore activity date.' }, { status: 400 });
   try {
     const settings = await getChallengeSettings();
-    const candidates = await prisma.activity.findMany({ where: { userId, category, completedWithFriend: true,
+    const candidates: BonusCandidate[] = await prisma.activity.findMany({ where: { userId, category, completedWithFriend: true,
       status: { in: ['APPROVED','PENDING'] }, occurredAt: { gte: start, lt: new Date(start.getTime() + 86400000) } },
       select: { distance: true, pace: true, status: true } });
     const qualifying = candidates.filter(a => calculateActivityPoints({ category, distance: a.distance, pace: a.pace ?? undefined }, settings.scoringRules).basePoints > 0);
