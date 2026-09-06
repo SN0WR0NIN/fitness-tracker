@@ -9,12 +9,20 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
+type AdminActivityUser = {
+  id: string;
+  name: string;
+  username: string | null;
+  columnId: string | null;
+  column: { name: string } | null;
+};
+
 export default async function AdminCreateActivityPage() {
   const guard = await requireAdmin();
   if (guard.status === 401) redirect('/auth/login');
   if (guard.error) redirect('/dashboard');
 
-  const [settings, users] = await Promise.all([
+  const [settings, usersResult] = await Promise.all([
     getChallengeSettings(),
     prisma.user.findMany({
       where: { role: 'MEMBER', columnId: { not: null } },
@@ -22,6 +30,7 @@ export default async function AdminCreateActivityPage() {
       orderBy: [{ column: { name: 'asc' } }, { name: 'asc' }],
     }),
   ]);
+  const users = usersResult as AdminActivityUser[];
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
