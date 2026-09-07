@@ -1,3 +1,4 @@
+import { assertAttachableProof } from '@/lib/proof-access';
 import { resolveActivityFriends } from '@/lib/activity-friends';
 import { activityFriendIds, sameFriendSelection } from '@/lib/friend-selection';
 import { reconcileParticipantScores } from '@/lib/scoring-ledger';
@@ -96,6 +97,7 @@ export async function createCorrection(userId: string, input: z.infer<typeof Cre
     if (existing.length) throw new FeatureError('This activity already has an open correction request. Track or cancel it in My correction requests.',409);
     const original = correctionSnapshot(activity);
     const values = CorrectionValuesSchema.parse(input.proposed);
+    await assertAttachableProof(tx, values.proofUrl, userId, activity.proofUrl);
     const unchanged = Object.entries(values).filter(([key]) => !['companionUserId','companionUserIds'].includes(key)).every(([key,value]) => original[key as keyof CorrectionSnapshot] === value) && sameFriendSelection(original, values);
     if (unchanged) throw new FeatureError('Change at least one activity field before sending a correction.');
     const change = await prepareChange(tx,activity,values,await settingsInTransaction(tx));
@@ -144,6 +146,7 @@ export async function decideCorrection(adminId: string, input: z.infer<typeof De
     if (input.decision === 'APPROVED' && activity) {
       const raw = request.proposed;
       const values = CorrectionValuesSchema.parse({activityDate:raw.activityDate,category:raw.category,distance:raw.distance,pace:raw.pace,duration:raw.duration,companionUserId:raw.companionUserId,companionUserIds:raw.companionUserIds,proofUrl:raw.proofUrl});
+      await assertAttachableProof(tx, values.proofUrl, request.user_id, activity.proofUrl);
       const change = await prepareChange(tx,activity,values,await settingsInTransaction(tx));
       const candidates = await tx.activity.findMany({where:{userId:activity.userId,id:{not:activity.id},status:{not:'REJECTED'}}});
       const matches = candidates.flatMap((candidate) => {const reason=duplicateReason({...activity,...change},candidate);return reason?[{id:candidate.id,reason}]:[];});

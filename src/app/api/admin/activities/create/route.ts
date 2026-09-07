@@ -53,6 +53,7 @@ export async function POST(request: Request) {
 
     const created = await createActivity({
       userId: target.id,
+      proofActorId: guard.userId,
       columnId: target.columnId,
       category: data.category,
       distance: data.distance,

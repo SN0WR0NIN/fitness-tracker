@@ -31,8 +31,8 @@ function getSupabaseAdmin(): SupabaseClient {
 }
 
 /**
- * Ensures the proof-upload bucket exists (public read, so approved proof
- * images can be viewed directly via their URL).
+ * New proof buckets are private. Existing buckets are never silently changed.
+ * The public-shaped URL below is a legacy storage reference, NOT a display URL.
  */
 export async function ensureProofBucketExists(): Promise<void> {
   const supabase = getSupabaseAdmin();
@@ -41,12 +41,14 @@ export async function ensureProofBucketExists(): Promise<void> {
     throw listError;
   }
 
-  if (buckets?.some((bucket) => bucket.name === PROOF_BUCKET)) {
+  const existing = buckets?.find((bucket) => bucket.name === PROOF_BUCKET);
+  if (existing) {
+    if (existing.public) throw new Error('Proof privacy activation is pending. An administrator must finish the approved storage rollout.');
     return;
   }
 
   const { error: createError } = await supabase.storage.createBucket(PROOF_BUCKET, {
-    public: true,
+    public: false,
     fileSizeLimit: '4MB',
     allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
   });
@@ -64,7 +66,7 @@ export async function uploadProofImage(
     .from(PROOF_BUCKET)
     .upload(fileName, buffer, {
       contentType,
-      cacheControl: '31536000',
+      cacheControl: '0',
       upsert: false,
     });
 
@@ -118,4 +120,17 @@ export function isProfileImageUrlForUser(value: string, userId: string): boolean
   } catch {
     return false;
   }
+}
+
+export async function downloadProofImage(path: string): Promise<Blob> {
+  const { data, error } = await getSupabaseAdmin().storage.from(PROOF_BUCKET).download(path);
+  if (error || !data) throw new Error('Proof could not be read.');
+  return data;
+}
+
+export async function getProofBucketPrivacy(): Promise<boolean | null> {
+  try {
+    const { data, error } = await getSupabaseAdmin().storage.getBucket(PROOF_BUCKET);
+    return error || !data ? null : !data.public;
+  } catch { return null; }
 }
