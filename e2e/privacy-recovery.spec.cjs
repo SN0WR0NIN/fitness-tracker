@@ -58,9 +58,17 @@ test('proofs enforce owner/admin sessions, upload ownership, no public disclosur
     const profile=await request.get(`/participants/${s.owner.id}`);expect(profile.ok()).toBe(true);expect(await profile.text()).not.toContain(proof);
     await s.owner.page.goto('/dashboard');
     await expect(s.owner.page.getByTestId('score-explanation').filter({hasText:'Included in standings'}).first()).toBeVisible();
-    const images=s.owner.page.locator('img[src^="/api/proofs?"]');expect(await images.count()).toBeGreaterThan(0);
-    await expect(images.first()).toHaveJSProperty('complete',true);
-    expect(await images.first().evaluate(img=>img.naturalWidth)).toBeGreaterThan(0);
+    // Hydration normalizes Next/Image src to an absolute URL; inspect the
+    // parsed same-origin endpoint instead of requiring relative DOM text.
+    const image=s.owner.page.getByRole('img',{name:'Run activity screenshot'}).first();
+    await image.scrollIntoViewIfNeeded();
+    await expect(image).toBeVisible();
+    const imageUrl=new URL(await image.getAttribute('src'),baseURL);
+    expect(imageUrl.origin).toBe(new URL(baseURL).origin);
+    expect(imageUrl.pathname).toBe('/api/proofs');
+    expect(imageUrl.searchParams.get('ref')).toBe(proof);
+    await expect(image).toHaveJSProperty('complete',true);
+    await expect.poll(()=>image.evaluate(img=>img.naturalWidth)).toBeGreaterThan(0);
     await s.owner.page.screenshot({path:'test-results/private-proof-owner-mobile.png',fullPage:true});
     await s.admin.page.goto('/admin/activities');
     await expect(s.admin.page.getByTestId('score-explanation').first()).toBeVisible();
