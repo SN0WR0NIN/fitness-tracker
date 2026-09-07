@@ -31,8 +31,10 @@ const quote = key => {
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) throw new Error('Invalid backup field name.');
   return `"${key}"`;
 };
+let phase = 'destination-precheck';
 async function restore(input, confirmation) {
   const target = assertDisposable(process.env, confirmation);
+  phase = 'fixture-validation';
   const validation = spawnSync(process.execPath, [path.join(__dirname, 'validate-operational-backup.cjs'), input], { encoding: 'utf8' });
   if (validation.status !== 0) throw new Error('Backup validator rejected the fixture.');
   const backup = JSON.parse(fs.readFileSync(input, 'utf8'));
@@ -40,6 +42,7 @@ async function restore(input, confirmation) {
   const { PrismaClient } = require('@prisma/client');
   const db = new PrismaClient({ datasources: { db: { url: target } } });
   try {
+    phase = 'empty-destination-verification';
     const result = await db.$transaction(async tx => {
       const identity = await tx.$queryRaw`SELECT current_database() AS name`;
       if (identity[0]?.name !== 'fitness_tracker_restore_drill') throw new Error('Unexpected destination database.');
@@ -53,9 +56,11 @@ async function restore(input, confirmation) {
       // Disable USER triggers only in this isolated destination, inside the
       // rollbackable transaction; foreign-key/check constraints stay active.
       // Historical achievement/notification state is restored, not regenerated.
+      phase = 'isolated-trigger-suspension';
       for (const table of Object.values(tables)) await tx.$executeRawUnsafe(`ALTER TABLE ${table} DISABLE TRIGGER USER`);
       const expectedCounts = {};
       for (const [key, table] of Object.entries(tables)) {
+        phase = `restore-${key}`;
         const rows = key === 'challenge' ? [backup.challenge] : backup[key];
         if (!Array.isArray(rows)) throw new Error(`Missing fixture collection ${key}.`);
         const columns = await tx.$queryRawUnsafe(`SELECT attname FROM pg_attribute WHERE attrelid=$1::regclass AND attnum>0 AND NOT attisdropped`, table);
@@ -82,14 +87,16 @@ async function restore(input, confirmation) {
         if (count[0].n !== rows.length) throw new Error(`Restored count mismatch in ${key}.`);
         expectedCounts[key] = rows.length;
       }
+      phase = 'isolated-trigger-restoration';
       for (const table of Object.values(tables)) await tx.$executeRawUnsafe(`ALTER TABLE ${table} ENABLE TRIGGER USER`);
       return { restored: true, syntheticOnly: true, collections: expectedCounts, accountsLocked: true, operatingModesLocked: true, binaryMediaRestored: false };
     }, { isolationLevel: 'Serializable', timeout: 60000, maxWait: 5000 });
     // Fresh transaction, not just in-transaction assertions.
+    phase = 'post-commit-verification';
     const persisted = await db.$queryRaw`SELECT (SELECT count(*)::int FROM "Activity") AS activities,(SELECT count(*)::int FROM "PointsLog") AS logs,(SELECT count(*)::int FROM "User" WHERE NOT "mustChangePassword") AS unlocked_users`;
     if (persisted[0].activities !== result.collections.activities || persisted[0].logs !== result.collections.pointsLogs || persisted[0].unlocked_users !== 0) throw new Error('Post-commit verification failed.');
     console.log(JSON.stringify({ ...result, postCommitVerified: true }));
   } finally { await db.$disconnect(); }
 }
 module.exports = { assertDisposable };
-if (require.main === module) restore(process.argv[2], process.argv[3]).catch(() => { console.error('Restore drill failed or refused. Destination must be inspected; do not automatically retry or erase it.'); process.exitCode = 1; });
+if (require.main === module) restore(process.argv[2], process.argv[3]).catch(() => { console.error(`Restore drill failed or refused at ${phase}. Destination must be inspected; do not automatically retry or erase it.`); process.exitCode = 1; });

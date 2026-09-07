@@ -96,6 +96,15 @@ jobs:
         run: |
           docker exec "$PG_CONTAINER" createdb -U postgres fitness_tracker_restore_drill
           docker exec "$PG_CONTAINER" pg_dump -U postgres --schema-only --no-owner --no-privileges -n public -n app_internal fitness_tracker_e2e > /tmp/fixture-schema.sql
+          # initdb already creates an empty public schema. Adjust only that
+          # single schema declaration; preserve all tables, constraints and errors.
+          python3 - <<'PYSCHEMA'
+          from pathlib import Path
+          p = Path('/tmp/fixture-schema.sql')
+          text = p.read_text()
+          assert text.count('CREATE SCHEMA public;') == 1
+          p.write_text(text.replace('CREATE SCHEMA public;', 'CREATE SCHEMA IF NOT EXISTS public;'))
+          PYSCHEMA
           docker exec -i "$PG_CONTAINER" psql -U postgres -v ON_ERROR_STOP=1 fitness_tracker_restore_drill < /tmp/fixture-schema.sql
           node scripts/restore-operational-drill.cjs /tmp/kg-hardening-fixture.json --confirm-disposable
           if node scripts/restore-operational-drill.cjs /tmp/kg-hardening-fixture.json --confirm-disposable; then
