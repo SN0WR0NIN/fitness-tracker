@@ -1,0 +1,65 @@
+name: Hardening source assembly
+on:
+  pull_request:
+    branches: [master]
+    paths: ['.github/workflows/hardening-assembly.yml']
+permissions:
+  contents: read
+jobs:
+  assemble:
+    if: github.repository == 'SN0WR0NIN/fitness-tracker' && github.event.pull_request.number == 59 && github.event.pull_request.head.ref == 'feat/privacy-recovery-operations' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: staging
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: b43b2857447f0a0197f95603baf8e25fea732b6e
+          path: reference
+          persist-credentials: false
+      - name: Check all public source edits and create unreferenced Git blobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, urllib.request
+          root = pathlib.Path('reference').resolve()
+          edits = json.loads(pathlib.Path('staging/.github/hardening-source-edits.json').read_text())
+          prepared = []
+          for name, plan in edits.items():
+              file = (root / name).resolve()
+              assert file.is_relative_to(root) and file.is_file()
+              source = file.read_text()
+              assert hashlib.sha256(source.encode()).hexdigest() == plan['before'], name + ': base mismatch'
+              result = source
+              for start, end, old, new in reversed(plan['edits']):
+                  assert source[start:end] == old, name + ': edit mismatch'
+                  result = result[:start] + new + result[end:]
+              assert hashlib.sha256(result.encode()).hexdigest() == plan['after'], name + ': result mismatch'
+              prepared.append((name,result))
+          entries = []
+          for name, content in prepared:
+              data = json.dumps({'content':content,'encoding':'utf-8'}).encode()
+              request = urllib.request.Request('https://api.github.com/repos/SN0WR0NIN/fitness-tracker/git/blobs', data=data, method='POST', headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+              with urllib.request.urlopen(request,timeout=30) as response:
+                  created=json.load(response)
+              expected=hashlib.sha1(b'blob '+str(len(content.encode())).encode()+b'\0'+content.encode()).hexdigest()
+              assert created['sha'] == expected
+              entries.append({'path':name,'mode':'100644','type':'blob','sha':created['sha']})
+          pathlib.Path('/tmp/hardening-blob-entries.json').write_text(json.dumps(entries,indent=2))
+          print(json.dumps({'verified_files':len(entries),'branch_updates':0,'production_operations':0}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hardening-verified-blob-identifiers
+          path: /tmp/hardening-blob-entries.json
+          retention-days: 1
+# Temporary source assembly only. Remove this workflow and recipe from the final tree.
+# GitHub's job token creates Git blobs only; it never updates a ref, merges, deploys,
+# contacts the application/providers, or reads production credentials or datasets.
