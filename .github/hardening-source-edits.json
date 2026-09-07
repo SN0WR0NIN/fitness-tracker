@@ -1,0 +1,102 @@
+{
+  ".github/workflows/e2e.yml": {
+    "before": "049f5d5d2304627b924675c6ae9b75dfb877b0358fbcafbc364fe259f2244797",
+    "after": "c35c9034d42553db29ff848d235b2cd4ab77fe1e4e1378c33010456aec4e8c71",
+    "edits": [
+      [1253,1253,"","Hardening unit and archive checks\n        run: npm run test:hardening\n      - name: "],
+      [2185,2185,"","\n          src/lib/proof-reference.ts src/lib/proof-access.ts src/lib/operational-backup.ts src/lib/score-explanation.ts\n          src/app/api/proofs/route.ts src/app/admin/operations/page.tsx src/components/ScoreExplanation.tsx src/components/ActivityProof.tsx"],
+      [4195,4195,"","Privacy and recovery regression without retries\n        run: npx playwright test --config=playwright.config.cjs e2e/privacy-recovery.spec.cjs --retries=0\n      - name: Install and verify scheduled backup v7 in disposable database only\n        run: |\n          npx prisma db execute --schema prisma/schema.prisma --file prisma/points-log-backup-v7.sql\n          node scripts/check-v7-snapshot.cjs\n      - name: Restore synthetic operational fixture into a new empty isolated database\n        env:\n          PG_CONTAINER: ${{ job.services.postgres.id }}\n          DRILL_TARGET_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/fitness_tracker_restore_drill\n        run: |\n          docker exec \"$PG_CONTAINER\" createdb -U postgres fitness_tracker_restore_drill\n          docker exec \"$PG_CONTAINER\" pg_dump -U postgres --schema-only --no-owner --no-privileges -n public -n app_internal fitness_tracker_e2e > /tmp/fixture-schema.sql\n          docker exec -i \"$PG_CONTAINER\" psql -U postgres -v ON_ERROR_STOP=1 fitness_tracker_restore_drill < /tmp/fixture-schema.sql\n          node scripts/restore-operational-drill.cjs /tmp/kg-hardening-fixture.json --confirm-disposable\n          if node scripts/restore-operational-drill.cjs /tmp/kg-hardening-fixture.json --confirm-disposable; then\n            echo \"ERROR: populated target was not rejected\"; exit 1\n          fi\n      - name: "],
+      [4347,4347,"","\n      - name: Upload synthetic hardening screenshots\n        if: success()\n        uses: actions/upload-artifact@v4\n        with:\n          name: hardening-ui-review\n          path: test-results/*-mobile.png\n          if-no-files-found: error\n          retention-days: 7"]
+    ]
+  },
+  "e2e/focused-controls.spec.cjs": {
+    "before":"66d0471c433a2ee33a7b1963e4c574111f8951993a860de1a8071d4815c6991d",
+    "after":"341e4d263a86c374dc8998bcccd61d34223fd94b675a58a615cb58be563e8a50",
+    "edits":[[19574,19574,"","nd PointsLog a"],[19586,19589,"and","while"],[19594,19594,"","legacy "],[19595,19602,"ersion-",""],[20102,20103,"6","7"]]
+  },
+  "e2e/stay-active.spec.cjs": {
+    "before":"a717e211ee991bd63e2dcf093d21d6e41ab3ace32c8aed2cad682dce217b9c17",
+    "after":"96c96a93fbd3d633d7ea0bf44a963d8cdd9c6b9a6c606da3de0f6d2e721b90d8",
+    "edits":[[5194,5194,"","Undefined(); // Proofs are owner/admin only.\n  expect(JSON.stringify(publicActivities)).not.toContain"]]
+  },
+  "package.json": {
+    "before":"331bd017b9e883e4a0b47f3fe3b7c00d9f9cff8019e238ec9b9ba1aae2d4f40f",
+    "after":"bea192333884c4ad872cd2b3db4cc13ca98d90e621af3fc4120aae5a7ae31eb3",
+    "edits":[[327,327,"","\",\n    \"test:hardening\": \"node scripts/hardening-unit-tests.cjs"]]
+  },
+  "src/app/admin/activities/page.tsx": {
+    "before":"5536a60df9b01005ba360b40f065f7ee300552fb84e3f3741efb2adb49caf29c",
+    "after":"99e80c161cf9293c8836f3ad911550dc366ab447bd9ad13a162a851931fcafde",
+    "edits":[[0,0,"","import type { ScoreBreakdown } from '@/lib/score-explanation';\n"],[585,585,"",";\n  pointsLog: ScoreBreakdown | null"],[2069,2069,"","pointsLog: { select: { basePoints: true, friendBonus: true, totalPoints: true } },\n        "]]
+  },
+  "src/app/api/activities/route.ts": {
+    "before":"6c1e9b9cac3575b0f82b749bdd7dfe4d1a16194b66c3c20963f1c83117049ff4",
+    "after":"6619a714df0d31a005540cd7340a684c3dab113b74caf67d15efb085d2a22155",
+    "edits":[[6102,6126,"proofUrl: true,\n        ",""]]
+  },
+  "src/app/api/admin/activities/create/route.ts": {
+    "before":"040d9262153fcf8de389d45aaa0e1978462c1b6da0929026f6e2340c04cc5805",
+    "after":"7aacda6675808513963413e6013c8fe0fc4c6a85ad05dc99c6bbb29182115df3",
+    "edits":[[3036,3036,"","proofActorId: guard.userId,\n      "]]
+  },
+  "src/app/api/admin/activities/route.ts": {
+    "before":"66d5c7775756c329b5559124462fea3638ad2ec15bb40642ac2134a5ee738051",
+    "after":"8810b83eb0d39e5929e4f1f4415193d5fc2664ddfce6b1c6c1dd6933401652eb",
+    "edits":[[884,884,"","pointsLog: { select: { basePoints: true, friendBonus: true, totalPoints: true } },\n        "]]
+  },
+  "src/app/api/upload/route.ts": {
+    "before":"913e016d3c2a73282885d7bcd5def16c2ec7fd9b5cd0c23386ce0caa2622cd4a",
+    "after":"62a73417889e8056b19f0549b40387dc592ce967b55a4829089676b91e11e8f9",
+    "edits":[[0,0,"","import { localProofFixtures } from '@/lib/proof-access';\n"],[2348,2349,"p","localP"],[2351,2352,"c","ofFixtur"],[2354,2410,"s.env.E2E_TEST_MODE === '1' && process.env.CI === 'true'","()"]]
+  },
+  "src/app/dashboard/page.tsx": {
+    "before":"85055daee3e6d2791a0c77bb5ec33636644b9f51283d8640a9df2ae333dfc40a",
+    "after":"8a235d08de2548b1c243a676082d96db33f9c1f45293347fbe5952457294f383",
+    "edits":[[0,0,"","import type { ScoreBreakdown } from '@/lib/score-explanation';\n"],[1135,1135,"",";\n  pointsLog: ScoreBreakdown | null"],[2862,2862,"",",\n        pointsLog: { select: { basePoints: true, friendBonus: true, totalPoints: true } }"]]
+  },
+  "src/components/AdminActionHub.tsx": {
+    "before":"e5b7817b799e3dcdda657c0c30082bfbb0ff978205216124d2d8d532d2f56c80",
+    "after":"d190024b1d6980260bbb54fa0f23c21be433909bd9f76c99b03f7719cd9f323a",
+    "edits":[[4899,4899,"","operations',label:'Operations & handover',description:'Proof privacy, backup coverage, billing alerts and administrator guide.',icon:<ShieldAlert className=\"h-5 w-5\"/>},{href:'/admin/"]]
+  },
+  "src/components/AdminActivityReview.tsx": {
+    "before":"ebc21712a9f95bf2be698948aabb434963e0db15817a4c95ab54418ee1016e89",
+    "after":"9a04aab2c15631cdf4d33bbb5ab36dcde56db5af77d1933ea846a7f0be52d768",
+    "edits":[[11,11,"","';\nimport ScoreExplanation from '@/components/ScoreExplanation';\nimport type { ScoreBreakdown } from '@/lib/score-explanation';\nimport { proofDisplayHref } from '@/lib/proof-reference"],[953,953,"",";\n  pointsLog?: ScoreBreakdown | null"],[12976,12976,"","proofDisplayHref("],[12993,12993,"",")!"],[16440,16440,"","                  {!refreshRequired ? <ScoreExplanation activity={activity} /> : null}\n    "],[19945,19945,"","proofDisplayHref("],[19958,19958,"",")!"]]
+  },
+  "src/components/AdminCreateActivityForm.tsx": {
+    "before":"77549ea2f853c5c5202fd643f63509aad84d5d8cd84e28c331646ac79935ca85",
+    "after":"2d4c9f00220e018fcc0688cd739aad01c0c1c63fca86a0bfcf37d3347e5c9b54",
+    "edits":[[11,11,"","';\nimport { proofDisplayHref } from '@/lib/proof-reference"],[11601,11601,"","DisplayHref(proof"],[11604,11604,"",")!"]]
+  },
+  "src/components/AthleteDashboard.tsx": {
+    "before":"f2eff4978b81e321224af3d245c597a08ecfa616e6c2f95d645c65c4e6bcf433",
+    "after":"e77d584076ee6b1ef1aad4aa240619beb0a98e28f809d51d357a10b7e3435dfd",
+    "edits":[[11,11,"","';\nimport ScoreExplanation from '@/components/ScoreExplanation';\nimport type { ScoreBreakdown } from '@/lib/score-explanation"],[2050,2050,"",";\n  pointsLog?: ScoreBreakdown | null"],[28107,28107,"","div className=\"lg:col-span-4\"><ScoreExplanation activity={activity} /></div>\n                    <"]]
+  },
+  "src/components/HistoricalImport.tsx": {
+    "before":"22f8ab14dfcb70f11f624d9221e9183a7f56eb3d76bb740cd61379c6a67e126d",
+    "after":"f3200c25606a230c959ad153a868eb2f1637935912724499b73b60eef7e47178",
+    "edits":[[11,11,"","';\nimport { proofDisplayHref } from '@/lib/proof-reference"],[8254,8254,"","proofDisplayHref("],[8266,8266,"",", true)!"]]
+  },
+  "src/components/NewActivityForm.tsx": {
+    "before":"75bbf10f3bc158f8e0a8c7864605db507b66f3cadc55196a11d695b3e957e21d",
+    "after":"da25d4e73cf879daadc885c2aeec30d286452954a2b2d61c55441953191980b0",
+    "edits":[[11,11,"","';\nimport { proofDisplayHref } from '@/lib/proof-reference"],[22319,22319,"","DisplayHref(proof"],[22322,22322,"",")!"]]
+  },
+  "src/lib/activities.ts": {
+    "before":"efe207780055e72b742caab8a91ae4effa76cc96123052b3268098b232b8cf6d",
+    "after":"8c726c1b75391c76f8f262c5b7b852e9e370f89afe1114c0ed5d71886ff03393",
+    "edits":[[0,0,"","import { assertAttachableProof } from './proof-access';\n"],[653,653,"","proofActorId?: string; "],[1054,1054,"",");\n    await assertAttachableProof(tx, input.proofUrl, input.proofActorId ?? input.userId"],[5313,5313,"","if (ownerId) await assertAttachableProof(tx, input.proofUrl, ownerId, activity.proofUrl);\n    "]]
+  },
+  "src/lib/activity-corrections.ts": {
+    "before":"71dc4d11e2fc1cc9faeb525ac69ab765be3f45c78d9e534b6cda519e2765a4bf",
+    "after":"1f49b79810cfe1a956efd6194d40b925990f28a9f43496dd032300b248713eb4",
+    "edits":[[0,0,"","import { assertAttachableProof } from '@/lib/proof-access';\n"],[8100,8100,"","await assertAttachableProof(tx, values.proofUrl, userId, activity.proofUrl);\n    "],[12679,12679,"","await assertAttachableProof(tx, values.proofUrl, request.user_id, activity.proofUrl);\n      "]]
+  },
+  "src/lib/participant-profile.ts": {
+    "before":"d2bdf265821f811dc695926c6d5f98f9e571b835297218cff4a0865ad8ed8852",
+    "after":"cc5bd295c4f4ab43e42cab140a851439a0ab6519473db036a72919047879d0c4",
+    "edits":[[2735,2749,"proofUrl:true,",""],[3066,3066,"","("],[3103,3103,"",").map(activity=>({...activity,proofUrl:null}))"]]
+  }
+}
