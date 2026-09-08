@@ -11,7 +11,7 @@ export default function ScoreExplanation({ activity, compact = false }: { activi
         {explanation.breakdown ? <span className="font-black text-orange-300">{explanation.breakdown.totalPoints.toFixed(1)} pts</span> : null}
       </div>
       {explanation.breakdown ? <p className="mt-1 text-slate-400">Base {explanation.breakdown.basePoints.toFixed(2)} · Friend +{explanation.breakdown.friendBonus.toFixed(1)}</p> : <p className="mt-1">{explanation.message}</p>}
-      {explanation.breakdown ? <p className="mt-2 border-t border-white/5 pt-2 text-slate-500">{explanation.message} Saved totals always round down to the lower 0.5-point increment.</p> : null}
+      {explanation.breakdown ? <p className="mt-2 border-t border-white/5 pt-2 text-slate-500">{explanation.message} Saved totals always round down to the lower whole point.</p> : null}
     </div>;
   }
 
@@ -19,6 +19,6 @@ export default function ScoreExplanation({ activity, compact = false }: { activi
     <p className={`font-semibold ${statusTone}`}>{explanation.status}</p>
     {explanation.breakdown ? <p>Activity points {explanation.breakdown.basePoints.toFixed(2)} · Friend bonus +{explanation.breakdown.friendBonus.toFixed(1)} · Saved total {explanation.breakdown.totalPoints.toFixed(1)}</p> : null}
     <p>{explanation.message}</p>
-    {explanation.breakdown ? <p className="text-slate-500">Activity points are displayed to 2 decimals. The saved total always rounds down to the lower 0.5-point increment.</p> : null}
+    {explanation.breakdown ? <p className="text-slate-500">Activity points are displayed to 2 decimals. The saved total always rounds down to the lower whole point.</p> : null}
   </div>;
 }
