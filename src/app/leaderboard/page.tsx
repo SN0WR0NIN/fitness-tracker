@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { Activity, Bike, Crown, Footprints, Minus, RefreshCw, Search, TrendingDown, TrendingUp, Trophy, Users, Waves } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import HeroAtmosphere from '@/components/HeroAtmosphere';
+import LeaderboardRacePanel from '@/components/LeaderboardRacePanel';
 
 type RankingMeta = {
   rank: number;
@@ -173,6 +174,16 @@ export default function LeaderboardPage() {
           </div>
           {view === 'individual' && <div className="mt-4 flex gap-2 overflow-x-auto pb-1">{categories.map((item) => <button key={item.key} onClick={() => setCategory(item.key)} className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-bold transition [&>svg]:h-4 [&>svg]:w-4 ${category === item.key ? 'bg-white text-slate-950' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>{item.icon}{item.label}</button>)}</div>}
         </div>
+
+        <LeaderboardRacePanel
+          view={view}
+          week={week}
+          individuals={rankedIndividuals}
+          teams={rankedTeams}
+          category={category}
+          teamMetric={teamMetric}
+          currentUserId={session?.user?.id ?? null}
+        />
 
         <div className="mt-5 space-y-2">
           {loading ? <LoadingRows /> : view === 'individual' ? (
