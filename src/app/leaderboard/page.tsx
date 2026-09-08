@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { Activity, Bike, Crown, Footprints, Minus, RefreshCw, Search, TrendingDown, TrendingUp, Trophy, Users, Waves } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import HeroAtmosphere from '@/components/HeroAtmosphere';
+import AnimatedNumber from '@/components/AnimatedNumber';
 
 type RankingMeta = {
   rank: number;
@@ -111,7 +112,7 @@ export default function LeaderboardPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <Navbar />
-      <main>
+      <main className="page-enter">
         <section className="hero-stage border-b border-white/10 bg-slate-950">
           <HeroAtmosphere />
           <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[0.82fr_1.18fr] lg:px-8 lg:py-20">
@@ -137,7 +138,7 @@ export default function LeaderboardPage() {
                       <span className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full border text-sm font-black sm:h-16 sm:w-16 sm:text-lg ${index === 0 ? 'border-lime-300/40 bg-lime-300 text-slate-950 shadow-lg shadow-lime-300/20' : index === 1 ? 'border-slate-300/30 bg-slate-300/15 text-slate-100' : 'border-orange-300/30 bg-orange-300/10 text-orange-200'}`}>{isPerson ? initials(entry.userName) : initials(entry.columnName)}</span>
                       <span className="mt-3 block w-full truncate text-sm font-black sm:text-base">{isPerson ? entry.userName : entry.columnName}</span>
                       <span className="mt-1 block w-full truncate text-[0.65rem] text-slate-500 sm:text-xs">{isPerson ? entry.columnName : `${entry.memberCount} members`}</span>
-                      <span className="mt-4 block text-lg font-black text-orange-300 sm:text-2xl">{score.toFixed(1)} <span className="text-[0.6rem] font-bold uppercase tracking-wider text-slate-500">pts</span></span>
+                      <span className="mt-4 block text-lg font-black text-orange-300 sm:text-2xl"><AnimatedNumber value={score} decimals={1} /> <span className="text-[0.6rem] font-bold uppercase tracking-wider text-slate-500">pts</span></span>
                       <span className="mt-3 block h-1.5 overflow-hidden rounded-full bg-white/5"><span className={`block h-full w-full rounded-full ${index === 0 ? 'bg-gradient-to-r from-lime-300 to-yellow-300' : 'bg-gradient-to-r from-orange-500 to-yellow-400'}`} /></span>
                     </>;
                     const className = `standing-row-enter ${order} relative min-w-0 rounded-2xl border p-3 text-center transition hover:-translate-y-1 sm:p-4 ${index === 0 ? 'min-h-64 border-lime-300/30 bg-gradient-to-b from-lime-300/15 to-lime-300/[0.04] shadow-xl shadow-lime-300/5 [animation-delay:100ms]' : 'min-h-56 border-white/10 bg-white/[0.04]'} ${index === 2 ? '[animation-delay:200ms]' : ''}`;
@@ -186,7 +187,7 @@ export default function LeaderboardPage() {
                 <span className={`flex h-9 w-9 items-center justify-center rounded-xl text-sm font-black ${actualIndex < 3 ? 'bg-white/10' : 'text-slate-500'}`}>{rankLabel(actualIndex)}</span>
                 <span className={`hidden h-11 w-11 items-center justify-center rounded-full border text-sm font-black sm:flex ${isCurrentUser ? 'border-lime-300/30 bg-lime-300 text-slate-950' : 'border-white/10 bg-slate-900 text-slate-300'}`}>{initials(person.userName)}</span>
                 <span className="min-w-0"><span className="flex items-center gap-2"><span className="block truncate font-black">{person.userName}</span>{isCurrentUser ? <span className="rounded-full bg-lime-300 px-2 py-0.5 text-[0.6rem] font-black uppercase tracking-wider text-slate-950">You</span> : null}<RankMovement change={person.rankChange} isNew={person.isNew} /></span><span className="block text-xs text-slate-500">{person.columnName}{actualIndex > 0 ? ` · ${pointsToNext.toFixed(1)} pts to overtake` : ' · Defending the lead'}</span><span className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-white/5"><span className="block h-full rounded-full bg-gradient-to-r from-orange-500 via-orange-400 to-yellow-300 transition-[width] duration-700" style={{ width: `${Math.max(3, person[category] / max * 100)}%` }} /></span></span>
-                <span className="rounded-xl bg-orange-400/10 px-3 py-2 text-right"><span className="block font-black text-orange-300">{person[category].toFixed(1)}</span><span className="block text-[0.6rem] font-bold uppercase tracking-wider text-slate-500">{category === 'totalPoints' ? 'points' : categories.find((item) => item.key === category)?.label}</span></span>
+                <span className="rounded-xl bg-orange-400/10 px-3 py-2 text-right"><AnimatedNumber value={person[category]} decimals={1} className="block font-black text-orange-300 tabular-nums" /><span className="block text-[0.6rem] font-bold uppercase tracking-wider text-slate-500">{category === 'totalPoints' ? 'points' : categories.find((item) => item.key === category)?.label}</span></span>
               </Link>;
             }) : <Empty />
           ) : teamResults.length ? teamResults.map((team) => {
@@ -198,12 +199,12 @@ export default function LeaderboardPage() {
               <span className={`flex h-9 w-9 items-center justify-center rounded-xl text-sm font-black ${actualIndex < 3 ? 'bg-white/10' : 'text-slate-500'}`}>{rankLabel(actualIndex)}</span>
               <span className="hidden h-11 w-11 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-300/10 text-sm font-black text-cyan-200 sm:flex">{initials(team.columnName)}</span>
               <span className="min-w-0"><span className="flex items-center gap-2"><span className="block truncate font-black">{team.columnName}</span><RankMovement change={team.rankChange} isNew={team.isNew} /></span><span className="block text-xs text-slate-500">{team.memberCount} members · {team.averagePoints.toFixed(1)} average{actualIndex > 0 ? ` · ${pointsToNext.toFixed(1)} pts to overtake` : ' · Defending the lead'}</span><span className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-white/5"><span className="block h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-300 transition-[width] duration-700" style={{ width: `${Math.max(3, team[teamMetric] / max * 100)}%` }} /></span></span>
-              <span className="rounded-xl bg-cyan-300/10 px-3 py-2 text-right"><span className="block font-black text-cyan-300">{team[teamMetric].toFixed(1)}</span><span className="block text-[0.6rem] font-bold uppercase tracking-wider text-slate-500">{teamMetric === 'averagePoints' ? 'avg pts' : 'points'}</span></span>
+              <span className="rounded-xl bg-cyan-300/10 px-3 py-2 text-right"><AnimatedNumber value={team[teamMetric]} decimals={1} className="block font-black text-cyan-300 tabular-nums" /><span className="block text-[0.6rem] font-bold uppercase tracking-wider text-slate-500">{teamMetric === 'averagePoints' ? 'avg pts' : 'points'}</span></span>
             </Link>;
           }) : <Empty />}
         </div>
         </div>
-        {currentUser && view === 'individual' ? <div className="fixed inset-x-3 bottom-28 z-40 mx-auto max-w-xl rounded-2xl border border-lime-300/30 bg-slate-900/95 p-3 shadow-2xl shadow-black/50 backdrop-blur-xl sm:bottom-4 sm:p-4"><Link href={`/participants/${currentUser.userId}`} className="grid grid-cols-[auto_auto_1fr_auto] items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-lime-300 font-black text-slate-950">{currentUserIndex + 1}</span><span className="flex h-10 w-10 items-center justify-center rounded-full bg-lime-300/10 text-xs font-black text-lime-200">{initials(currentUser.userName)}</span><span className="min-w-0"><span className="block text-[0.6rem] font-black uppercase tracking-[0.18em] text-lime-300">Your position</span><span className="block truncate font-black">{currentUser.userName}</span></span><span className="text-right"><span className="block font-black text-orange-300">{currentUser[category].toFixed(1)}</span><span className="block text-[0.6rem] uppercase text-slate-500">points</span></span></Link></div> : null}
+        {currentUser && view === 'individual' ? <div className="fixed inset-x-3 bottom-28 z-40 mx-auto max-w-xl rounded-2xl border border-lime-300/30 bg-slate-900/95 p-3 shadow-2xl shadow-black/50 backdrop-blur-xl sm:bottom-4 sm:p-4"><Link href={`/participants/${currentUser.userId}`} className="grid grid-cols-[auto_auto_1fr_auto] items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-lime-300 font-black text-slate-950">{currentUserIndex + 1}</span><span className="flex h-10 w-10 items-center justify-center rounded-full bg-lime-300/10 text-xs font-black text-lime-200">{initials(currentUser.userName)}</span><span className="min-w-0"><span className="block text-[0.6rem] font-black uppercase tracking-[0.18em] text-lime-300">Your position</span><span className="block truncate font-black">{currentUser.userName}</span></span><span className="text-right"><AnimatedNumber value={currentUser[category]} decimals={1} className="block font-black text-orange-300 tabular-nums" /><span className="block text-[0.6rem] uppercase text-slate-500">points</span></span></Link></div> : null}
       </main>
     </div>
   );

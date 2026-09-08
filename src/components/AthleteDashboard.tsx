@@ -1,5 +1,6 @@
 'use client';
 import ScoreExplanation from '@/components/ScoreExplanation';
+import AnimatedNumber from '@/components/AnimatedNumber';
 import type { ScoreBreakdown } from '@/lib/score-explanation';
 import ActivityProof from '@/components/ActivityProof';
 import PersonalAnalytics from '@/components/PersonalAnalytics';
@@ -288,7 +289,7 @@ export default function AthleteDashboard({
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <Navbar />
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+      <main className="page-enter mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         <details open className="dashboard-fold"><summary>Profile & season</summary><section className="hero-stage rounded-3xl border border-white/10 bg-slate-950 p-6 shadow-2xl shadow-black/20 sm:p-8">
           <HeroAtmosphere />
           <div className="hero-reveal mb-5 flex items-start justify-between gap-3">
@@ -317,7 +318,7 @@ export default function AthleteDashboard({
 
             <div className="hero-reveal hero-reveal-delay-1 min-w-56 rounded-3xl border border-lime-300/20 bg-lime-300/[0.07] p-6 text-left backdrop-blur sm:text-right">
               <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Season score</p>
-              <p className="athletic-display mt-2 text-6xl leading-none text-lime-300 sm:text-7xl">{profile.totalPoints.toFixed(1)}</p>
+              <AnimatedNumber value={profile.totalPoints} decimals={1} className="athletic-display mt-2 block text-6xl leading-none text-lime-300 sm:text-7xl tabular-nums" />
               <p className="mt-2 text-sm font-bold text-slate-300">Rank {profile.rank ? `#${profile.rank}` : 'pending'} of {profile.participantCount}</p>
               <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-lime-300 to-orange-400 transition-[width] duration-700" style={{ width: `${profile.rank ? Math.max(8, (profile.participantCount - profile.rank + 1) / Math.max(profile.participantCount, 1) * 100) : 8}%` }} /></div>
             </div>
@@ -332,8 +333,8 @@ export default function AthleteDashboard({
         </section></details>
 
         {activitySubmitted ? (
-          <section role="status" className="flex items-start gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-emerald-100">
-            <Check className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+          <section role="status" className="submission-celebration flex items-start gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-emerald-100">
+            <Check className="celebration-icon mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
             <div><p className="font-black">Activity submitted</p><p className="mt-1 text-sm text-emerald-100/70">It is now in the review queue. Your points will count after an admin approves it.</p></div>
           </section>
         ) : null}
