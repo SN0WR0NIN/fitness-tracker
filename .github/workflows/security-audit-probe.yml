@@ -1,0 +1,46 @@
+name: Dependency audit probe
+
+on:
+  push:
+    branches:
+      - chore/dependency-security-cleanup
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked application dependencies
+        run: npm ci
+      - name: Report application audit findings
+        shell: bash
+        run: |
+          npm audit --json > audit-app.json || true
+          node - <<'NODE'
+          const fs=require('fs');
+          const data=JSON.parse(fs.readFileSync('audit-app.json','utf8'));
+          console.log('APPLICATION_AUDIT_COUNTS', JSON.stringify(data.metadata?.vulnerabilities || {}));
+          for (const [name,v] of Object.entries(data.vulnerabilities || {})) {
+            console.log('APPLICATION_AUDIT_ITEM', JSON.stringify({name,severity:v.severity,isDirect:v.isDirect,range:v.range,via:(v.via||[]).map(x=>typeof x==='string'?x:{source:x.source,name:x.name,title:x.title,severity:x.severity,range:x.range,url:x.url}),fixAvailable:v.fixAvailable}));
+          }
+          NODE
+      - name: Report CI-only Playwright audit findings
+        shell: bash
+        run: |
+          npm install --no-save @playwright/test@1.55.0
+          npm audit --json > audit-ci.json || true
+          node - <<'NODE'
+          const fs=require('fs');
+          const data=JSON.parse(fs.readFileSync('audit-ci.json','utf8'));
+          console.log('CI_AUDIT_COUNTS', JSON.stringify(data.metadata?.vulnerabilities || {}));
+          for (const [name,v] of Object.entries(data.vulnerabilities || {})) {
+            console.log('CI_AUDIT_ITEM', JSON.stringify({name,severity:v.severity,isDirect:v.isDirect,range:v.range,via:(v.via||[]).map(x=>typeof x==='string'?x:{source:x.source,name:x.name,title:x.title,severity:x.severity,range:x.range,url:x.url}),fixAvailable:v.fixAvailable}));
+          }
+          NODE
