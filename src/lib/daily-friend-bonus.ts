@@ -1,4 +1,4 @@
-import { calculateActivityPoints, resolveEffectiveCategory, getWeekStart, getWeekNumber, type ActivityCategory, type ScoringRules } from './scoring';
+import { calculateActivityPoints, hasPositiveBaseScore, resolveEffectiveCategory, getWeekStart, getWeekNumber, type ActivityCategory, type ScoringRules } from './scoring';
 import { singaporeDate } from './activity-date';
 
 export const FRIEND_BONUS_SPORTS: readonly ActivityCategory[] = ['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE'];
@@ -8,13 +8,13 @@ export type DailyScoringActivity = {
   status: 'PENDING' | 'APPROVED' | 'REJECTED'; occurredAt: Date; createdAt: Date;
 };
 
-/** Shared by the allocator and the availability preview. basePoints is a
- * two-decimal display value and can round a small positive workout to zero.
- * Solo totalPoints uses the official round-down half-point rule. */
+/** Shared by the allocator and the availability preview. Friend eligibility
+ * uses the unrounded activity value so final score flooring cannot erase an
+ * otherwise valid positive workout. */
 export function qualifiesForFriendBonus(activity: Pick<DailyScoringActivity, 'category' | 'distance' | 'pace'>, rules: ScoringRules): boolean {
   const category = resolveEffectiveCategory(activity.category, activity.pace ?? undefined, rules);
   if (!FRIEND_BONUS_SPORTS.includes(category)) return false;
-  return calculateActivityPoints({ category, distance: activity.distance, pace: activity.pace ?? undefined }, rules).totalPoints > 0;
+  return hasPositiveBaseScore({ category, distance: activity.distance, pace: activity.pace ?? undefined }, rules);
 }
 
 /** Approved workouts claim first; pending amounts are estimates only. Within
