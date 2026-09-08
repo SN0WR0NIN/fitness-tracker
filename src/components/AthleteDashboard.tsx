@@ -391,44 +391,56 @@ export default function AthleteDashboard({
         </section></details>
 
         <details open className="dashboard-fold"><summary>My activities</summary><section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
-          <div className="flex flex-wrap items-end justify-between gap-3 p-5 sm:p-6">
-            <SectionTitle icon={<Activity className="h-5 w-5 text-emerald-300" />} title="My activities" subtitle="Track approvals and manage your submissions" />
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
+            <SectionTitle icon={<Activity className="h-5 w-5 text-emerald-300" />} title="My activities" subtitle="Recent submissions · tap one to view score, proof and actions" />
             <span className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-400">{visibleActivities.length} total</span>
           </div>
-          <p role="status" aria-live="polite" className="px-5 text-sm text-slate-300 sm:px-6">{deleteMessage}</p>
+          {deleteMessage ? <p role="status" aria-live="polite" className="border-t border-white/5 px-4 py-3 text-sm text-slate-300 sm:px-5">{deleteMessage}</p> : null}
           {visibleActivities.length ? (
             <div>
               {visibleActivities.map((activity) => {
                 const Icon = categoryIcons[activity.category];
                 return (
-                  <div id={`activity-${activity.id}`} key={activity.id} className="grid scroll-mt-24 gap-4 border-t border-white/5 px-5 py-4 sm:px-6 lg:grid-cols-[auto_1fr_auto_auto] lg:items-center">
-                    <span className="hidden rounded-xl bg-white/5 p-2.5 text-slate-300 lg:block"><Icon className="h-5 w-5" /></span>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2"><p className="font-bold">{categoryLabels[activity.category]}</p><Status status={activity.status} /></div>
-                      <p className="mt-1 text-xs text-slate-500">{new Date(activity.occurredAt).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', year: 'numeric' })}{activity.distance ? ` · ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}` : ''}{activity.duration ? ` · ${formatDuration(activity.duration)}` : ''}{activity.pace ? ` · ${formatPace(activity.pace)}/km` : ''}</p>
-                      {activity.rejectionReason ? <p className="mt-2 text-xs text-rose-300">Reason: {activity.rejectionReason}</p> : null}
-                    </div>
-                    <div className="text-sm text-slate-400">
-                      {editingCompanionId === activity.id ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <select aria-label="Select activity companion" value={companionSelect} onChange={(event) => setCompanionSelect(event.target.value)} className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1.5 text-xs text-white"><option value="">No friend</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select>
-                          <button type="button" onClick={() => saveCompanion(activity.id)} disabled={savingCompanion} className="text-xs font-bold text-sky-300 disabled:opacity-50">Save</button>
-                          <button type="button" onClick={() => setEditingCompanionId(null)} className="text-xs text-slate-500">Cancel</button>
+                  <details id={`activity-${activity.id}`} data-testid="dashboard-activity" key={activity.id} className="group scroll-mt-24 border-t border-white/5">
+                    <summary className="grid cursor-pointer list-none grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-4 marker:content-none sm:px-5">
+                      <span className="rounded-xl bg-white/5 p-2.5 text-slate-300"><Icon className="h-5 w-5" /></span>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2"><p className="font-bold">{categoryLabels[activity.category]}</p><Status status={activity.status} /></div>
+                        <p className="mt-1 text-xs text-slate-500">{new Date(activity.occurredAt).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', year: 'numeric' })}{activity.distance ? ` · ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}` : ''}{activity.duration ? ` · ${formatDuration(activity.duration)}` : ''}{activity.pace ? ` · ${formatPace(activity.pace)}/km` : ''}</p>
+                        <p className="mt-1 truncate text-xs text-slate-600">{activity.completedWithFriend ? `With ${activity.companion || 'a friend'}` : 'Solo activity'}</p>
+                      </div>
+                      <div className="flex items-center gap-3 pl-2"><span className="min-w-14 text-right font-black text-orange-300">+{activity.points.toFixed(1)}</span><span aria-hidden="true" className="text-lg text-slate-500 transition group-open:rotate-180">⌄</span></div>
+                    </summary>
+                    <div className="border-t border-white/5 bg-black/10 px-4 py-4 sm:px-5 sm:py-5">
+                      {activity.rejectionReason ? <p className="mb-4 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-200"><strong>Rejection reason:</strong> {activity.rejectionReason}</p> : null}
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)]">
+                        <div className="space-y-4">
+                          <ScoreExplanation activity={activity} compact />
+                          {activity.status === 'PENDING' && activity.stravaActivityId ? (
+                            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-400">
+                              {editingCompanionId === activity.id ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <select aria-label="Select activity companion" value={companionSelect} onChange={(event) => setCompanionSelect(event.target.value)} className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1.5 text-xs text-white"><option value="">No friend</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select>
+                                  <button type="button" onClick={() => saveCompanion(activity.id)} disabled={savingCompanion} className="text-xs font-bold text-sky-300 disabled:opacity-50">Save</button>
+                                  <button type="button" onClick={() => setEditingCompanionId(null)} className="text-xs text-slate-500">Cancel</button>
+                                </div>
+                              ) : <button type="button" onClick={() => startEditCompanion(activity)} className="text-xs font-bold text-sky-300">Edit activity friend</button>}
+                            </div>
+                          ) : null}
+                          {activity.status === 'APPROVED' ? <ApprovedActivityDateEditor activity={activity} /> : null}
+                          {activity.status === 'PENDING' ? <PendingActivityEditor activity={activity} users={users.filter((user) => user.id !== profile.id)} /> : null}
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-2"><span>{activity.completedWithFriend ? `With ${activity.companion || 'a friend'}` : 'Solo activity'}</span>{activity.status === 'PENDING' && activity.stravaActivityId ? <button type="button" onClick={() => startEditCompanion(activity)} className="text-xs font-bold text-sky-300">Edit</button> : null}</div>
-                      )}
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                          <div className="mb-3 flex items-center justify-between gap-3"><p className="text-xs font-black uppercase tracking-wider text-slate-400">Proof</p><span className="text-[0.65rem] font-semibold text-slate-600">Owner / admin</span></div>
+                          <ActivityProof key={activity.proofUrl || 'no-proof'} proofUrl={activity.proofUrl} label={`${categoryLabels[activity.category]} activity screenshot`} compact />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+                        <div>{activity.stravaActivityId ? <a href={`https://www.strava.com/activities/${activity.stravaActivityId}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-orange-400/20 bg-orange-400/10 px-3 text-xs font-bold text-orange-200">Open Strava <ExternalLink className="h-3.5 w-3.5" /></a> : null}</div>
+                        <button type="button" disabled={deletingId !== null} onClick={() => void deleteSubmission(activity)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-rose-400/15 px-3 text-xs font-semibold text-rose-300 transition hover:bg-rose-400/10 disabled:opacity-50" aria-label={`Delete ${categoryLabels[activity.category]} submission from ${new Date(activity.occurredAt).toLocaleDateString('en-SG')}`}><Trash2 className="h-4 w-4" />{deletingId === activity.id ? 'Deleting…' : 'Delete submission'}</button>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between gap-5 lg:justify-end">
-                      {activity.stravaActivityId ? <a href={`https://www.strava.com/activities/${activity.stravaActivityId}`} target="_blank" rel="noopener noreferrer" aria-label="View activity on Strava" className="text-orange-400 transition hover:text-orange-300"><ExternalLink className="h-4 w-4" /></a> : <span />}
-                      <button type="button" disabled={deletingId !== null} onClick={() => void deleteSubmission(activity)} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-rose-300 hover:bg-rose-400/10 disabled:opacity-50" aria-label={`Delete ${categoryLabels[activity.category]} submission from ${new Date(activity.occurredAt).toLocaleDateString('en-SG')}`}><Trash2 className="h-4 w-4" />{deletingId === activity.id ? 'Deleting…' : 'Delete'}</button>
-                      <span className="min-w-16 text-right font-black text-orange-300">+{activity.points.toFixed(1)}</span>
-                    </div>
-                    <div className="lg:col-span-4"><ScoreExplanation activity={activity} /></div>
-                    <ActivityProof key={activity.proofUrl || 'no-proof'} proofUrl={activity.proofUrl} label={`${categoryLabels[activity.category]} activity screenshot`} />
-                    {activity.status === 'APPROVED'  ? <ApprovedActivityDateEditor activity={activity} /> : null}
-                    {activity.status === 'PENDING' ? <PendingActivityEditor activity={activity} users={users.filter((user) => user.id !== profile.id)} /> : null}
-                  </div>
+                  </details>
                 );
               })}
             </div>
