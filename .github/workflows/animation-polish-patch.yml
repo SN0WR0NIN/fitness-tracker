@@ -1,0 +1,212 @@
+name: Animation polish patch
+
+on:
+  push:
+    branches:
+      - feat/animation-interaction-polish
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/animation-interaction-polish
+      - name: Apply animation and interaction polish
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_required(path, old, new, count=1):
+              file = Path(path)
+              text = file.read_text()
+              if old not in text:
+                  raise SystemExit(f'Missing expected text in {path}: {old[:100]!r}')
+              text = text.replace(old, new, count)
+              file.write_text(text)
+
+          # Leaderboard: animate primary scores and page entrance without changing ranking logic.
+          path = 'src/app/leaderboard/page.tsx'
+          replace_required(path,
+              "import HeroAtmosphere from '@/components/HeroAtmosphere';\n",
+              "import HeroAtmosphere from '@/components/HeroAtmosphere';\nimport AnimatedNumber from '@/components/AnimatedNumber';\n")
+          replace_required(path, '<main>', '<main className="page-enter">')
+          replace_required(path, '{score.toFixed(1)} <span className="text-[0.6rem] font-bold uppercase tracking-wider text-slate-500">pts</span>', '<AnimatedNumber value={score} decimals={1} /> <span className="text-[0.6rem] font-bold uppercase tracking-wider text-slate-500">pts</span>')
+          replace_required(path, '<span className="block font-black text-orange-300">{person[category].toFixed(1)}</span>', '<AnimatedNumber value={person[category]} decimals={1} className="block font-black text-orange-300 tabular-nums" />')
+          replace_required(path, '<span className="block font-black text-cyan-300">{team[teamMetric].toFixed(1)}</span>', '<AnimatedNumber value={team[teamMetric]} decimals={1} className="block font-black text-cyan-300 tabular-nums" />')
+          replace_required(path, '<span className="block font-black text-orange-300">{currentUser[category].toFixed(1)}</span>', '<AnimatedNumber value={currentUser[category]} decimals={1} className="block font-black text-orange-300 tabular-nums" />')
+
+          # Activity logging: animated live score and more tactile card entrance.
+          path = 'src/components/EnhancedActivityForm.tsx'
+          replace_required(path,
+              "import FriendMultiSelect from '@/components/FriendMultiSelect';\n",
+              "import FriendMultiSelect from '@/components/FriendMultiSelect';\nimport AnimatedNumber from '@/components/AnimatedNumber';\n")
+          replace_required(path, '<main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">', '<main className="page-enter mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">')
+          replace_required(path, '<div className="sticky top-3 z-40 mb-5 mt-4 rounded-2xl border border-orange-300/20 bg-slate-950/92 px-4 py-3 shadow-2xl backdrop-blur-xl">', '<div className="motion-card sticky top-3 z-40 mb-5 mt-4 rounded-2xl border border-orange-300/20 bg-slate-950/92 px-4 py-3 shadow-2xl backdrop-blur-xl">')
+          replace_required(path, '<span className="text-3xl font-black">{preview.totalPoints.toFixed(1)}</span>', '<AnimatedNumber value={preview.totalPoints} decimals={1} className="text-3xl font-black tabular-nums" />')
+          replace_required(path, '<form onSubmit={handleSubmit} className="space-y-5 rounded-3xl border border-white/10 bg-white/[0.04] p-5 sm:p-7">', '<form onSubmit={handleSubmit} className="motion-card space-y-5 rounded-3xl border border-white/10 bg-white/[0.04] p-5 sm:p-7">')
+
+          # Dashboard: animated season score and submission-success celebration.
+          path = 'src/components/AthleteDashboard.tsx'
+          replace_required(path,
+              "import ScoreExplanation from '@/components/ScoreExplanation';\n",
+              "import ScoreExplanation from '@/components/ScoreExplanation';\nimport AnimatedNumber from '@/components/AnimatedNumber';\n")
+          replace_required(path, '<main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">', '<main className="page-enter mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">')
+          replace_required(path, '<p className="athletic-display mt-2 text-6xl leading-none text-lime-300 sm:text-7xl">{profile.totalPoints.toFixed(1)}</p>', '<AnimatedNumber value={profile.totalPoints} decimals={1} className="athletic-display mt-2 block text-6xl leading-none text-lime-300 sm:text-7xl tabular-nums" />')
+          replace_required(path, '<section role="status" className="flex items-start gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-emerald-100">', '<section role="status" className="submission-celebration flex items-start gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-emerald-100">')
+          replace_required(path, '<Check className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />', '<Check className="celebration-icon mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />')
+
+          # Public profile: staged card/achievement reveals and animated progress bars.
+          path = 'src/app/participants/[id]/page.tsx'
+          replace_required(path, '<main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">', '<main className="page-enter mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">')
+          replace_required(path, '<section className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-5 sm:p-8">', '<section className="motion-card relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-5 sm:p-8">')
+          replace_required(path, '{showcase.length?<section className="rounded-2xl border border-yellow-300/15 bg-gradient-to-r from-yellow-300/[0.08] to-orange-400/[0.04] p-5 sm:p-6">', '{showcase.length?<section className="achievement-pop rounded-2xl border border-yellow-300/15 bg-gradient-to-r from-yellow-300/[0.08] to-orange-400/[0.04] p-5 sm:p-6">')
+          replace_required(path, 'className="rounded-xl border border-yellow-300/10 bg-black/15 p-4"', 'className="achievement-pop interactive-lift rounded-xl border border-yellow-300/10 bg-black/15 p-4"')
+          replace_required(path, 'className="mx-auto w-full max-w-14 rounded-t-lg bg-gradient-to-t from-orange-600 to-yellow-300"', 'className="weekly-chart-bar mx-auto w-full max-w-14 rounded-t-lg bg-gradient-to-t from-orange-600 to-yellow-300"')
+          replace_required(path, 'className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-t border-white/5 px-5 py-4 sm:px-6"', 'className="motion-row grid grid-cols-[auto_1fr_auto] items-center gap-3 border-t border-white/5 px-5 py-4 sm:px-6"')
+          replace_required(path, 'className={`h-full rounded-full ${category.colour}`}', 'className={`motion-progress h-full rounded-full ${category.colour}`}')
+          replace_required(path, "function HeroStat({label,value,detail}:{label:string;value:string;detail:string}){return <div className=\"rounded-2xl border border-white/10 bg-slate-950/40 p-4\">", "function HeroStat({label,value,detail}:{label:string;value:string;detail:string}){return <div className=\"motion-card interactive-lift rounded-2xl border border-white/10 bg-slate-950/40 p-4\">")
+          replace_required(path, "function Snapshot({label,value,detail}:{label:string;value:string;detail:string}){return <div className=\"rounded-2xl border border-white/10 bg-white/[0.04] p-4\">", "function Snapshot({label,value,detail}:{label:string;value:string;detail:string}){return <div className=\"motion-card interactive-lift rounded-2xl border border-white/10 bg-white/[0.04] p-4\">")
+
+          # Global motion primitives. Respect reduced-motion preferences.
+          css = Path('src/app/globals.css')
+          existing = css.read_text()
+          marker = '/* interaction-polish-v1 */'
+          if marker not in existing:
+              existing += r'''
+
+/* interaction-polish-v1 */
+@keyframes page-enter-polish {
+  from { opacity: 0; transform: translateY(10px) scale(.996); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes card-enter-polish {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes achievement-pop-polish {
+  0% { opacity: 0; transform: translateY(10px) scale(.92); }
+  65% { opacity: 1; transform: translateY(-2px) scale(1.02); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes row-enter-polish {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes progress-grow-polish {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes celebrate-polish {
+  0% { opacity: 0; transform: translateY(-8px) scale(.96); }
+  60% { opacity: 1; transform: translateY(1px) scale(1.012); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes celebrate-icon-polish {
+  0% { transform: rotate(-18deg) scale(.65); }
+  55% { transform: rotate(8deg) scale(1.28); }
+  100% { transform: rotate(0) scale(1); }
+}
+@keyframes confetti-polish {
+  0% { opacity: 0; transform: translate3d(0,-12px,0) rotate(0); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(18px,44px,0) rotate(150deg); }
+}
+
+.page-enter { animation: page-enter-polish 420ms cubic-bezier(.16,1,.3,1) both; }
+.motion-card { animation: card-enter-polish 520ms cubic-bezier(.16,1,.3,1) both; }
+.motion-row { animation: row-enter-polish 420ms cubic-bezier(.16,1,.3,1) both; }
+.achievement-pop { animation: achievement-pop-polish 620ms cubic-bezier(.16,1,.3,1) both; }
+.motion-progress { transform-origin: left; animation: progress-grow-polish 800ms cubic-bezier(.16,1,.3,1) both; }
+.interactive-lift { transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+.interactive-lift:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+.submission-celebration { position: relative; overflow: hidden; animation: celebrate-polish 580ms cubic-bezier(.16,1,.3,1) both; }
+.submission-celebration::before,
+.submission-celebration::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  right: 38px;
+  width: 5px;
+  height: 8px;
+  border-radius: 2px;
+  background: #bef264;
+  box-shadow: -24px 8px #38bdf8, 18px 16px #facc15, -42px 24px #fb7185, 38px 4px #34d399;
+  pointer-events: none;
+  animation: confetti-polish 900ms ease-out both;
+}
+.submission-celebration::after { right: 76px; animation-delay: 100ms; transform: scale(.8); }
+.celebration-icon { animation: celebrate-icon-polish 620ms cubic-bezier(.16,1,.3,1) both; }
+.dashboard-fold[open] > section { animation: card-enter-polish 320ms cubic-bezier(.16,1,.3,1) both; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .motion-card,
+  .motion-row,
+  .achievement-pop,
+  .motion-progress,
+  .submission-celebration,
+  .submission-celebration::before,
+  .submission-celebration::after,
+  .celebration-icon,
+  .dashboard-fold[open] > section {
+    animation: none !important;
+  }
+  .interactive-lift { transition: none !important; }
+  .interactive-lift:hover { transform: none !important; box-shadow: none !important; }
+}
+'''
+              css.write_text(existing)
+
+          # Focused browser regression for animation hooks and reduced-risk success celebration.
+          Path('e2e/animation-polish.spec.cjs').write_text(r'''const { test, expect } = require('@playwright/test');
+
+const PASSWORD = process.env.E2E_PASSWORD || 'E2E-only-Password-123!';
+
+async function login(context, email) {
+  const page = await context.newPage();
+  await page.goto('/auth/login');
+  await page.getByPlaceholder('Your username or email').fill(email);
+  await page.locator('input[type="password"]').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Log In' }).click();
+  await expect(page).toHaveURL(/\/dashboard/);
+  return page;
+}
+
+test('core challenge screens expose lightweight animation hooks', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await login(context, 'member-e2e@example.test');
+
+  await page.goto('/dashboard?activitySubmitted=true');
+  const success = page.getByRole('status');
+  await expect(success).toBeVisible();
+  await expect(success).toHaveClass(/submission-celebration/);
+  await expect(success.locator('.celebration-icon')).toHaveCount(1);
+  await expect(page.locator('main.page-enter')).toBeVisible();
+
+  await page.goto('/activities/new');
+  await expect(page.getByText('Live score preview', { exact: true })).toBeVisible();
+  await expect(page.locator('main.page-enter')).toBeVisible();
+  await expect(page.locator('.motion-card').first()).toBeVisible();
+
+  await page.goto('/leaderboard');
+  await expect(page.locator('main.page-enter')).toBeVisible();
+  await expect(page.getByText('Standings controls', { exact: true })).toBeVisible();
+
+  await context.close();
+});
+''')
+      - name: Commit polish
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/app/globals.css src/app/leaderboard/page.tsx src/app/participants/'[id]'/page.tsx src/components/EnhancedActivityForm.tsx src/components/AthleteDashboard.tsx e2e/animation-polish.spec.cjs
+          git diff --cached --quiet && exit 0
+          git commit -m 'Add animation and interaction polish'
+          git push origin HEAD:feat/animation-interaction-polish
