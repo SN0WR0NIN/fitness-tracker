@@ -17,18 +17,25 @@ export default function PwaManager({children}:{children:React.ReactNode}){
     const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
     const detectInstalled=()=>{const standalone=display.matches||Boolean((navigator as Navigator & {standalone?:boolean}).standalone);setInstalled(standalone);setShowIOSInstructions(ios&&!standalone);};
     queueMicrotask(()=>{if(!disposed){setOnline(navigator.onLine);detectInstalled();}});
-    const onOnline=()=>setOnline(true);const onOffline=()=>setOnline(false);
+    let registration:ServiceWorkerRegistration|undefined;
+    let registerPromise:Promise<void>|null=null;
+    const observe=()=>{const worker=registration?.installing;if(!worker)return;worker.addEventListener('statechange',()=>{if(!disposed&&worker.state==='installed'&&navigator.serviceWorker.controller)setWaiting(registration?.waiting ?? worker);});};
+    const register=()=>{
+      if(disposed||!('serviceWorker' in navigator)||registerPromise)return;
+      registerPromise=navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).then((result)=>{if(disposed)return;registration=result;if(result.waiting)setWaiting(result.waiting);result.addEventListener('updatefound',observe);observe();}).catch(()=>{if(!disposed)setInstallMessage('Offline support could not be enabled. You can continue using the website.');});
+    };
+    // Register as soon as the page has loaded instead of relying on a fixed
+    // timer that can be interrupted by fast navigation or backgrounding.
+    if(document.readyState==='complete')register();else window.addEventListener('load',register,{once:true});
+    const checkForUpdate=()=>{if(!disposed&&navigator.onLine)void registration?.update?.().catch(()=>{});};
+    const onOnline=()=>{setOnline(true);register();checkForUpdate();};const onOffline=()=>setOnline(false);
+    const onVisible=()=>{if(document.visibilityState==='visible')checkForUpdate();};
     const onPrompt=(event:Event)=>{event.preventDefault();setInstallEvent(event as InstallPromptEvent);};
     const onInstalled=()=>{setInstalled(true);setInstallEvent(null);setShowIOSInstructions(false);setInstallMessage('KG Active is installed on this device.');};
     const onControllerChange=()=>{if(updateChosen.current)window.location.reload();};
-    let registration:ServiceWorkerRegistration|undefined;
-    const observe=()=>{const worker=registration?.installing;if(!worker)return;worker.addEventListener('statechange',()=>{if(!disposed&&worker.state==='installed'&&navigator.serviceWorker.controller)setWaiting(registration?.waiting ?? worker);});};
-    const timer='serviceWorker' in navigator?window.setTimeout(()=>{
-      navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).then((result)=>{if(disposed)return;registration=result;if(result.waiting)setWaiting(result.waiting);result.addEventListener('updatefound',observe);observe();}).catch(()=>{if(!disposed)setInstallMessage('Offline support could not be enabled. You can continue using the website.');});
-    },1600):null;
-    window.addEventListener('online',onOnline);window.addEventListener('offline',onOffline);window.addEventListener('beforeinstallprompt',onPrompt);window.addEventListener('appinstalled',onInstalled);display.addEventListener('change',detectInstalled);
+    window.addEventListener('online',onOnline);window.addEventListener('offline',onOffline);window.addEventListener('beforeinstallprompt',onPrompt);window.addEventListener('appinstalled',onInstalled);document.addEventListener('visibilitychange',onVisible);display.addEventListener('change',detectInstalled);
     if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('controllerchange',onControllerChange);
-    return ()=>{disposed=true;if(timer!==null)window.clearTimeout(timer);registration?.removeEventListener('updatefound',observe);window.removeEventListener('online',onOnline);window.removeEventListener('offline',onOffline);window.removeEventListener('beforeinstallprompt',onPrompt);window.removeEventListener('appinstalled',onInstalled);display.removeEventListener('change',detectInstalled);if('serviceWorker' in navigator)navigator.serviceWorker.removeEventListener('controllerchange',onControllerChange);};
+    return ()=>{disposed=true;window.removeEventListener('load',register);registration?.removeEventListener('updatefound',observe);window.removeEventListener('online',onOnline);window.removeEventListener('offline',onOffline);window.removeEventListener('beforeinstallprompt',onPrompt);window.removeEventListener('appinstalled',onInstalled);document.removeEventListener('visibilitychange',onVisible);display.removeEventListener('change',detectInstalled);if('serviceWorker' in navigator)navigator.serviceWorker.removeEventListener('controllerchange',onControllerChange);};
   },[]);
   const install=useCallback(async()=>{
     if(!installEvent)return;

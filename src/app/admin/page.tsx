@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { Activity, CheckCircle2, DatabaseBackup, FileClock, Link2, ShieldCheck, TriangleAlert, Trophy, Users } from 'lucide-react';
 import AdminActionHub from '@/components/AdminActionHub';
+import AdminQueueBoard from '@/components/AdminQueueBoard';
 import Navbar from '@/components/Navbar';
 import SystemStatusCard from '@/components/SystemStatusCard';
 import { requireAdmin } from '@/lib/adminGuard';
@@ -12,12 +13,15 @@ import { getLatestOperationalBackupSummary, getLatestScheduledHealth } from '@/l
 
 export const dynamic = 'force-dynamic';
 
+type QueueCounts={corrections:number;dirty:number};
+type PendingPreview={id:string;category:string;points:number;createdAt:Date;user:{name:string};column:{name:string}};
+
 export default async function AdminPage() {
   const guard = await requireAdmin();
   if (guard.status === 401) redirect('/auth/login');
   if (guard.error) redirect('/dashboard');
 
-  const [users, activities, pending, approvedPoints, audit, stravaConnected, scheduledHealth, automatedBackup, passwordResets, latestCompletedWeek] = await Promise.all([
+  const [users, activities, pending, approvedPoints, audit, stravaConnected, scheduledHealth, automatedBackup, passwordResets, latestCompletedWeek, queueCountsResult, pendingPreviewResult] = await Promise.all([
     prisma.user.count(),
     prisma.activity.count(),
     prisma.activity.count({ where: { status: 'PENDING' } }),
@@ -28,6 +32,8 @@ export default async function AdminPage() {
     getLatestOperationalBackupSummary(),
     getActivePasswordResetCount(),
     getLatestCompletedWeekNumber(),
+    prisma.$queryRaw<Array<QueueCounts>>`SELECT (SELECT count(*)::int FROM app_internal.activity_correction WHERE status='OPEN') AS corrections,(SELECT count(*)::int FROM app_internal.weekly_result_dirty) AS dirty`,
+    prisma.activity.findMany({where:{status:'PENDING'},orderBy:{createdAt:'asc'},take:5,select:{id:true,category:true,points:true,createdAt:true,user:{select:{name:true}},column:{select:{name:true}}}}),
   ]);
 
   let latestWeeklyResult: Awaited<ReturnType<typeof getWeeklyCompetitionResult>> = null;
@@ -54,6 +60,8 @@ export default async function AdminPage() {
   const checkTime = scheduledHealth?.createdAt;
   const openDuplicatePairs = integrity?.open_duplicate_pairs ?? integrity?.possible_duplicate_pairs ?? 0;
   const deferredDuplicatePairs = integrity?.deferred_duplicate_pairs ?? 0;
+  const queueCounts=(queueCountsResult as QueueCounts[])[0] ?? {corrections:0,dirty:0};
+  const pendingPreview=(pendingPreviewResult as PendingPreview[]).map(item=>({id:item.id,name:item.user.name,column:item.column.name,category:item.category,points:item.points,createdAt:item.createdAt}));
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -61,10 +69,7 @@ export default async function AdminPage() {
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         <header className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-8">
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-lime-300"><ShieldCheck className="h-4 w-4" />Admin operations</p>
-          <div className="mt-3">
-            <h1 className="text-3xl font-black sm:text-5xl">Command Centre 2.0</h1>
-            <p className="mt-3 max-w-2xl text-slate-400">Everything admins need, grouped into one simple workspace.</p>
-          </div>
+          <div className="mt-3"><h1 className="text-3xl font-black sm:text-5xl">Command Centre 2.0</h1><p className="mt-3 max-w-2xl text-slate-400">Start with today&apos;s queue, then open only the specialist tool you need.</p></div>
         </header>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -74,30 +79,19 @@ export default async function AdminPage() {
           <Stat icon={<Trophy className="h-5 w-5" />} label="Approved points" value={(approvedPoints._sum.points ?? 0).toFixed(1)} />
         </section>
 
-        <AdminActionHub
-          pendingReviews={pending}
-          passwordResets={passwordResets}
-          duplicateReviews={openDuplicatePairs}
-          latestCompletedWeek={latestCompletedWeek}
-          latestWeekPendingReviews={latestWeekPendingReviews}
-          weeklyAwardState={weeklyAwardState}
-          healthStatus={scheduledHealth?.status ?? null}
-        />
+        <AdminQueueBoard pendingCount={pending} correctionCount={queueCounts.corrections} duplicateCount={openDuplicatePairs} dirtyWeekCount={queueCounts.dirty} pendingItems={pendingPreview}/>
+
+        <AdminActionHub pendingReviews={pending} passwordResets={passwordResets} duplicateReviews={openDuplicatePairs} latestCompletedWeek={latestCompletedWeek} latestWeekPendingReviews={latestWeekPendingReviews} weeklyAwardState={weeklyAwardState} healthStatus={scheduledHealth?.status ?? null} />
 
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <h2 className="text-lg font-black">Admin activity feed</h2><p className="mt-1 text-sm text-slate-500">Recent operational changes from the existing audit trail.</p>
           <div className="mt-5 divide-y divide-white/5">{recentAudit.length ? recentAudit.map((item) => <div key={item.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold">{item.action}</p><p className="mt-1 text-xs text-slate-500">{item.actorName} · {item.target}</p></div><time className="text-xs text-slate-600">{item.createdAt.toLocaleString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</time></div>) : <p className="py-8 text-center text-sm text-slate-500">No admin audit entries yet.</p>}</div>
         </section>
 
-        <div id="system-health" className="scroll-mt-6">
-          <SystemStatusCard />
-        </div>
+        <div id="system-health" className="scroll-mt-6"><SystemStatusCard /></div>
 
         <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div><h2 className="text-lg font-black">Automated safety net</h2><p className="mt-1 text-sm text-slate-500">Integrity runs hourly. Private operational snapshots run daily at 2:30 AM Singapore time.</p></div>
-            <span className="text-xs text-slate-600">{checkTime ? `Last check ${formatSg(checkTime)}` : 'No scheduled check recorded'}</span>
-          </div>
+          <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black">Automated safety net</h2><p className="mt-1 text-sm text-slate-500">Integrity runs hourly. Private operational snapshots run daily at 2:30 AM Singapore time.</p></div><span className="text-xs text-slate-600">{checkTime ? `Last check ${formatSg(checkTime)}` : 'No scheduled check recorded'}</span></div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <HealthStat icon={(integrity?.score_mismatches ?? 1) === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />} label="Score reconciliation" value={integrity ? (integrity.score_mismatches === 0 ? 'Balanced' : `${integrity.score_mismatches} mismatch${integrity.score_mismatches === 1 ? '' : 'es'}`) : 'No result'} detail={scheduledHealth ? `Scheduled status: ${scheduledHealth.status}` : 'Waiting for scheduler'} good={Boolean(integrity && integrity.score_mismatches === 0)} />
             <HealthStat icon={(integrity?.possible_duplicate_pairs ?? 1) === 0 ? <CheckCircle2 className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />} label="Duplicate review" value={integrity ? `${openDuplicatePairs} open` : 'No result'} detail={`${deferredDuplicatePairs} deferred · decisions are tracked`} good={Boolean(integrity && integrity.possible_duplicate_pairs === 0)} />
