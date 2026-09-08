@@ -17,7 +17,7 @@ test('core challenge screens expose lightweight animation hooks', async ({ brows
   const page = await login(context, 'member-e2e@example.test');
 
   await page.goto('/dashboard?activitySubmitted=true');
-  const success = page.getByRole('status');
+  const success = page.locator('section.submission-celebration[role="status"]');
   await expect(success).toBeVisible();
   await expect(success).toHaveClass(/submission-celebration/);
   await expect(success.locator('.celebration-icon')).toHaveCount(1);
