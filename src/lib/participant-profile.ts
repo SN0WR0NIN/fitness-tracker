@@ -9,15 +9,16 @@ type ProfileWeekScore={weekNumber:number;weekStart:Date;totalPoints:number;runPo
 type ProfileUser={id:string;name:string;createdAt:Date;column:{id:string;name:string}|null;weeklyScores:ProfileWeekScore[];};
 type RankedScore={userId:string;_sum:{totalPoints:number|null};};
 type CategoryScore={category:ActivityCategory;_sum:{points:number|null};};
-export async function getParticipantProfile(userId:string,options:{includeActivities?:boolean}={}){
+export async function getParticipantProfile(userId:string,options:{includeActivities?:boolean;activityLimit?:number}={}){
   const includeActivities=options.includeActivities ?? true;
+  const activityLimit=options.activityLimit && options.activityLimit>0 ? Math.min(Math.floor(options.activityLimit),100) : undefined;
   const activityWhere={userId,status:'APPROVED' as const};
   const [userResult,rankedScoresResult,profileSettings,activityCount,friendActivities,categoryScoresResult,activitiesResult,engineAchievements]=await Promise.all([
     prisma.user.findUnique({where:{id:userId},select:{id:true,name:true,createdAt:true,column:{select:{id:true,name:true}},weeklyScores:{orderBy:{weekStart:'asc'},select:{weekNumber:true,weekStart:true,totalPoints:true,runPoints:true,cyclePoints:true,swimPoints:true,hikePoints:true,troopGamePoints:true}}}}),
     prisma.weeklyScore.groupBy({by:['userId'],_sum:{totalPoints:true},orderBy:{_sum:{totalPoints:'desc'}}}),
     getUserProfileSettings(userId),prisma.activity.count({where:activityWhere}),prisma.activity.count({where:{...activityWhere,completedWithFriend:true}}),
     prisma.activity.groupBy({by:['category'],where:activityWhere,_sum:{points:true}}),
-    includeActivities?prisma.activity.findMany({where:activityWhere,orderBy:{occurredAt:'desc'},select:{id:true,category:true,distance:true,pace:true,duration:true,elevationGain:true,points:true,completedWithFriend:true,companion:true,stravaActivityId:true,occurredAt:true,weekNumber:true}}):Promise.resolve([] as ProfileActivity[]),
+    includeActivities?prisma.activity.findMany({where:activityWhere,orderBy:{occurredAt:'desc'},take:activityLimit,select:{id:true,category:true,distance:true,pace:true,duration:true,elevationGain:true,points:true,completedWithFriend:true,companion:true,stravaActivityId:true,occurredAt:true,weekNumber:true}}):Promise.resolve([] as ProfileActivity[]),
     getEngineAchievements(userId),
   ]);
   const user=userResult as ProfileUser|null;const rankedScores=rankedScoresResult as RankedScore[];const categoryScores=categoryScoresResult as CategoryScore[];const activities=(activitiesResult as ProfileActivity[]).map(activity=>({...activity,proofUrl:null}));
@@ -31,8 +32,6 @@ export async function getParticipantProfile(userId:string,options:{includeActivi
   const categories=(Object.keys(CATEGORY_DETAILS) as ActivityCategory[]).map((key)=>({key,...CATEGORY_DETAILS[key],points:scoreByCategory.get(key) ?? 0}));
   const activeCategories=categories.filter((category)=>category.points>0).length;
   const bestWeek=weeklyScores.reduce<ProfileWeekScore|null>((best,week)=>(!best||week.totalPoints>best.totalPoints?week:best),null);
-  // Milestones are persisted by the database engine. Current-rank badges stay
-  // live and do not claim a permanent historical rank or award bonus points.
   const rankBadges:ProfileAchievement[]=[
     {name:'Top 10',description:'Currently rank in the overall top 10',unlocked:Boolean(totalPoints>0&&rank&&rank<=10),progress:rank&&totalPoints>0?Math.min(1,10/rank):0,category:'Competition',tier:'silver',progressLabel:rank?`Current rank #${rank}`:'Not ranked yet'},
     {name:'Podium',description:'Currently rank in the overall top 3',unlocked:Boolean(totalPoints>0&&rank&&rank<=3),progress:rank&&totalPoints>0?Math.min(1,3/rank):0,category:'Competition',tier:'gold',progressLabel:rank?`Current rank #${rank}`:'Not ranked yet'},
