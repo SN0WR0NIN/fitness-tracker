@@ -67,9 +67,9 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     // still fail if more than one visible form is present.
     const form = page.locator('form:visible');
     await expect(form).toHaveCount(1);
-    await form.getByLabel(/^Activity date/).fill('2026-09-03');
-    await form.getByPlaceholder('e.g. 5.00').fill('5');
-    await form.getByPlaceholder('e.g. 6:30').fill('6');
+    await form.getByLabel('Date',{exact:true}).fill('2026-09-03');
+    await form.getByPlaceholder('5.00').fill('5');
+    await form.getByPlaceholder('6:30').fill('6');
     await form.getByRole('checkbox',{name:'I completed this with friends',exact:true}).check();
     const picker = form.getByRole('group',{name:'Friends',exact:true});
     await picker.getByLabel('Search friends',{exact:true}).fill('Group friend1');
