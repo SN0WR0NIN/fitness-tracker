@@ -65,7 +65,7 @@ test('small positive workouts use the same friend eligibility in estimates and f
       const log = await db.pointsLog.findUniqueOrThrow({ where: { activityId: tiny.id } });
       expect(log.basePoints).toBe(0); // Display rounding must not remove eligibility.
       expect(log.friendBonus).toBe(3);
-      expect(tiny.points).toBe(3.5);
+      expect(tiny.points).toBe(3); // Friend bonus applies first, then the final total rounds down.
       const path = `/api/activities/friend-bonus?activityDate=2026-09-02&category=${category}`;
       expect(await json(await accounts.member.api.get(path))).toMatchObject({ used: false, pending: true, available: false });
       await json(await accounts.admin.api.post(`/api/admin/activities/${tiny.id}/approve`, { data: {} }));
