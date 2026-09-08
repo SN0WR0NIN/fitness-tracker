@@ -9,7 +9,7 @@
  * - Troop Games: 5 points flat.
  * - Friend bonus: +3 per participant / Singapore day / eligible sport; maximum 12 across four sports.
  *   No extra bonus for Troop Games, repeated same-sport entries, or extra friends.
- * - Final totals are always rounded DOWN to the lower 0.5-point increment.
+ * - Final totals are always rounded DOWN to the lower whole point.
  */
 
 export type ActivityCategory = 
@@ -68,13 +68,13 @@ interface ScoringOutput {
 }
 
 /**
- * Floor a non-negative score to the lower half-point. The tiny tolerance only
- * protects exact half-point values from floating-point representation noise;
- * it never promotes a genuinely lower score into the next half-point band.
+ * Floor a non-negative score to the lower whole point. The tiny tolerance only
+ * protects exact whole-point values from floating-point representation noise;
+ * it never promotes a genuinely lower score into the next whole-point band.
  */
 export function roundScoreDown(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
-  return Math.floor((value + 1e-9) * 2) / 2;
+  return Math.floor(value + 1e-9);
 }
 
 /**
@@ -99,7 +99,7 @@ function runPaceBonusPerKm(pace: number, rules: ScoringRules): number {
   return rules.runStandardBonusPerKm;
 }
 
-/** Raw activity value before display rounding, friend bonus, or final half-point flooring. */
+/** Raw activity value before display rounding, friend bonus, or final whole-point flooring. */
 function rawBasePoints(input: Pick<ScoringInput, 'category' | 'distance' | 'pace'>, rules: ScoringRules): number {
   switch (input.category) {
     case 'RUN':
@@ -122,7 +122,7 @@ function rawBasePoints(input: Pick<ScoringInput, 'category' | 'distance' | 'pace
 /**
  * Friend-bonus eligibility must use the unrounded activity value. This keeps a
  * valid tiny positive Run/Cycle/Swim eligible even when its solo saved score
- * floors below 0.5, while sub-minimum Walk/Hike entries remain ineligible.
+ * floors below 1 point, while sub-minimum Walk/Hike entries remain ineligible.
  */
 export function hasPositiveBaseScore(
   input: Pick<ScoringInput, 'category' | 'distance' | 'pace'>,
