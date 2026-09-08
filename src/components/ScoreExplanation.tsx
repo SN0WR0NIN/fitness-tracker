@@ -11,7 +11,7 @@ export default function ScoreExplanation({ activity, compact = false }: { activi
         {explanation.breakdown ? <span className="font-black text-orange-300">{explanation.breakdown.totalPoints.toFixed(1)} pts</span> : null}
       </div>
       {explanation.breakdown ? <p className="mt-1 text-slate-400">Base {explanation.breakdown.basePoints.toFixed(2)} · Friend +{explanation.breakdown.friendBonus.toFixed(1)}</p> : <p className="mt-1">{explanation.message}</p>}
-      {explanation.breakdown ? <details className="mt-2 border-t border-white/5 pt-2"><summary className="cursor-pointer font-semibold text-slate-500 hover:text-slate-300">How this score works</summary><div className="mt-2 space-y-1"><p>{explanation.message}</p><p className="text-slate-500">Activity points are displayed to 2 decimals. The saved total is rounded up to the next 0.5 point.</p></div></details> : null}
+      {explanation.breakdown ? <p className="mt-2 border-t border-white/5 pt-2 text-slate-500">{explanation.message} Saved totals round up to the next 0.5 point.</p> : null}
     </div>;
   }
 
