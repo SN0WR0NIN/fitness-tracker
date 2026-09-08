@@ -65,7 +65,7 @@ test('small positive workouts use the same friend eligibility in estimates and f
       const log = await db.pointsLog.findUniqueOrThrow({ where: { activityId: tiny.id } });
       expect(log.basePoints).toBe(0); // Display rounding must not remove eligibility.
       expect(log.friendBonus).toBe(3);
-      expect(tiny.points).toBe(3.5);
+      expect(tiny.points).toBe(3); // Friend bonus applies first, then the final total rounds down to a whole point.
       const path = `/api/activities/friend-bonus?activityDate=2026-09-02&category=${category}`;
       expect(await json(await accounts.member.api.get(path))).toMatchObject({ used: false, pending: true, available: false });
       await json(await accounts.admin.api.post(`/api/admin/activities/${tiny.id}/approve`, { data: {} }));
@@ -110,7 +110,7 @@ test('admin review refreshes sibling bonuses and safely recovers when the post-s
     await main.getByPlaceholder('Search athlete or column').fill(key);
     const row = id => main.locator(`article[data-activity-id="${id}"]:visible`);
     const points = (id, value) => expect(row(id).getByTestId('activity-points')).toHaveText(value);
-    await points(first.id, '10.5');
+    await points(first.id, '10.0');
     await points(second.id, '12.0');
     await points(third.id, '18.0');
 
@@ -119,7 +119,7 @@ test('admin review refreshes sibling bonuses and safely recovers when the post-s
     await dialog.getByRole('textbox').fill('Incorrect evidence for this particular workout.');
     await dialog.getByRole('button', { name: 'Confirm rejection', exact: true }).click();
     await expect(row(first.id)).toContainText('REJECTED');
-    await points(first.id, '7.5');
+    await points(first.id, '7.0');
     await points(second.id, '15.0'); // Different card gains the bonus without a page reload.
 
     let failNextRead = true;
@@ -152,12 +152,12 @@ test('admin review refreshes sibling bonuses and safely recovers when the post-s
     await expect(row(third.id)).toContainText('PENDING');
     await row(first.id).getByRole('button', { name: 'Approve', exact: true }).click();
     await expect(row(first.id)).toContainText('APPROVED');
-    await points(first.id, '10.5');
+    await points(first.id, '10.0');
     await points(second.id, '12.0');
     await points(third.id, '18.0'); // The approved activity now takes priority over the pending estimate.
     const approved = await db.activity.findMany({ where: { userId: accounts.member.id, status: 'APPROVED' } });
     const scores = await db.weeklyScore.findMany({ where: { userId: accounts.member.id } });
-    expect(scores.reduce((n, score) => n + score.totalPoints, 0)).toBe(22.5);
-    expect(approved.reduce((n, activity) => n + activity.points, 0)).toBe(22.5);
+    expect(scores.reduce((n, score) => n + score.totalPoints, 0)).toBe(22);
+    expect(approved.reduce((n, activity) => n + activity.points, 0)).toBe(22);
   });
 });

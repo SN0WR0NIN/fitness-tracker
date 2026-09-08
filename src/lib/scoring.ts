@@ -9,7 +9,7 @@
  * - Troop Games: 5 points flat.
  * - Friend bonus: +3 per participant / Singapore day / eligible sport; maximum 12 across four sports.
  *   No extra bonus for Troop Games, repeated same-sport entries, or extra friends.
- * - Final totals are rounded UP to the nearest 0.5 point.
+ * - Final totals are always rounded DOWN to the lower whole point.
  */
 
 export type ActivityCategory = 
@@ -68,6 +68,16 @@ interface ScoringOutput {
 }
 
 /**
+ * Floor a non-negative score to the lower whole point. The tiny tolerance only
+ * protects exact whole-point values from floating-point representation noise;
+ * it never promotes a genuinely lower score into the next whole-point band.
+ */
+export function roundScoreDown(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.floor(value + 1e-9);
+}
+
+/**
  * A "Run" submitted with a pace slower than the slow-pace threshold isn't a
  * real run per the rules — it gets auto-recategorized as Walk/Hike instead.
  * Returns the effective category to actually score and store.
@@ -89,49 +99,50 @@ function runPaceBonusPerKm(pace: number, rules: ScoringRules): number {
   return rules.runStandardBonusPerKm;
 }
 
+/** Raw activity value before display rounding, friend bonus, or final whole-point flooring. */
+function rawBasePoints(input: Pick<ScoringInput, 'category' | 'distance' | 'pace'>, rules: ScoringRules): number {
+  switch (input.category) {
+    case 'RUN':
+      if (input.distance) {
+        const bonusPerKm = input.pace !== undefined ? runPaceBonusPerKm(input.pace, rules) : 0;
+        return input.distance * (rules.runBasePerKm + bonusPerKm);
+      }
+      return 0;
+    case 'CYCLE':
+      return input.distance ? input.distance / rules.cycleKmPerPoint : 0;
+    case 'SWIM':
+      return input.distance ? input.distance / rules.swimMetersPerPoint : 0;
+    case 'WALK_OR_HIKE':
+      return input.distance && input.distance >= rules.walkMinimumKm ? input.distance * rules.walkPointsPerKm : 0;
+    case 'TROOP_GAMES':
+      return rules.troopGamePoints;
+  }
+}
+
+/**
+ * Friend-bonus eligibility must use the unrounded activity value. This keeps a
+ * valid tiny positive Run/Cycle/Swim eligible even when its solo saved score
+ * floors below 1 point, while sub-minimum Walk/Hike entries remain ineligible.
+ */
+export function hasPositiveBaseScore(
+  input: Pick<ScoringInput, 'category' | 'distance' | 'pace'>,
+  rules: ScoringRules = DEFAULT_SCORING_RULES
+): boolean {
+  return rawBasePoints(input, rules) > 0;
+}
+
 /**
  * Calculate points based on activity type and metrics.
  * NOTE: callers should pass the category returned by resolveEffectiveCategory(),
  * not the raw user-selected category, so slow "runs" score as walks.
  */
 export function calculateActivityPoints(input: ScoringInput, rules: ScoringRules = DEFAULT_SCORING_RULES): ScoringOutput {
-  let basePoints = 0;
-
-  switch (input.category) {
-    case 'RUN':
-      if (input.distance) {
-        const bonusPerKm = input.pace !== undefined ? runPaceBonusPerKm(input.pace, rules) : 0;
-        basePoints = input.distance * (rules.runBasePerKm + bonusPerKm);
-      }
-      break;
-
-    case 'CYCLE':
-      if (input.distance) {
-        basePoints = input.distance / rules.cycleKmPerPoint;
-      }
-      break;
-
-    case 'SWIM':
-      if (input.distance) {
-        basePoints = input.distance / rules.swimMetersPerPoint;
-      }
-      break;
-
-    case 'WALK_OR_HIKE':
-      if (input.distance && input.distance >= rules.walkMinimumKm) {
-        basePoints = input.distance * rules.walkPointsPerKm;
-      }
-      break;
-
-    case 'TROOP_GAMES':
-      basePoints = rules.troopGamePoints;
-      break;
-  }
+  const basePoints = rawBasePoints(input, rules);
 
   // Daily allocation is enforced by planDailyActivityScores in the server ledger.
   // The standalone calculation represents a maximum eligible estimate only.
   const friendBonus = input.completedWithFriend && input.category !== 'TROOP_GAMES' && basePoints > 0 ? rules.friendBonus : 0;
-  const totalPoints = Math.ceil((basePoints + friendBonus) * 2) / 2;
+  const totalPoints = roundScoreDown(basePoints + friendBonus);
 
   return {
     basePoints: Math.round(basePoints * 100) / 100,

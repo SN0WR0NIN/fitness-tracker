@@ -7,6 +7,7 @@ const ts = require('typescript');
 function moduleFrom(file) { const m = { exports: {} }; const result = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }); new Function('exports','require','module',result.outputText)(m.exports,require,m); return m.exports; }
 const { parseProofReference: parse, proofDisplayHref } = moduleFrom('src/lib/proof-reference.ts');
 const { explainScore } = moduleFrom('src/lib/score-explanation.ts');
+const { calculateActivityPoints, hasPositiveBaseScore, roundScoreDown } = moduleFrom('src/lib/scoring.ts');
 const origin = 'https://fixture.supabase.co';
 const valid = `${origin}/storage/v1/object/public/activity-proofs/owner/image.png`;
 assert.equal(parse(valid,origin).path, 'owner/image.png');
@@ -15,6 +16,20 @@ assert.equal(parse('https://drive.google.com/file/d/fixtureID/view',origin).kind
 assert.equal(parse('https://drive.google.com.evil.test/file/d/fixtureID/view',origin),null);
 assert.equal(parse('https://example.invalid/e2e-proof/a/b',origin),null);
 assert.ok(proofDisplayHref(valid).startsWith('/api/proofs?ref='));
+assert.equal(roundScoreDown(7.99),7);
+assert.equal(roundScoreDown(7.5),7);
+assert.equal(roundScoreDown(7.01),7);
+assert.equal(roundScoreDown(8),8);
+assert.equal(roundScoreDown(0.99),0);
+assert.equal(calculateActivityPoints({category:'CYCLE',distance:10}).totalPoints,3);
+assert.equal(calculateActivityPoints({category:'CYCLE',distance:10,completedWithFriend:true}).totalPoints,6);
+assert.equal(calculateActivityPoints({category:'SWIM',distance:175}).totalPoints,1);
+assert.equal(calculateActivityPoints({category:'RUN',distance:3.1,pace:6}).totalPoints,4);
+assert.equal(hasPositiveBaseScore({category:'RUN',distance:0.001,pace:6}),true);
+assert.equal(calculateActivityPoints({category:'RUN',distance:0.001,pace:6}).totalPoints,0);
+assert.equal(calculateActivityPoints({category:'RUN',distance:0.001,pace:6,completedWithFriend:true}).friendBonus,3);
+assert.equal(calculateActivityPoints({category:'RUN',distance:0.001,pace:6,completedWithFriend:true}).totalPoints,3);
+assert.equal(hasPositiveBaseScore({category:'WALK_OR_HIKE',distance:2}),false);
 const base = { category:'RUN',status:'APPROVED',points:3.5,completedWithFriend:true,pointsLog:{basePoints:0,friendBonus:3,totalPoints:3.5} };
 assert.match(explainScore(base).message, /\+3 friend bonus applied/);
 assert.match(explainScore({...base,status:'PENDING'}).status,/not included/);
@@ -40,4 +55,4 @@ try {
   fs.symlinkSync('/etc/passwd',path.join(directory,'source/activity-proofs/u/link'));
   assert.throws(()=>pack(path.join(directory,'source'),path.join(directory,'archive-two')));
 } finally { fs.rmSync(directory,{recursive:true,force:true}); }
-console.log('Hardening unit checks passed: proof references, stored score explanations, disposable restore guards, object archive integrity.');
+console.log('Hardening unit checks passed: proof references, whole-point round-down scoring, stored score explanations, disposable restore guards, object archive integrity.');
