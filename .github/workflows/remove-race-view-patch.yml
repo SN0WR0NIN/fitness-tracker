@@ -20,60 +20,48 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-
+          import re
           page = Path('src/app/leaderboard/page.tsx')
           text = page.read_text()
           text = text.replace("import LeaderboardRacePanel from '@/components/LeaderboardRacePanel';\n", "")
-          panel = '''        <LeaderboardRacePanel
-          view={view}
-          week={week}
-          individuals={rankedIndividuals}
-          teams={rankedTeams}
-          category={category}
-          teamMetric={teamMetric}
-          currentUserId={session?.user?.id ?? null}
-        />
-
-'''
-          if panel not in text:
-              raise SystemExit('Race view panel block not found')
-          text = text.replace(panel, '', 1)
+          pattern = r"\n        <LeaderboardRacePanel\n(?:.*\n){0,12}?        />\n"
+          text, count = re.subn(pattern, "", text, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected one race panel, removed {count}')
           page.write_text(text)
-
           Path('src/components/LeaderboardRacePanel.tsx').unlink()
           Path('e2e/leaderboard-race.spec.cjs').unlink()
-
-          Path('e2e/leaderboard-no-race.spec.cjs').write_text(r'''const { test, expect } = require('@playwright/test');
-
-const PASSWORD = process.env.E2E_PASSWORD || 'E2E-only-Password-123!';
-
-async function login(context, email) {
-  const page = await context.newPage();
-  await page.goto('/auth/login');
-  await page.getByPlaceholder('Your username or email').fill(email);
-  await page.locator('input[type="password"]').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Log In' }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-  return page;
-}
-
-test('leaderboard keeps standings controls without race view', async ({ browser }) => {
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
-  const page = await login(context, 'member-e2e@example.test');
-  await page.goto('/leaderboard');
-
-  await expect(page.getByText('Standings controls', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Individual', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Column', exact: true })).toBeVisible();
-  await expect(page.getByText('Race view', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Momentum to Sunday' })).toHaveCount(0);
-  await expect(page.getByText('Column momentum', { exact: true })).toHaveCount(0);
-
-  await page.getByRole('button', { name: 'Column', exact: true }).click();
-  await expect(page.getByText(/members .* average/).first()).toBeVisible();
-  await context.close();
-});
-''')
+          lines = [
+              "const { test, expect } = require('@playwright/test');",
+              "",
+              "const PASSWORD = process.env.E2E_PASSWORD || 'E2E-only-Password-123!';",
+              "",
+              "async function login(context, email) {",
+              "  const page = await context.newPage();",
+              "  await page.goto('/auth/login');",
+              "  await page.getByPlaceholder('Your username or email').fill(email);",
+              "  await page.locator('input[type=\\\"password\\\"]').fill(PASSWORD);",
+              "  await page.getByRole('button', { name: 'Log In' }).click();",
+              "  await expect(page).toHaveURL(/\\/dashboard/);",
+              "  return page;",
+              "}",
+              "",
+              "test('leaderboard keeps standings controls without race view', async ({ browser }) => {",
+              "  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });",
+              "  const page = await login(context, 'member-e2e@example.test');",
+              "  await page.goto('/leaderboard');",
+              "  await expect(page.getByText('Standings controls', { exact: true })).toBeVisible();",
+              "  await expect(page.getByRole('button', { name: 'Individual', exact: true })).toBeVisible();",
+              "  await expect(page.getByRole('button', { name: 'Column', exact: true })).toBeVisible();",
+              "  await expect(page.getByText('Race view', { exact: true })).toHaveCount(0);",
+              "  await expect(page.getByRole('heading', { name: 'Momentum to Sunday' })).toHaveCount(0);",
+              "  await expect(page.getByText('Column momentum', { exact: true })).toHaveCount(0);",
+              "  await page.getByRole('button', { name: 'Column', exact: true }).click();",
+              "  await expect(page.getByText(/members .* average/).first()).toBeVisible();",
+              "  await context.close();",
+              "});",
+          ]
+          Path('e2e/leaderboard-no-race.spec.cjs').write_text('\n'.join(lines) + '\n')
       - name: Commit removal
         shell: bash
         run: |
