@@ -1,0 +1,46 @@
+name: Wire race view
+
+on:
+  push:
+    branches:
+      - feat/leaderboard-race-view
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/leaderboard-race-view
+      - name: Insert race panel
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('src/app/leaderboard/page.tsx')
+          text = path.read_text()
+          old_import = "import HeroAtmosphere from '@/components/HeroAtmosphere';\n"
+          new_import = old_import + "import LeaderboardRacePanel from '@/components/LeaderboardRacePanel';\n"
+          if "LeaderboardRacePanel" not in text:
+              if old_import not in text:
+                  raise SystemExit('HeroAtmosphere import anchor not found')
+              text = text.replace(old_import, new_import, 1)
+          anchor = '''        </div>\n\n        <div className="mt-5 space-y-2">'''
+          insertion = '''        </div>\n\n        <LeaderboardRacePanel\n          view={view}\n          week={week}\n          individuals={rankedIndividuals}\n          teams={rankedTeams}\n          category={category}\n          teamMetric={teamMetric}\n          currentUserId={session?.user?.id ?? null}\n        />\n\n        <div className="mt-5 space-y-2">'''
+          if '<LeaderboardRacePanel' not in text:
+              if anchor not in text:
+                  raise SystemExit('Leaderboard controls anchor not found')
+              text = text.replace(anchor, insertion, 1)
+          path.write_text(text)
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/app/leaderboard/page.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'Integrate race view with leaderboard'
+          git push origin HEAD:feat/leaderboard-race-view
