@@ -31,10 +31,10 @@ test('member gets quick logging, focused activity history and richer profile', a
   await expect(approved.getByText('Request correction', { exact: true })).toBeVisible();
 
   await page.goto('/participants/e2e_member');
-  await expect(page.getByText('Top sport')).toBeVisible();
-  await expect(page.getByText('Buddy sessions')).toBeVisible();
-  await expect(page.getByText('Active weeks')).toBeVisible();
-  await expect(page.getByText('Recent activities', { exact: true })).toBeVisible();
+  await expect(page.locator('main p:visible').filter({ hasText: /^Top sport$/ }).first()).toBeVisible();
+  await expect(page.locator('main p:visible').filter({ hasText: /^Buddy sessions$/ }).first()).toBeVisible();
+  await expect(page.locator('main p:visible').filter({ hasText: /^Active weeks$/ }).first()).toBeVisible();
+  await expect(page.getByText('Recent activities', { exact: true }).first()).toBeVisible();
 
   await context.close();
 });
@@ -43,7 +43,7 @@ test('admin command centre presents one operational queue', async ({ browser }) 
   const context = await browser.newContext();
   const page = await login(context, ADMIN);
   await page.goto('/admin');
-  await expect(page.getByRole('main').getByText("Today's queue", { exact: true })).toBeVisible();
+  await expect(page.getByRole('main').getByText("Today's queue", { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Pending activities').first()).toBeVisible();
   await expect(page.getByText('Corrections').first()).toBeVisible();
   await expect(page.getByText('Duplicates').first()).toBeVisible();
