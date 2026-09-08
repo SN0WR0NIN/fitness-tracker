@@ -1,10 +1,15 @@
-const CACHE_NAME = 'kg-stay-active-v4';
+const CACHE_NAME = 'kg-stay-active-v5';
 const CACHE_PREFIX = 'kg-stay-active-';
 const OFFLINE_URL = '/offline';
 const STATIC_ASSETS = [OFFLINE_URL, '/kg-gorilla-192.png', '/kg-gorilla-512.png', '/kg-gorilla-maskable-512.png', '/kg-gorilla-apple.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)));
+  event.waitUntil(caches.open(CACHE_NAME).then(async (cache) => {
+    // The offline page is the only essential install asset. Optional icons or
+    // manifest refreshes must not make the entire service-worker install fail.
+    try { await cache.addAll([OFFLINE_URL]); } catch {}
+    await Promise.allSettled(STATIC_ASSETS.filter((asset) => asset !== OFFLINE_URL).map((asset) => cache.addAll([asset])));
+  }));
   // New versions wait until the user explicitly confirms an update.
 });
 self.addEventListener('message', (event) => {
