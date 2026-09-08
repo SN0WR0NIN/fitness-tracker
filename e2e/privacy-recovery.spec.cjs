@@ -57,6 +57,9 @@ test('proofs enforce owner/admin sessions, upload ownership, no public disclosur
     expect(await publicFeed.text()).not.toContain(proof);
     const profile=await request.get(`/participants/${s.owner.id}`);expect(profile.ok()).toBe(true);expect(await profile.text()).not.toContain(proof);
     await s.owner.page.goto('/dashboard');
+    const dashboardActivity = s.owner.page.getByTestId('dashboard-activity').first();
+    await expect(dashboardActivity).toBeVisible();
+    await dashboardActivity.locator('summary').click();
     await expect(s.owner.page.getByTestId('score-explanation').filter({hasText:'Included in standings'}).first()).toBeVisible();
     // Hydration normalizes Next/Image src to an absolute URL; inspect the
     // parsed same-origin endpoint instead of requiring relative DOM text.
