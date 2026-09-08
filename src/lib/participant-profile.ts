@@ -17,10 +17,10 @@ export async function getParticipantProfile(userId:string,options:{includeActivi
     prisma.weeklyScore.groupBy({by:['userId'],_sum:{totalPoints:true},orderBy:{_sum:{totalPoints:'desc'}}}),
     getUserProfileSettings(userId),prisma.activity.count({where:activityWhere}),prisma.activity.count({where:{...activityWhere,completedWithFriend:true}}),
     prisma.activity.groupBy({by:['category'],where:activityWhere,_sum:{points:true}}),
-    includeActivities?prisma.activity.findMany({where:activityWhere,orderBy:{occurredAt:'desc'},select:{id:true,category:true,distance:true,pace:true,duration:true,elevationGain:true,points:true,completedWithFriend:true,companion:true,proofUrl:true,stravaActivityId:true,occurredAt:true,weekNumber:true}}):Promise.resolve([] as ProfileActivity[]),
+    includeActivities?prisma.activity.findMany({where:activityWhere,orderBy:{occurredAt:'desc'},select:{id:true,category:true,distance:true,pace:true,duration:true,elevationGain:true,points:true,completedWithFriend:true,companion:true,stravaActivityId:true,occurredAt:true,weekNumber:true}}):Promise.resolve([] as ProfileActivity[]),
     getEngineAchievements(userId),
   ]);
-  const user=userResult as ProfileUser|null;const rankedScores=rankedScoresResult as RankedScore[];const categoryScores=categoryScoresResult as CategoryScore[];const activities=activitiesResult as ProfileActivity[];
+  const user=userResult as ProfileUser|null;const rankedScores=rankedScoresResult as RankedScore[];const categoryScores=categoryScoresResult as CategoryScore[];const activities=(activitiesResult as ProfileActivity[]).map(activity=>({...activity,proofUrl:null}));
   if(!user)return null;
   const weeklyScoresByNumber=new Map<number,ProfileWeekScore>();
   for(const week of user.weeklyScores){const existing=weeklyScoresByNumber.get(week.weekNumber);if(existing){existing.totalPoints+=week.totalPoints;existing.runPoints+=week.runPoints;existing.cyclePoints+=week.cyclePoints;existing.swimPoints+=week.swimPoints;existing.hikePoints+=week.hikePoints;existing.troopGamePoints+=week.troopGamePoints;}else{weeklyScoresByNumber.set(week.weekNumber,{...week});}}

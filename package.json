@@ -9,7 +9,8 @@
     "lint": "eslint",
     "seed": "node prisma/seed.js",
     "validate:backup": "node scripts/validate-operational-backup.cjs",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test:hardening": "node scripts/hardening-unit-tests.cjs"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",

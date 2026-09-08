@@ -142,7 +142,6 @@ export async function GET(request: NextRequest) {
         points: true,
         completedWithFriend: true,
         companion: true,
-        proofUrl: true,
         occurredAt: true,
         stravaActivityId: true,
         mapPolyline: true,

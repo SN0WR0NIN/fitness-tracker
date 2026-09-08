@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
     const activities = await prisma.activity.findMany({
       where: status === 'ALL' ? {} : { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' },
       include: {
+        pointsLog: { select: { basePoints: true, friendBonus: true, totalPoints: true } },
         user: { select: { id: true, name: true, email: true } },
         column: { select: { id: true, name: true } },
         reviewedBy: { select: { id: true, name: true } },

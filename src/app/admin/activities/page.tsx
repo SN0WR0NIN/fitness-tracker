@@ -1,3 +1,4 @@
+import type { ScoreBreakdown } from '@/lib/score-explanation';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ShieldCheck } from 'lucide-react';
@@ -16,6 +17,7 @@ type ReviewActivity = {
   duration: number | null;
   elevationGain: number | null;
   points: number;
+  pointsLog: ScoreBreakdown | null;
   completedWithFriend: boolean;
   companion: string | null;
   companionUserId: string | null;
@@ -55,6 +57,7 @@ export default async function AdminActivitiesPage() {
   const [activitiesResult, usersResult] = await Promise.all([
     prisma.activity.findMany({
       include: {
+        pointsLog: { select: { basePoints: true, friendBonus: true, totalPoints: true } },
         user: { select: { id: true, name: true, email: true } },
         column: { select: { id: true, name: true } },
         reviewedBy: { select: { id: true, name: true } },

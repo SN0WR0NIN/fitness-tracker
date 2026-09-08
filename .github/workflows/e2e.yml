@@ -39,6 +39,8 @@ jobs:
           cache: npm
       - name: Install application dependencies
         run: npm ci
+      - name: Hardening unit and archive checks
+        run: npm run test:hardening
       - name: Prepare ephemeral database
         run: |
           npx prisma generate
@@ -52,6 +54,8 @@ jobs:
         run: >-
           npx eslint src/lib/system-automation.ts src/lib/duplicate-review.ts src/lib/competition-results.ts src/lib/notifications.ts
           src/lib/operating-mode.ts src/lib/activity-corrections.ts src/lib/achievement-engine.ts src/lib/notification-preferences.ts src/lib/feature-response.ts
+          src/lib/proof-reference.ts src/lib/proof-access.ts src/lib/operational-backup.ts src/lib/score-explanation.ts
+          src/app/api/proofs/route.ts src/app/admin/operations/page.tsx src/components/ScoreExplanation.tsx src/components/ActivityProof.tsx
           src/lib/friend-selection.ts src/lib/activity-friends.ts src/components/FriendMultiSelect.tsx
           src/lib/daily-friend-bonus.ts src/lib/scoring-ledger.ts src/lib/activities.ts src/components/useDailyFriendBonus.ts src/app/api/activities/friend-bonus/route.ts
           src/components/AdminActivityReview.tsx src/app/api/admin/activities/route.ts
@@ -79,11 +83,46 @@ jobs:
         run: npx playwright test --config=playwright.config.cjs
       - name: Repeat daily bonus release checks without retries
         run: npx playwright test --config=playwright.config.cjs e2e/daily-friend-bonus.spec.cjs e2e/daily-friend-bonus-release.spec.cjs e2e/daily-friend-bonus-achievements.spec.cjs --repeat-each=3 --retries=0
+      - name: Privacy and recovery regression without retries
+        run: npx playwright test --config=playwright.config.cjs e2e/privacy-recovery.spec.cjs --retries=0
+      - name: Install and verify scheduled backup v7 in disposable database only
+        run: |
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/points-log-backup-v7.sql
+          node scripts/check-v7-snapshot.cjs
+      - name: Restore synthetic operational fixture into a new empty isolated database
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+          DRILL_TARGET_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/fitness_tracker_restore_drill
+        run: |
+          docker exec "$PG_CONTAINER" createdb -U postgres fitness_tracker_restore_drill
+          docker exec "$PG_CONTAINER" pg_dump -U postgres --schema-only --no-owner --no-privileges -n public -n app_internal fitness_tracker_e2e > /tmp/fixture-schema.sql
+          # initdb already creates an empty public schema. Adjust only that
+          # single schema declaration; preserve all tables, constraints and errors.
+          python3 - <<'PYSCHEMA'
+          from pathlib import Path
+          p = Path('/tmp/fixture-schema.sql')
+          text = p.read_text()
+          assert text.count('CREATE SCHEMA public;') == 1
+          p.write_text(text.replace('CREATE SCHEMA public;', 'CREATE SCHEMA IF NOT EXISTS public;'))
+          PYSCHEMA
+          docker exec -i "$PG_CONTAINER" psql -U postgres -v ON_ERROR_STOP=1 fitness_tracker_restore_drill < /tmp/fixture-schema.sql
+          node scripts/restore-operational-drill.cjs /tmp/kg-hardening-fixture.json --confirm-disposable
+          if node scripts/restore-operational-drill.cjs /tmp/kg-hardening-fixture.json --confirm-disposable; then
+            echo "ERROR: populated target was not rejected"; exit 1
+          fi
       - name: Collect diagnostics
         if: always()
         run: |
           mkdir -p test-results
           cp /tmp/kg-e2e-app.log test-results/server.log || true
+      - name: Upload synthetic hardening screenshots
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardening-ui-review
+          path: test-results/*-mobile.png
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload E2E report on failure
         if: failure()
         uses: actions/upload-artifact@v4

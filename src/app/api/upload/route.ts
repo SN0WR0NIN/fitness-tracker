@@ -1,3 +1,4 @@
+import { localProofFixtures } from '@/lib/proof-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { getServerSession } from 'next-auth';
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
     // CI E2E uses an ephemeral database and must never depend on production
     // Supabase Storage. The gate requires both explicit E2E mode and CI=true,
     // so this path cannot activate on normal Vercel runtime traffic.
-    if (process.env.E2E_TEST_MODE === '1' && process.env.CI === 'true') {
+    if (localProofFixtures()) {
       const url = `https://example.invalid/e2e-proof/${session.user.id}/${randomUUID()}.${imageExtension(contentType)}`;
       log.success({ status: 200, contentType, bytes: file.size, e2e: true });
       return NextResponse.json({ url });

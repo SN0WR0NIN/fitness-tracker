@@ -258,13 +258,13 @@ test('achievement awards are approved-only, idempotent, reversible and silently 
   await reconcile(s.db, s.member.id);
 });
 
-test('new feature records are exported and the version-6 snapshot checksum validates', async ({ sandbox: s }, testInfo) => {
+test('new feature records and PointsLog are exported while the legacy v6 snapshot checksum validates', async ({ sandbox: s }, testInfo) => {
   const activity = await s.create();
   await json(await s.requestCorrection(activity, { distance: 8 }), 201);
   await json(await s.member.api.post('/api/account/notifications', { data: { ...defaults, achievements: false } }));
   expect((await s.member.api.get('/api/admin/export?type=backup')).status()).toBe(403);
   const backup = await json(await s.admin.api.get('/api/admin/export?type=backup'));
-  expect(backup.version).toBe(6);
+  expect(backup.version).toBe(7);
   expect(backup.activityCorrections.some((r) => r.user_id === s.member.id)).toBe(true);
   expect(backup.notificationPreferences.some((r) => r.user_id === s.member.id)).toBe(true);
   expect(backup.achievementDefinitions.length).toBeGreaterThanOrEqual(22);

@@ -1,3 +1,4 @@
+import type { ScoreBreakdown } from '@/lib/score-explanation';
 import { redirect } from 'next/navigation';
 import { after } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -26,6 +27,7 @@ type DashboardActivity = {
   pace: number | null;
   duration: number | null;
   points: number;
+  pointsLog: ScoreBreakdown | null;
   completedWithFriend: boolean;
   companion: string | null;
   companionUserId: string | null;
@@ -68,6 +70,7 @@ export default async function DashboardPage() {
         pace: true,
         duration: true,
         points: true,
+        pointsLog: { select: { basePoints: true, friendBonus: true, totalPoints: true } },
         completedWithFriend: true,
         companion: true,
         companionUserId: true,

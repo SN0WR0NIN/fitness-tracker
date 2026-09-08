@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminGuard';
 import { prisma } from '@/lib/prisma';
-import { getAnnouncements, getAuditEntries, getChallengeSettings, getManagedColumns, recordAdminAudit } from '@/lib/admin-control';
-import { getFocusedBackupData } from '@/lib/focused-backup';
+import { recordAdminAudit } from '@/lib/admin-control';
+import { captureOperationalBackup } from '@/lib/operational-backup';
 import { requestLog } from '@/lib/telemetry';
 
 const csvCell = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
@@ -18,63 +18,12 @@ export async function GET(request: NextRequest) {
   const type = request.nextUrl.searchParams.get('type') || 'activities';
   if (type === 'backup') {
     try {
-      const [settings, announcements, columns, users, activities, weeklyScores, profileSettings, weeklyGoals, rankingSnapshots, duplicateReviews, weeklyResults, notifications, passwordResetRequests, audit, focused] = await Promise.all([
-        getChallengeSettings(),
-        getAnnouncements(),
-        getManagedColumns(),
-        prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, columnId: true, stravaAthleteId: true, createdAt: true, updatedAt: true }, orderBy: { name: 'asc' } }),
-        prisma.activity.findMany({ select: { id: true, userId: true, columnId: true, category: true, distance: true, pace: true, duration: true, completedWithFriend: true, companion: true, companionUserId: true, companionUserIds: true, proofUrl: true, points: true, status: true, reviewedById: true, reviewedAt: true, rejectionReason: true, occurredAt: true, weekStart: true, weekNumber: true, stravaActivityId: true, elevationGain: true, createdAt: true, updatedAt: true }, orderBy: { occurredAt: 'desc' } }),
-        prisma.weeklyScore.findMany({ orderBy: [{ weekNumber: 'asc' }, { totalPoints: 'desc' }] }),
-        prisma.$queryRawUnsafe('SELECT "userId", "weeklyGoal", "bio", "profilePhotoUrl", "createdAt", "updatedAt" FROM "UserProfileSettings" ORDER BY "userId"'),
-        prisma.$queryRawUnsafe('SELECT "userId", "weekStart", "target", "createdAt", "updatedAt" FROM "WeeklyGoal" ORDER BY "weekStart", "userId"'),
-        prisma.$queryRawUnsafe('SELECT "id", "scope", "periodKey", "entityId", "rank", "points", "snapshotDate", "capturedAt" FROM "RankingSnapshot" ORDER BY "capturedAt"'),
-        prisma.$queryRawUnsafe('SELECT pair_key, activity_a_id, activity_b_id, status, duplicate_activity_id, kept_activity_id, note, reviewed_by_id, reviewed_by_name, reviewed_at, created_at, updated_at FROM app_internal.duplicate_review_decision ORDER BY updated_at'),
-        prisma.$queryRawUnsafe('SELECT * FROM app_internal.weekly_result ORDER BY display_start_date, week_number'),
-        prisma.$queryRawUnsafe('SELECT id, user_id, kind, level, title, message, href, metadata, dedupe_key, created_at FROM app_internal.notification ORDER BY created_at'),
-        prisma.$queryRawUnsafe('SELECT id, user_id, status, request_count, requested_at, last_requested_at, issued_at, expires_at, completed_at, cancelled_at, issued_by_id, issued_by_name, created_at, updated_at FROM app_internal.password_reset_request ORDER BY created_at'),
-        getAuditEntries(10000),
-        getFocusedBackupData(),
-      ]);
-      const backup = {
-        format: 'kg-stay-active-operational-backup',
-        version: 6,
-        exportedAt: new Date().toISOString(),
-        excludes: ['passwords', 'Strava access tokens', 'Strava refresh tokens', 'temporary password reset secrets'],
-        challenge: settings,
-        announcements,
-        columns,
-        users,
-        activities,
-        weeklyScores,
-        profileSettings,
-        weeklyGoals,
-        rankingSnapshots,
-        duplicateReviews,
-        weeklyResults,
-        notifications,
-        passwordResetRequests,
-        audit,
-        ...focused,
-      };
+      const backup = await captureOperationalBackup();
       try {
-        await recordAdminAudit(guard.userId, 'BACKUP_EXPORT', 'Operational backup', {
-          users: users.length,
-          activities: activities.length,
-          weeklyScores: weeklyScores.length,
-          profileSettings: Array.isArray(profileSettings) ? profileSettings.length : 0,
-          weeklyGoals: Array.isArray(weeklyGoals) ? weeklyGoals.length : 0,
-          rankingSnapshots: Array.isArray(rankingSnapshots) ? rankingSnapshots.length : 0,
-          duplicateReviews: Array.isArray(duplicateReviews) ? duplicateReviews.length : 0,
-          weeklyResults: Array.isArray(weeklyResults) ? weeklyResults.length : 0,
-          notifications: Array.isArray(notifications) ? notifications.length : 0,
-          passwordResetRequests: Array.isArray(passwordResetRequests) ? passwordResetRequests.length : 0,
-          ...Object.fromEntries(Object.entries(focused).map(([key, value]) => [key, Array.isArray(value) ? value.length : 0])),
-        });
-      } catch (auditError) {
-        console.warn('Backup export completed but audit entry could not be recorded.', auditError);
-      }
-      log.success({ status: 200, type, users: users.length, activities: activities.length });
-      return new NextResponse(JSON.stringify(backup, null, 2), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="kg-backup-${new Date().toISOString().slice(0, 10)}.json"`, 'Cache-Control': 'no-store' } });
+        await recordAdminAudit(guard.userId, 'BACKUP_EXPORT', 'Operational backup v7', backup.counts);
+      } catch { console.warn('Backup export completed; audit entry unavailable.'); }
+      log.success({ status: 200, type, version: 7 });
+      return new NextResponse(JSON.stringify(backup, null, 2), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="kg-backup-${new Date().toISOString().slice(0, 10)}.json"`, 'Cache-Control': 'private, no-store' } });
     } catch (error) {
       log.failure(error, { type });
       return NextResponse.json({ error: 'Unable to create backup export' }, { status: 500 });

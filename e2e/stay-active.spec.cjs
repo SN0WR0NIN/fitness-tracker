@@ -102,7 +102,8 @@ test('member to admin workflow stays correct and private', async ({ browser, req
   const publicCreated = publicActivities.find((activity) => activity.id === created.id);
   expect(publicCreated).toBeTruthy();
   expect(publicCreated.user.email).toBeUndefined();
-  expect(publicCreated.proofUrl).toBe(proofUrl);
+  expect(publicCreated.proofUrl).toBeUndefined(); // Proofs are owner/admin only.
+  expect(JSON.stringify(publicActivities)).not.toContain(proofUrl);
 
   await memberPage.goto('/participants/e2e_member');
   await expect(memberPage.getByText('E2E Member').first()).toBeVisible();

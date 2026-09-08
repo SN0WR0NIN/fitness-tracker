@@ -1,3 +1,4 @@
+import { assertAttachableProof } from './proof-access';
 import type { Activity, Prisma } from '@prisma/client';
 import { resolveActivityFriends } from './activity-friends';
 import { activityFriendIds } from './friend-selection';
@@ -7,7 +8,7 @@ import { scoringTransaction, ledgerSettings, reconcileParticipantScores } from '
 import { assertCompetitionWritable } from './operating-mode';
 
 interface CreateActivityInput {
-  userId: string; columnId: string; category: ActivityCategory; distance?: number; pace?: number;
+  userId: string; columnId: string; proofActorId?: string; category: ActivityCategory; distance?: number; pace?: number;
   companionUserId?: string; companionUserIds?: string[]; proofUrl?: string; stravaActivityId?: string;
   occurredAt?: Date; mapPolyline?: string; elevationGain?: number; duration?: number;
 }
@@ -15,6 +16,7 @@ interface CreateActivityInput {
 export async function createActivity(input: CreateActivityInput) {
   return scoringTransaction(async tx => {
     await assertCompetitionWritable(tx);
+    await assertAttachableProof(tx, input.proofUrl, input.proofActorId ?? input.userId);
     const settings = await ledgerSettings(tx);
     const category = resolveEffectiveCategory(input.category, input.pace, settings.rules);
     const friends = await resolveActivityFriends(tx, input.userId, input);
@@ -87,6 +89,7 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
     if (ownerId && activity.stravaActivityId && (input.category !== undefined || input.distance !== undefined || input.pace !== undefined || input.proofUrl !== undefined)) {
       throw new ActivityEditError('Strava workout details must be corrected in Strava. You can update friends here.', 400);
     }
+    if (ownerId) await assertAttachableProof(tx, input.proofUrl, ownerId, activity.proofUrl);
     const settings = await ledgerSettings(tx);
     const pace = input.pace === undefined ? activity.pace : input.pace;
     const category = resolveEffectiveCategory(input.category ?? activity.category, pace ?? undefined, settings.rules);

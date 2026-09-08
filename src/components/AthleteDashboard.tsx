@@ -1,4 +1,6 @@
 'use client';
+import ScoreExplanation from '@/components/ScoreExplanation';
+import type { ScoreBreakdown } from '@/lib/score-explanation';
 import ActivityProof from '@/components/ActivityProof';
 import PersonalAnalytics from '@/components/PersonalAnalytics';
 import WeeklyProgressChart from '@/components/WeeklyProgressChart';
@@ -70,6 +72,7 @@ type DashboardActivity = {
   pace: number | null;
   duration: number | null;
   points: number;
+  pointsLog?: ScoreBreakdown | null;
   completedWithFriend: boolean;
   companion: string | null;
   companionUserId: string | null;
@@ -420,6 +423,7 @@ export default function AthleteDashboard({
                       <button type="button" disabled={deletingId !== null} onClick={() => void deleteSubmission(activity)} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-rose-300 hover:bg-rose-400/10 disabled:opacity-50" aria-label={`Delete ${categoryLabels[activity.category]} submission from ${new Date(activity.occurredAt).toLocaleDateString('en-SG')}`}><Trash2 className="h-4 w-4" />{deletingId === activity.id ? 'Deleting…' : 'Delete'}</button>
                       <span className="min-w-16 text-right font-black text-orange-300">+{activity.points.toFixed(1)}</span>
                     </div>
+                    <div className="lg:col-span-4"><ScoreExplanation activity={activity} /></div>
                     <ActivityProof key={activity.proofUrl || 'no-proof'} proofUrl={activity.proofUrl} label={`${categoryLabels[activity.category]} activity screenshot`} />
                     {activity.status === 'APPROVED'  ? <ApprovedActivityDateEditor activity={activity} /> : null}
                     {activity.status === 'PENDING' ? <PendingActivityEditor activity={activity} users={users.filter((user) => user.id !== profile.id)} /> : null}

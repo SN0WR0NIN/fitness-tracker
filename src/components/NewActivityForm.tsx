@@ -1,4 +1,5 @@
 'use client';
+import { proofDisplayHref } from '@/lib/proof-reference';
 import { useDailyFriendBonus } from '@/components/useDailyFriendBonus';
 import FriendMultiSelect from '@/components/FriendMultiSelect';
 
@@ -345,7 +346,7 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
           {withFriend ? <p role="status" className="text-sm text-sky-200">{dailyBonus.message}</p> : null}
           <FormSection number="4" title="Attach proof" subtitle="Upload a clear screenshot from Strava, Garmin, or another fitness app.">
             {proofUrl ? (
-              <div className="relative h-60 overflow-hidden rounded-2xl border border-white/10 bg-black/20"><Image src={proofUrl} alt="Uploaded activity proof" fill unoptimized sizes="(max-width: 1024px) 100vw, 700px" className="object-contain" /><button type="button" onClick={() => setProofUrl('')} aria-label="Remove proof image" className="absolute right-3 top-3 rounded-full bg-rose-500 p-2 text-white shadow-lg transition hover:bg-rose-400"><X className="h-4 w-4" /></button></div>
+              <div className="relative h-60 overflow-hidden rounded-2xl border border-white/10 bg-black/20"><Image src={proofDisplayHref(proofUrl)!} alt="Uploaded activity proof" fill unoptimized sizes="(max-width: 1024px) 100vw, 700px" className="object-contain" /><button type="button" onClick={() => setProofUrl('')} aria-label="Remove proof image" className="absolute right-3 top-3 rounded-full bg-rose-500 p-2 text-white shadow-lg transition hover:bg-rose-400"><X className="h-4 w-4" /></button></div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2"><label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-black/10 px-5 text-center transition hover:border-orange-400/50 hover:bg-orange-400/5"><Camera className="h-8 w-8 text-slate-500" /><span className="mt-3 font-bold text-slate-300">{uploading ? 'Uploading proof…' : 'Take a proof photo'}</span><span className="mt-1 text-xs text-slate-500">Open your phone&apos;s rear camera</span><input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={handleFileChange} disabled={uploading || !online || maintenanceMode} className="hidden" /></label><label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-black/10 px-5 text-center transition hover:border-sky-400/50 hover:bg-sky-400/5"><ImagePlus className="h-8 w-8 text-slate-500" /><span className="mt-3 font-bold text-slate-300">Choose screenshot</span><span className="mt-1 text-xs text-slate-500">JPEG, PNG, WebP or GIF · maximum 4MB</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFileChange} disabled={uploading || !online || maintenanceMode} className="hidden" /></label></div>
             )}
