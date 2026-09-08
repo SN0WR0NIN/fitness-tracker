@@ -10,7 +10,7 @@ export type DailyScoringActivity = {
 
 /** Shared by the allocator and the availability preview. basePoints is a
  * two-decimal display value and can round a small positive workout to zero.
- * Solo totalPoints uses the unchanged official half-point rounding rule. */
+ * Solo totalPoints uses the official round-down half-point rule. */
 export function qualifiesForFriendBonus(activity: Pick<DailyScoringActivity, 'category' | 'distance' | 'pace'>, rules: ScoringRules): boolean {
   const category = resolveEffectiveCategory(activity.category, activity.pace ?? undefined, rules);
   if (!FRIEND_BONUS_SPORTS.includes(category)) return false;
