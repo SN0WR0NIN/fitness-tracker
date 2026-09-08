@@ -99,44 +99,45 @@ function runPaceBonusPerKm(pace: number, rules: ScoringRules): number {
   return rules.runStandardBonusPerKm;
 }
 
+/** Raw activity value before display rounding, friend bonus, or final half-point flooring. */
+function rawBasePoints(input: Pick<ScoringInput, 'category' | 'distance' | 'pace'>, rules: ScoringRules): number {
+  switch (input.category) {
+    case 'RUN':
+      if (input.distance) {
+        const bonusPerKm = input.pace !== undefined ? runPaceBonusPerKm(input.pace, rules) : 0;
+        return input.distance * (rules.runBasePerKm + bonusPerKm);
+      }
+      return 0;
+    case 'CYCLE':
+      return input.distance ? input.distance / rules.cycleKmPerPoint : 0;
+    case 'SWIM':
+      return input.distance ? input.distance / rules.swimMetersPerPoint : 0;
+    case 'WALK_OR_HIKE':
+      return input.distance && input.distance >= rules.walkMinimumKm ? input.distance * rules.walkPointsPerKm : 0;
+    case 'TROOP_GAMES':
+      return rules.troopGamePoints;
+  }
+}
+
+/**
+ * Friend-bonus eligibility must use the unrounded activity value. This keeps a
+ * valid tiny positive Run/Cycle/Swim eligible even when its solo saved score
+ * floors below 0.5, while sub-minimum Walk/Hike entries remain ineligible.
+ */
+export function hasPositiveBaseScore(
+  input: Pick<ScoringInput, 'category' | 'distance' | 'pace'>,
+  rules: ScoringRules = DEFAULT_SCORING_RULES
+): boolean {
+  return rawBasePoints(input, rules) > 0;
+}
+
 /**
  * Calculate points based on activity type and metrics.
  * NOTE: callers should pass the category returned by resolveEffectiveCategory(),
  * not the raw user-selected category, so slow "runs" score as walks.
  */
 export function calculateActivityPoints(input: ScoringInput, rules: ScoringRules = DEFAULT_SCORING_RULES): ScoringOutput {
-  let basePoints = 0;
-
-  switch (input.category) {
-    case 'RUN':
-      if (input.distance) {
-        const bonusPerKm = input.pace !== undefined ? runPaceBonusPerKm(input.pace, rules) : 0;
-        basePoints = input.distance * (rules.runBasePerKm + bonusPerKm);
-      }
-      break;
-
-    case 'CYCLE':
-      if (input.distance) {
-        basePoints = input.distance / rules.cycleKmPerPoint;
-      }
-      break;
-
-    case 'SWIM':
-      if (input.distance) {
-        basePoints = input.distance / rules.swimMetersPerPoint;
-      }
-      break;
-
-    case 'WALK_OR_HIKE':
-      if (input.distance && input.distance >= rules.walkMinimumKm) {
-        basePoints = input.distance * rules.walkPointsPerKm;
-      }
-      break;
-
-    case 'TROOP_GAMES':
-      basePoints = rules.troopGamePoints;
-      break;
-  }
+  const basePoints = rawBasePoints(input, rules);
 
   // Daily allocation is enforced by planDailyActivityScores in the server ledger.
   // The standalone calculation represents a maximum eligible estimate only.
