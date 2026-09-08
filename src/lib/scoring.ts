@@ -9,7 +9,7 @@
  * - Troop Games: 5 points flat.
  * - Friend bonus: +3 per participant / Singapore day / eligible sport; maximum 12 across four sports.
  *   No extra bonus for Troop Games, repeated same-sport entries, or extra friends.
- * - Final totals are rounded UP to the nearest 0.5 point.
+ * - Final totals are always rounded DOWN to the lower 0.5-point increment.
  */
 
 export type ActivityCategory = 
@@ -65,6 +65,16 @@ interface ScoringOutput {
   basePoints: number;
   friendBonus: number;
   totalPoints: number;
+}
+
+/**
+ * Floor a non-negative score to the lower half-point. The tiny tolerance only
+ * protects exact half-point values from floating-point representation noise;
+ * it never promotes a genuinely lower score into the next half-point band.
+ */
+export function roundScoreDown(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.floor((value + 1e-9) * 2) / 2;
 }
 
 /**
@@ -131,7 +141,7 @@ export function calculateActivityPoints(input: ScoringInput, rules: ScoringRules
   // Daily allocation is enforced by planDailyActivityScores in the server ledger.
   // The standalone calculation represents a maximum eligible estimate only.
   const friendBonus = input.completedWithFriend && input.category !== 'TROOP_GAMES' && basePoints > 0 ? rules.friendBonus : 0;
-  const totalPoints = Math.ceil((basePoints + friendBonus) * 2) / 2;
+  const totalPoints = roundScoreDown(basePoints + friendBonus);
 
   return {
     basePoints: Math.round(basePoints * 100) / 100,
