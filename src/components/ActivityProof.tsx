@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { ExternalLink, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-export default function ActivityProof({ proofUrl, label }: { proofUrl: string | null; label: string }) {
+export default function ActivityProof({ proofUrl, label, compact = false }: { proofUrl: string | null; label: string; compact?: boolean }) {
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -28,8 +28,8 @@ export default function ActivityProof({ proofUrl, label }: { proofUrl: string | 
 
   return <div className="lg:col-span-4">
     <button type="button" onClick={() => setOpen(true)} className="block w-full max-w-sm overflow-hidden rounded-xl border border-white/10 bg-black/20 text-left transition hover:border-orange-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300" aria-label={`Enlarge ${label}`}>
-      {failed ? <p className="p-5 text-sm text-slate-400">Proof unavailable in this session. Sign in as its owner or an administrator.</p> : <div className="relative h-48 sm:h-56"><Image src={preview} alt={label} fill unoptimized referrerPolicy="no-referrer" loading="lazy" quality={68} sizes="(max-width: 640px) 92vw, 384px" className="object-contain" onError={() => setFailed(true)} /></div>}
-      <p className="border-t border-white/10 px-4 py-2 text-xs font-semibold text-orange-300">Owner / admin access · Tap to enlarge</p>
+      {failed ? <p className="p-5 text-sm text-slate-400">Proof unavailable in this session. Sign in as its owner or an administrator.</p> : <div className={`relative ${compact ? 'h-32 sm:h-40' : 'h-48 sm:h-56'}`}><Image src={preview} alt={label} fill unoptimized referrerPolicy="no-referrer" loading="lazy" quality={68} sizes="(max-width: 640px) 92vw, 384px" className="object-contain" onError={() => setFailed(true)} /></div>}
+      <p className={`border-t border-white/10 text-xs font-semibold text-orange-300 ${compact ? 'px-3 py-1.5' : 'px-4 py-2'}`}>Owner / admin access · Tap to enlarge</p>
     </button>
 
     {open && <div role="dialog" aria-modal="true" aria-label={label} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm" onClick={() => setOpen(false)}>
