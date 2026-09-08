@@ -21,14 +21,14 @@ export default async function NewActivityPage() {
       select: { category: true, distance: true, pace: true, occurredAt: true, status: true },
     }),
   ]);
-  const last = recentActivities.find((activity) => activity.status !== 'REJECTED') ?? null;
+  const last = recentActivities.find((activity: (typeof recentActivities)[number]) => activity.status !== 'REJECTED') ?? null;
 
   return <EnhancedActivityForm
     userId={userId}
     scoringRules={settings.scoringRules}
     maintenanceMode={settings.maintenanceMode}
     maintenanceMessage={settings.maintenanceMessage}
-    recentActivities={recentActivities.map((activity) => ({ ...activity, occurredAt: activity.occurredAt.toISOString() }))}
+    recentActivities={recentActivities.map((activity: (typeof recentActivities)[number]) => ({ ...activity, occurredAt: activity.occurredAt.toISOString() }))}
     lastActivity={last ? { category: last.category, distance: last.distance, pace: last.pace } : null}
   />;
 }
