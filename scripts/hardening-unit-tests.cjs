@@ -7,7 +7,7 @@ const ts = require('typescript');
 function moduleFrom(file) { const m = { exports: {} }; const result = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }); new Function('exports','require','module',result.outputText)(m.exports,require,m); return m.exports; }
 const { parseProofReference: parse, proofDisplayHref } = moduleFrom('src/lib/proof-reference.ts');
 const { explainScore } = moduleFrom('src/lib/score-explanation.ts');
-const { calculateActivityPoints, roundScoreDown } = moduleFrom('src/lib/scoring.ts');
+const { calculateActivityPoints, hasPositiveBaseScore, roundScoreDown } = moduleFrom('src/lib/scoring.ts');
 const origin = 'https://fixture.supabase.co';
 const valid = `${origin}/storage/v1/object/public/activity-proofs/owner/image.png`;
 assert.equal(parse(valid,origin).path, 'owner/image.png');
@@ -24,6 +24,11 @@ assert.equal(calculateActivityPoints({category:'CYCLE',distance:10}).totalPoints
 assert.equal(calculateActivityPoints({category:'CYCLE',distance:10,completedWithFriend:true}).totalPoints,6);
 assert.equal(calculateActivityPoints({category:'SWIM',distance:175}).totalPoints,1.5);
 assert.equal(calculateActivityPoints({category:'RUN',distance:3.1,pace:6}).totalPoints,4.5);
+assert.equal(hasPositiveBaseScore({category:'RUN',distance:0.001,pace:6}),true);
+assert.equal(calculateActivityPoints({category:'RUN',distance:0.001,pace:6}).totalPoints,0);
+assert.equal(calculateActivityPoints({category:'RUN',distance:0.001,pace:6,completedWithFriend:true}).friendBonus,3);
+assert.equal(calculateActivityPoints({category:'RUN',distance:0.001,pace:6,completedWithFriend:true}).totalPoints,3);
+assert.equal(hasPositiveBaseScore({category:'WALK_OR_HIKE',distance:2}),false);
 const base = { category:'RUN',status:'APPROVED',points:3.5,completedWithFriend:true,pointsLog:{basePoints:0,friendBonus:3,totalPoints:3.5} };
 assert.match(explainScore(base).message, /\+3 friend bonus applied/);
 assert.match(explainScore({...base,status:'PENDING'}).status,/not included/);
