@@ -5,19 +5,25 @@ import { requireAdmin } from '@/lib/adminGuard';
 import { updateActivity } from '@/lib/activities';
 import { prisma } from '@/lib/prisma';
 import { recordAdminAudit } from '@/lib/admin-control';
+import { MAX_ACTIVITY_PROOFS } from '@/lib/proof-access';
 
 const halfPoint = z.number().nonnegative('Total points cannot be negative').max(100000)
   .refine((value) => Math.abs(value * 2 - Math.round(value * 2)) < 1e-9, 'Total points must use 0.5-point increments');
+const proof = z.string().url().max(2048);
 
 const EditActivitySchema = z.object({
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']).optional(),
   distance: z.number().positive('Distance must be greater than zero').max(100000).optional(),
-  pace: z.number().positive('Pace must be greater than zero').max(60).optional(),
+  pace: z.number().positive('Pace must be greater than zero').max(60).nullable().optional(),
   companionUserIds: z.array(z.string().min(1).max(200)).max(100).optional(),
   companionUserId: z.string().nullable().optional(),
   companionName: z.string().nullable().optional(),
+  proofUrl: proof.nullable().optional(),
+  proofUrls: z.array(proof).max(MAX_ACTIVITY_PROOFS).optional(),
   basePointsOverride: z.number().nonnegative('Base points cannot be negative').max(100000).nullable().optional(),
   totalPointsOverride: halfPoint.nullable().optional(),
+}).refine((value) => !value.proofUrls || new Set(value.proofUrls).size === value.proofUrls.length, {
+  message: 'The same proof photo cannot be attached twice.', path: ['proofUrls'],
 });
 
 export async function PATCH(
