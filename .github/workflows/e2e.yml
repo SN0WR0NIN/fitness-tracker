@@ -50,6 +50,7 @@ jobs:
           npx prisma db execute --schema prisma/schema.prisma --file prisma/achievement-engine.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/multiple-activity-friends.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/achievement-final-state.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/admin-score-overrides.sql
       - name: Lint safety app changes
         run: >-
           npx eslint src/lib/system-automation.ts src/lib/duplicate-review.ts src/lib/competition-results.ts src/lib/notifications.ts
@@ -58,7 +59,8 @@ jobs:
           src/app/api/proofs/route.ts src/app/admin/operations/page.tsx src/components/ScoreExplanation.tsx src/components/ActivityProof.tsx
           src/lib/friend-selection.ts src/lib/activity-friends.ts src/components/FriendMultiSelect.tsx
           src/lib/daily-friend-bonus.ts src/lib/scoring-ledger.ts src/lib/activities.ts src/components/useDailyFriendBonus.ts src/app/api/activities/friend-bonus/route.ts
-          src/components/AdminActivityReview.tsx src/app/api/admin/activities/route.ts
+          src/components/AdminActivityReview.tsx src/app/api/admin/activities/route.ts src/app/api/admin/activities/[id]/route.ts
+          src/components/AdminScoreOverrides.tsx src/app/admin/score-overrides/page.tsx src/components/AdminActionHub.tsx
           src/proxy.ts src/app/api/admin/backups/latest/route.ts src/app/api/admin/duplicates/decision/route.ts src/app/api/admin/awards/generate/route.ts
           src/app/api/admin/export/route.ts src/app/api/notifications/route.ts src/app/api/upload/route.ts
           src/app/api/admin/maintenance/route.ts src/app/api/admin/corrections/route.ts src/app/api/corrections/route.ts
