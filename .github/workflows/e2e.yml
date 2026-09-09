@@ -51,14 +51,16 @@ jobs:
           npx prisma db execute --schema prisma/schema.prisma --file prisma/multiple-activity-friends.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/achievement-final-state.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/admin-score-overrides.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/multiple-proof-photos.sql
       - name: Lint safety app changes
         run: >-
           npx eslint src/lib/system-automation.ts src/lib/duplicate-review.ts src/lib/competition-results.ts src/lib/notifications.ts
           src/lib/operating-mode.ts src/lib/activity-corrections.ts src/lib/achievement-engine.ts src/lib/notification-preferences.ts src/lib/feature-response.ts
-          src/lib/proof-reference.ts src/lib/proof-access.ts src/lib/operational-backup.ts src/lib/score-explanation.ts
+          src/lib/proof-reference.ts src/lib/proof-access.ts src/lib/operational-backup.ts src/lib/score-explanation.ts src/lib/activity-duplicates.ts
           src/app/api/proofs/route.ts src/app/admin/operations/page.tsx src/components/ScoreExplanation.tsx src/components/ActivityProof.tsx
           src/lib/friend-selection.ts src/lib/activity-friends.ts src/components/FriendMultiSelect.tsx
           src/lib/daily-friend-bonus.ts src/lib/scoring-ledger.ts src/lib/activities.ts src/components/useDailyFriendBonus.ts src/app/api/activities/friend-bonus/route.ts
+          src/app/api/activities/route.ts src/app/api/activities/[id]/route.ts src/components/EnhancedActivityForm.tsx src/components/MyActivitiesHistory.tsx
           src/components/AdminActivityReview.tsx src/app/api/admin/activities/route.ts src/app/api/admin/activities/[id]/route.ts
           src/components/AdminScoreOverrides.tsx src/app/admin/score-overrides/page.tsx src/components/AdminActionHub.tsx
           src/proxy.ts src/app/api/admin/backups/latest/route.ts src/app/api/admin/duplicates/decision/route.ts src/app/api/admin/awards/generate/route.ts
@@ -98,8 +100,6 @@ jobs:
         run: |
           docker exec "$PG_CONTAINER" createdb -U postgres fitness_tracker_restore_drill
           docker exec "$PG_CONTAINER" pg_dump -U postgres --schema-only --no-owner --no-privileges -n public -n app_internal fitness_tracker_e2e > /tmp/fixture-schema.sql
-          # initdb already creates an empty public schema. Adjust only that
-          # single schema declaration; preserve all tables, constraints and errors.
           python3 - <<'PYSCHEMA'
           from pathlib import Path
           p = Path('/tmp/fixture-schema.sql')
