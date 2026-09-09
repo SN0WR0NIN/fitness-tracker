@@ -45,7 +45,7 @@ export default async function RulesPage() {
               <RuleCard icon={<Waves />} tone="text-violet-300 bg-violet-300/10" title="Swimming" score={`1 pt / ${rules.swimMetersPerPoint} m`} detail="Pool, open-water, and triathlon swim legs all count." />
               <RuleCard icon={<Footprints />} tone="text-orange-300 bg-orange-300/10" title="Walking / hiking" score={`${rules.walkPointsPerKm} pt / km`} detail={`A minimum distance of ${rules.walkMinimumKm} km is required for points.`} />
             </div>
-            <p className="mt-4 rounded-xl border border-lime-300/20 bg-lime-300/[0.06] px-4 py-3 text-sm text-slate-300"><strong className="text-lime-300">Rounding rule:</strong> after eligible bonuses are added, the saved score always rounds down to the lower whole point. For example, 7.99, 7.50 and 7.01 all become 7, while 8.00 stays 8.</p>
+            <p className="mt-4 rounded-xl border border-lime-300/20 bg-lime-300/[0.06] px-4 py-3 text-sm text-slate-300"><strong className="text-lime-300">Rounding rule:</strong> after eligible bonuses are added, the saved score always rounds down to the lower 0.5-point increment. For example, 7.99 becomes 7.5, 7.50 stays 7.5, and 7.49 becomes 7.0.</p>
           </section>
 
           <section>
