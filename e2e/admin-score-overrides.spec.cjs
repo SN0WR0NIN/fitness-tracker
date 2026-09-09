@@ -25,7 +25,7 @@ async function login(browser, baseURL, user, password) {
   return context;
 }
 
-test('admins can vet proof and persist or clear Base Points and Points Total overrides', async ({ browser, baseURL }) => {
+test('admins can vet proof, distance and pace and persist or clear score overrides', async ({ browser, baseURL }) => {
   assertDisposable(baseURL);
   const db = new PrismaClient();
   const key = `score_override_${randomUUID().replaceAll('-', '')}`;
@@ -60,7 +60,7 @@ test('admins can vet proof and persist or clear Base Points and Points Total ove
     await json(await adminContext.request.patch(`/api/admin/activities/${activity.id}`, { data: { totalPointsOverride: 9.5 } }));
     await json(await adminContext.request.patch(`/api/admin/activities/${activity.id}`, { data: { distance: 6 } }));
     saved = await db.activity.findUniqueOrThrow({ where: { id: activity.id }, include: { pointsLog: true } });
-    expect(saved).toMatchObject({ distance: 6, basePointsOverride: 8.25, totalPointsOverride: 9.5, points: 9.5 });
+    expect(saved).toMatchObject({ distance: 6, pace: 6, basePointsOverride: 8.25, totalPointsOverride: 9.5, points: 9.5 });
     expect(saved.pointsLog).toMatchObject({ basePoints: 8.25, totalPoints: 9.5 });
     const weekly = await db.weeklyScore.findFirstOrThrow({ where: { userId: member.id } });
     expect(weekly.totalPoints).toBe(9.5);
@@ -69,6 +69,9 @@ test('admins can vet proof and persist or clear Base Points and Points Total ove
     await page.goto('/admin/score-overrides');
     const card = page.locator(`article[data-score-activity-id="${activity.id}"]`);
     await expect(card).toContainText('ADMIN OVERRIDE');
+    await expect(card.locator('[data-vetting-distance]')).toHaveText('6.00 km');
+    await expect(card.locator('[data-vetting-pace]')).toHaveText('6:00 /km');
+
     const proofButton = card.getByRole('button', { name: "View Score Override Member's proof" });
     await expect(proofButton).toBeVisible();
     await expect(proofButton.locator('img')).toHaveAttribute('src', /\/api\/proofs\?ref=/);

@@ -12,6 +12,8 @@ type ScoreActivity = {
   category: string;
   status: ActivityStatus;
   occurredAt: string;
+  distance: number;
+  pace: number | null;
   points: number;
   proofUrl: string | null;
   basePointsOverride: number | null;
@@ -28,6 +30,20 @@ type EditState = {
   base: string;
   total: string;
 };
+
+function formatDistance(activity: ScoreActivity): string {
+  if (!Number.isFinite(activity.distance) || activity.distance <= 0) return '—';
+  if (activity.category === 'SWIM') return `${Math.round(activity.distance)} m`;
+  return `${activity.distance.toFixed(2)} km`;
+}
+
+function formatPace(pace: number | null): string {
+  if (pace === null || !Number.isFinite(pace) || pace <= 0) return '—';
+  const totalSeconds = Math.round(pace * 60);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')} /km`;
+}
 
 export default function AdminScoreOverrides({ initialActivities }: { initialActivities: ScoreActivity[] }) {
   const [activities, setActivities] = useState(initialActivities);
@@ -123,7 +139,7 @@ export default function AdminScoreOverrides({ initialActivities }: { initialActi
           <option value="APPROVED">Approved</option><option value="PENDING">Pending</option><option value="REJECTED">Rejected</option><option value="ALL">All</option>
         </select>
       </div>
-      <p className="mt-3 text-xs leading-5 text-slate-500">Proof stays behind the authenticated proof viewer. Base override replaces the calculated base points. Friend-bonus allocation stays automatic. A Total override, when enabled, becomes the exact final saved total and must use 0.5-point increments.</p>
+      <p className="mt-3 text-xs leading-5 text-slate-500">Proof, distance and pace are shown together for vetting. Base override replaces the calculated base points. Friend-bonus allocation stays automatic. A Total override, when enabled, becomes the exact final saved total and must use 0.5-point increments.</p>
     </section>
 
     {error ? <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-200">{error}</div> : null}
@@ -148,7 +164,11 @@ export default function AdminScoreOverrides({ initialActivities }: { initialActi
                 <div className="text-right"><p className="text-2xl font-black text-orange-300">{activity.points.toFixed(1)}</p><p className="text-[0.68rem] uppercase tracking-wider text-slate-600">saved total</p></div>
               </div>
 
-              {log ? <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-white/5 bg-black/10 p-3 text-center text-xs"><div><p className="text-slate-500">Base</p><p className="mt-1 font-black">{log.basePoints.toFixed(2)}</p></div><div><p className="text-slate-500">Friend</p><p className="mt-1 font-black">+{log.friendBonus.toFixed(1)}</p></div><div><p className="text-slate-500">Total</p><p className="mt-1 font-black">{log.totalPoints.toFixed(1)}</p></div></div> : <p className="mt-4 text-sm text-amber-200">Score breakdown unavailable for this activity.</p>}
+              <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-black/10 p-3 text-center text-xs sm:grid-cols-5">
+                <div><p className="text-slate-500">Distance</p><p className="mt-1 font-black" data-vetting-distance>{formatDistance(activity)}</p></div>
+                <div><p className="text-slate-500">Pace</p><p className="mt-1 font-black" data-vetting-pace>{formatPace(activity.pace)}</p></div>
+                {log ? <><div><p className="text-slate-500">Base</p><p className="mt-1 font-black">{log.basePoints.toFixed(2)}</p></div><div><p className="text-slate-500">Friend</p><p className="mt-1 font-black">+{log.friendBonus.toFixed(1)}</p></div><div className="col-span-2 sm:col-span-1"><p className="text-slate-500">Total</p><p className="mt-1 font-black">{log.totalPoints.toFixed(1)}</p></div></> : <div className="col-span-2 text-amber-200 sm:col-span-3">Score breakdown unavailable.</div>}
+              </div>
 
               {isEditing && log ? <div className="mt-4 grid gap-4 rounded-xl border border-orange-400/20 bg-orange-400/[0.06] p-4 md:grid-cols-2">
                 <label className="space-y-2"><span className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={edit.baseEnabled} onChange={(event) => setEdit({ ...edit, baseEnabled: event.target.checked })} />Override Base Points</span><input aria-label="Base Points override" type="number" min="0" step="0.01" disabled={!edit.baseEnabled} value={edit.base} onChange={(event) => setEdit({ ...edit, base: event.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 disabled:opacity-50" /></label>
