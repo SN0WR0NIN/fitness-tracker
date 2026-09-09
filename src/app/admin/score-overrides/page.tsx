@@ -1,3 +1,4 @@
+import type { Activity } from '@prisma/client';
 import { redirect } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import AdminScoreOverrides from '@/components/AdminScoreOverrides';
@@ -5,6 +6,12 @@ import { requireAdmin } from '@/lib/adminGuard';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
+
+type ScoreOverrideActivity = Activity & {
+  pointsLog: { basePoints: number; friendBonus: number; totalPoints: number } | null;
+  user: { id: string; name: string; email: string };
+  column: { name: string };
+};
 
 export default async function AdminScoreOverridesPage() {
   const guard = await requireAdmin();
@@ -18,9 +25,9 @@ export default async function AdminScoreOverridesPage() {
       column: { select: { name: true } },
     },
     orderBy: { occurredAt: 'desc' },
-  });
+  }) as ScoreOverrideActivity[];
 
-  const serialized = activities.map((activity) => ({
+  const serialized = activities.map((activity: ScoreOverrideActivity) => ({
     ...activity,
     occurredAt: activity.occurredAt.toISOString(),
     createdAt: activity.createdAt.toISOString(),
