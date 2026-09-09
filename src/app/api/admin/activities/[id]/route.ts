@@ -6,6 +6,9 @@ import { updateActivity } from '@/lib/activities';
 import { prisma } from '@/lib/prisma';
 import { recordAdminAudit } from '@/lib/admin-control';
 
+const halfPoint = z.number().nonnegative('Total points cannot be negative').max(100000)
+  .refine((value) => Math.abs(value * 2 - Math.round(value * 2)) < 1e-9, 'Total points must use 0.5-point increments');
+
 const EditActivitySchema = z.object({
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']).optional(),
   distance: z.number().positive('Distance must be greater than zero').max(100000).optional(),
@@ -13,6 +16,8 @@ const EditActivitySchema = z.object({
   companionUserIds: z.array(z.string().min(1).max(200)).max(100).optional(),
   companionUserId: z.string().nullable().optional(),
   companionName: z.string().nullable().optional(),
+  basePointsOverride: z.number().nonnegative('Base points cannot be negative').max(100000).nullable().optional(),
+  totalPointsOverride: halfPoint.nullable().optional(),
 });
 
 export async function PATCH(
@@ -47,7 +52,8 @@ export async function PATCH(
     }
 
     const activity = await updateActivity(id, data);
-    await recordAdminAudit(guard.userId, 'Corrected activity', id, data);
+    const scoreOverrideChanged = data.basePointsOverride !== undefined || data.totalPointsOverride !== undefined;
+    await recordAdminAudit(guard.userId, scoreOverrideChanged ? 'Overrode activity score' : 'Corrected activity', id, data);
     return NextResponse.json(activity);
   } catch (error) {
     if (error instanceof ActivityEditError) return NextResponse.json({ error: error.message }, { status: error.status });
