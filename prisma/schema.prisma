@@ -68,6 +68,8 @@ model Activity {
   companionUser   User?      @relation("ActivityCompanion", fields: [companionUserId], references: [id])
   proofUrl        String?
   points          Float
+  basePointsOverride Float?   // admin-only persistent override for PointsLog.basePoints
+  totalPointsOverride Float?  // admin-only persistent override for final saved points
   status          ActivityStatus @default(PENDING)
   reviewedBy      User?      @relation("ActivityReviewer", fields: [reviewedById], references: [id])
   reviewedById    String?
