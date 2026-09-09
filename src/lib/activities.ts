@@ -79,12 +79,16 @@ export async function resetActivityToPending(activityId: string) {
 interface UpdateActivityInput {
   category?: ActivityCategory; distance?: number; pace?: number | null; proofUrl?: string | null;
   companionUserId?: string | null; companionUserIds?: string[]; companionName?: string | null;
+  basePointsOverride?: number | null; totalPointsOverride?: number | null;
 }
 
 export async function updateActivity(activityId: string, input: UpdateActivityInput, ownerId?: string) {
   return changeActivity(activityId, async (tx, activity) => {
     if (ownerId && activity.userId !== ownerId) throw new ActivityEditError('Not your activity', 403);
     if (ownerId && activity.status !== 'PENDING') throw new ActivityEditError('This submission has been reviewed. Refresh to see its status.', 409);
+    if (ownerId && (input.basePointsOverride !== undefined || input.totalPointsOverride !== undefined)) {
+      throw new ActivityEditError('Only administrators can override saved points.', 403);
+    }
     if (ownerId) await assertCompetitionWritable(tx, true);
     if (ownerId && activity.stravaActivityId && (input.category !== undefined || input.distance !== undefined || input.pace !== undefined || input.proofUrl !== undefined)) {
       throw new ActivityEditError('Strava workout details must be corrected in Strava. You can update friends here.', 400);
@@ -104,6 +108,8 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
     await tx.activity.update({ where: { id: activityId }, data: {
       category, distance: category === 'TROOP_GAMES' ? 0 : input.distance ?? activity.distance,
       pace, proofUrl: input.proofUrl, ...friends,
+      basePointsOverride: input.basePointsOverride,
+      totalPointsOverride: input.totalPointsOverride,
     } });
   });
 }

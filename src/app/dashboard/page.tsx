@@ -27,6 +27,8 @@ type DashboardActivity = {
   pace: number | null;
   duration: number | null;
   points: number;
+  basePointsOverride: number | null;
+  totalPointsOverride: number | null;
   pointsLog: ScoreBreakdown | null;
   completedWithFriend: boolean;
   companion: string | null;
@@ -70,6 +72,8 @@ export default async function DashboardPage() {
         pace: true,
         duration: true,
         points: true,
+        basePointsOverride: true,
+        totalPointsOverride: true,
         pointsLog: { select: { basePoints: true, friendBonus: true, totalPoints: true } },
         completedWithFriend: true,
         companion: true,
