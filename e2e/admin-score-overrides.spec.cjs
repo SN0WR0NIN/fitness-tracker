@@ -25,7 +25,7 @@ async function login(browser, baseURL, user, password) {
   return context;
 }
 
-test('admins can persist and clear Base Points and Points Total overrides', async ({ browser, baseURL }) => {
+test('admins can vet proof and persist or clear Base Points and Points Total overrides', async ({ browser, baseURL }) => {
   assertDisposable(baseURL);
   const db = new PrismaClient();
   const key = `score_override_${randomUUID().replaceAll('-', '')}`;
@@ -43,6 +43,8 @@ test('admins can persist and clear Base Points and Points Total overrides', asyn
     const activity = await json(await memberContext.request.post('/api/activities', { data: {
       activityDate: '2026-09-02', category: 'RUN', distance: 5, pace: 6,
     } }), 201);
+    const proofUrl = `https://example.invalid/e2e-proof/${member.id}/${key}.png`;
+    await db.activity.update({ where: { id: activity.id }, data: { proofUrl } });
     await json(await adminContext.request.post(`/api/admin/activities/${activity.id}/approve`, { data: {} }));
     expect((await db.activity.findUniqueOrThrow({ where: { id: activity.id } })).points).toBe(7.5);
 
@@ -67,6 +69,15 @@ test('admins can persist and clear Base Points and Points Total overrides', asyn
     await page.goto('/admin/score-overrides');
     const card = page.locator(`article[data-score-activity-id="${activity.id}"]`);
     await expect(card).toContainText('ADMIN OVERRIDE');
+    const proofButton = card.getByRole('button', { name: "View Score Override Member's proof" });
+    await expect(proofButton).toBeVisible();
+    await expect(proofButton.locator('img')).toHaveAttribute('src', /\/api\/proofs\?ref=/);
+    await proofButton.click();
+    await expect(page.getByRole('dialog', { name: 'Activity proof preview' })).toBeVisible();
+    await expect(page.getByAltText('Activity proof enlarged')).toBeVisible();
+    await page.getByRole('button', { name: 'Close proof preview' }).click();
+    await expect(page.getByRole('dialog', { name: 'Activity proof preview' })).toHaveCount(0);
+
     await card.getByRole('button', { name: 'Edit score' }).click();
     await expect(card.getByLabel('Base Points override')).toHaveValue('8.25');
     await expect(card.getByLabel('Points Total override')).toHaveValue('9.5');

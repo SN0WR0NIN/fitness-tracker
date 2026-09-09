@@ -1,8 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
-import { RotateCcw, Save, Search, SlidersHorizontal } from 'lucide-react';
+import { Eye, ImageOff, RotateCcw, Save, Search, SlidersHorizontal, X } from 'lucide-react';
+import { proofDisplayHref } from '@/lib/proof-reference';
 
 type ActivityStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 type ScoreActivity = {
@@ -11,6 +13,7 @@ type ScoreActivity = {
   status: ActivityStatus;
   occurredAt: string;
   points: number;
+  proofUrl: string | null;
   basePointsOverride: number | null;
   totalPointsOverride: number | null;
   pointsLog: { basePoints: number; friendBonus: number; totalPoints: number } | null;
@@ -32,6 +35,7 @@ export default function AdminScoreOverrides({ initialActivities }: { initialActi
   const [status, setStatus] = useState<'ALL' | ActivityStatus>('APPROVED');
   const [edit, setEdit] = useState<EditState | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [selectedProof, setSelectedProof] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const filtered = useMemo(() => {
@@ -119,7 +123,7 @@ export default function AdminScoreOverrides({ initialActivities }: { initialActi
           <option value="APPROVED">Approved</option><option value="PENDING">Pending</option><option value="REJECTED">Rejected</option><option value="ALL">All</option>
         </select>
       </div>
-      <p className="mt-3 text-xs leading-5 text-slate-500">Base override replaces the calculated base points. Friend-bonus allocation stays automatic. A Total override, when enabled, becomes the exact final saved total and must use 0.5-point increments.</p>
+      <p className="mt-3 text-xs leading-5 text-slate-500">Proof stays behind the authenticated proof viewer. Base override replaces the calculated base points. Friend-bonus allocation stays automatic. A Total override, when enabled, becomes the exact final saved total and must use 0.5-point increments.</p>
     </section>
 
     {error ? <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-200">{error}</div> : null}
@@ -129,22 +133,38 @@ export default function AdminScoreOverrides({ initialActivities }: { initialActi
         const log = activity.pointsLog;
         const isEditing = edit?.id === activity.id;
         const overridden = activity.basePointsOverride !== null || activity.totalPointsOverride !== null;
-        return <article key={activity.id} data-score-activity-id={activity.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div><div className="flex flex-wrap items-center gap-2"><Link href={`/participants/${activity.user.id}`} className="font-black hover:text-orange-300">{activity.user.name}</Link><span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[0.68rem] font-black text-slate-400">{activity.status}</span>{overridden ? <span className="rounded-full border border-orange-400/20 bg-orange-400/10 px-2 py-0.5 text-[0.68rem] font-black text-orange-200">ADMIN OVERRIDE</span> : null}</div><p className="mt-1 text-xs text-slate-500">{activity.column.name} · {activity.category} · {new Date(activity.occurredAt).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
-            <div className="text-right"><p className="text-2xl font-black text-orange-300">{activity.points.toFixed(1)}</p><p className="text-[0.68rem] uppercase tracking-wider text-slate-600">saved total</p></div>
+        return <article key={activity.id} data-score-activity-id={activity.id} className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+          <div className="grid sm:grid-cols-[10rem_1fr]">
+            <div className="relative min-h-36 overflow-hidden border-b border-white/10 bg-black/20 sm:min-h-full sm:border-b-0 sm:border-r">
+              {activity.proofUrl ? <button type="button" onClick={() => setSelectedProof(activity.proofUrl)} aria-label={`View ${activity.user.name}'s proof`} className="group relative h-full min-h-36 w-full">
+                <Image src={proofDisplayHref(activity.proofUrl)!} alt={`${activity.user.name} activity proof`} fill unoptimized sizes="(max-width: 640px) 100vw, 160px" className="object-cover transition duration-300 group-hover:scale-105" />
+                <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-lg bg-black/75 px-2 py-1 text-[0.68rem] font-bold text-white"><Eye className="h-3.5 w-3.5" />View proof</span>
+              </button> : <div className="flex h-full min-h-36 flex-col items-center justify-center gap-2 px-4 text-center text-slate-600"><ImageOff className="h-6 w-6" /><span className="text-xs font-bold">No photo proof</span></div>}
+            </div>
+
+            <div className="p-4 sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div><div className="flex flex-wrap items-center gap-2"><Link href={`/participants/${activity.user.id}`} className="font-black hover:text-orange-300">{activity.user.name}</Link><span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[0.68rem] font-black text-slate-400">{activity.status}</span>{overridden ? <span className="rounded-full border border-orange-400/20 bg-orange-400/10 px-2 py-0.5 text-[0.68rem] font-black text-orange-200">ADMIN OVERRIDE</span> : null}</div><p className="mt-1 text-xs text-slate-500">{activity.column.name} · {activity.category} · {new Date(activity.occurredAt).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+                <div className="text-right"><p className="text-2xl font-black text-orange-300">{activity.points.toFixed(1)}</p><p className="text-[0.68rem] uppercase tracking-wider text-slate-600">saved total</p></div>
+              </div>
+
+              {log ? <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-white/5 bg-black/10 p-3 text-center text-xs"><div><p className="text-slate-500">Base</p><p className="mt-1 font-black">{log.basePoints.toFixed(2)}</p></div><div><p className="text-slate-500">Friend</p><p className="mt-1 font-black">+{log.friendBonus.toFixed(1)}</p></div><div><p className="text-slate-500">Total</p><p className="mt-1 font-black">{log.totalPoints.toFixed(1)}</p></div></div> : <p className="mt-4 text-sm text-amber-200">Score breakdown unavailable for this activity.</p>}
+
+              {isEditing && log ? <div className="mt-4 grid gap-4 rounded-xl border border-orange-400/20 bg-orange-400/[0.06] p-4 md:grid-cols-2">
+                <label className="space-y-2"><span className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={edit.baseEnabled} onChange={(event) => setEdit({ ...edit, baseEnabled: event.target.checked })} />Override Base Points</span><input aria-label="Base Points override" type="number" min="0" step="0.01" disabled={!edit.baseEnabled} value={edit.base} onChange={(event) => setEdit({ ...edit, base: event.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 disabled:opacity-50" /></label>
+                <label className="space-y-2"><span className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={edit.totalEnabled} onChange={(event) => setEdit({ ...edit, totalEnabled: event.target.checked })} />Override Points Total</span><input aria-label="Points Total override" type="number" min="0" step="0.5" disabled={!edit.totalEnabled} value={edit.total} onChange={(event) => setEdit({ ...edit, total: event.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 disabled:opacity-50" /></label>
+                <div className="flex flex-wrap gap-2 md:col-span-2"><button type="button" disabled={savingId === activity.id} onClick={() => save(activity)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-sm font-black disabled:opacity-50"><Save className="h-4 w-4" />Save score</button><button type="button" disabled={savingId === activity.id} onClick={() => clear(activity)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold disabled:opacity-50"><RotateCcw className="h-4 w-4" />Use calculated score</button><button type="button" onClick={() => setEdit(null)} className="min-h-10 rounded-xl px-4 py-2 text-sm font-bold text-slate-400">Cancel</button></div>
+              </div> : <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" disabled={!log || savingId !== null} onClick={() => start(activity)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-orange-400/20 bg-orange-400/10 px-4 py-2 text-sm font-black text-orange-200 disabled:opacity-50"><SlidersHorizontal className="h-4 w-4" />Edit score</button>{overridden ? <button type="button" disabled={savingId !== null} onClick={() => clear(activity)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold disabled:opacity-50"><RotateCcw className="h-4 w-4" />Clear overrides</button> : null}</div>}
+            </div>
           </div>
-
-          {log ? <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-white/5 bg-black/10 p-3 text-center text-xs"><div><p className="text-slate-500">Base</p><p className="mt-1 font-black">{log.basePoints.toFixed(2)}</p></div><div><p className="text-slate-500">Friend</p><p className="mt-1 font-black">+{log.friendBonus.toFixed(1)}</p></div><div><p className="text-slate-500">Total</p><p className="mt-1 font-black">{log.totalPoints.toFixed(1)}</p></div></div> : <p className="mt-4 text-sm text-amber-200">Score breakdown unavailable for this activity.</p>}
-
-          {isEditing && log ? <div className="mt-4 grid gap-4 rounded-xl border border-orange-400/20 bg-orange-400/[0.06] p-4 md:grid-cols-2">
-            <label className="space-y-2"><span className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={edit.baseEnabled} onChange={(event) => setEdit({ ...edit, baseEnabled: event.target.checked })} />Override Base Points</span><input aria-label="Base Points override" type="number" min="0" step="0.01" disabled={!edit.baseEnabled} value={edit.base} onChange={(event) => setEdit({ ...edit, base: event.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 disabled:opacity-50" /></label>
-            <label className="space-y-2"><span className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={edit.totalEnabled} onChange={(event) => setEdit({ ...edit, totalEnabled: event.target.checked })} />Override Points Total</span><input aria-label="Points Total override" type="number" min="0" step="0.5" disabled={!edit.totalEnabled} value={edit.total} onChange={(event) => setEdit({ ...edit, total: event.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 disabled:opacity-50" /></label>
-            <div className="flex flex-wrap gap-2 md:col-span-2"><button type="button" disabled={savingId === activity.id} onClick={() => save(activity)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-sm font-black disabled:opacity-50"><Save className="h-4 w-4" />Save score</button><button type="button" disabled={savingId === activity.id} onClick={() => clear(activity)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold disabled:opacity-50"><RotateCcw className="h-4 w-4" />Use calculated score</button><button type="button" onClick={() => setEdit(null)} className="min-h-10 rounded-xl px-4 py-2 text-sm font-bold text-slate-400">Cancel</button></div>
-          </div> : <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" disabled={!log || savingId !== null} onClick={() => start(activity)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-orange-400/20 bg-orange-400/10 px-4 py-2 text-sm font-black text-orange-200 disabled:opacity-50"><SlidersHorizontal className="h-4 w-4" />Edit score</button>{overridden ? <button type="button" disabled={savingId !== null} onClick={() => clear(activity)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold disabled:opacity-50"><RotateCcw className="h-4 w-4" />Clear overrides</button> : null}</div>}
         </article>;
       })}
       {!filtered.length ? <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center text-sm text-slate-500">No matching activities.</div> : null}
     </section>
+
+    {selectedProof ? <div role="dialog" aria-modal="true" aria-label="Activity proof preview" className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setSelectedProof(null)}>
+      <button type="button" onClick={() => setSelectedProof(null)} aria-label="Close proof preview" className="absolute right-5 top-5 z-10 rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"><X className="h-5 w-5" /></button>
+      <div className="relative h-full w-full"><Image src={proofDisplayHref(selectedProof)!} alt="Activity proof enlarged" fill unoptimized sizes="100vw" className="object-contain" /></div>
+    </div> : null}
   </div>;
 }
