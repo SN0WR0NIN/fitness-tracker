@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Award,ChevronDown,DatabaseBackup,FileClock,KeyRound,Megaphone,PlusCircle,Settings,ShieldAlert,Trophy,Users,Wrench,Pencil } from 'lucide-react';
+import { Award,ChevronDown,DatabaseBackup,FileClock,KeyRound,Megaphone,PlusCircle,Settings,ShieldAlert,Trophy,Users,Wrench,Pencil,SlidersHorizontal } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { getOperatingState } from '@/lib/operating-mode';
 type WeeklyAwardState='FINALIZED'|'READY'|'WAITING_REVIEW'|'NOT_STARTED';
@@ -23,6 +23,7 @@ export default async function AdminActionHub({pendingReviews,passwordResets,dupl
   const activities:ActionItem[]=[
     {href:'/admin/activities/new',label:'Create activity',description:'Add an activity on behalf of a participant.',icon:<PlusCircle className="h-5 w-5"/>},
     {href:'/admin/activities',label:'Review pending',description:'Approve, reject or correct submitted activities.',icon:<FileClock className="h-5 w-5"/>,badge:countBadge(pendingReviews)},
+    {href:'/admin/score-overrides',label:'Score overrides',description:'Manually edit Base Points and the final Points Total.',icon:<SlidersHorizontal className="h-5 w-5"/>},
     {href:'/admin/corrections',label:'Correction requests',description:'Compare original and proposed values before changing approved entries.',icon:<Pencil className="h-5 w-5"/>,badge:countBadge(correctionCount)},
     {href:'/admin/duplicates',label:'Duplicate review',description:'Compare possible duplicate entries side by side.',icon:<ShieldAlert className="h-5 w-5"/>,badge:countBadge(duplicateReviews)},
   ];
