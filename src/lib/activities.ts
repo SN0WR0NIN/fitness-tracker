@@ -1,4 +1,4 @@
-import { assertAttachableProof } from './proof-access';
+import { assertAttachableProof, assertAttachableProofs, normalizeProofUrls } from './proof-access';
 import type { Activity, Prisma } from '@prisma/client';
 import { resolveActivityFriends } from './activity-friends';
 import { activityFriendIds } from './friend-selection';
@@ -9,14 +9,15 @@ import { assertCompetitionWritable } from './operating-mode';
 
 interface CreateActivityInput {
   userId: string; columnId: string; proofActorId?: string; category: ActivityCategory; distance?: number; pace?: number;
-  companionUserId?: string; companionUserIds?: string[]; proofUrl?: string; stravaActivityId?: string;
+  companionUserId?: string; companionUserIds?: string[]; proofUrl?: string; proofUrls?: string[]; stravaActivityId?: string;
   occurredAt?: Date; mapPolyline?: string; elevationGain?: number; duration?: number;
 }
 
 export async function createActivity(input: CreateActivityInput) {
   return scoringTransaction(async tx => {
     await assertCompetitionWritable(tx);
-    await assertAttachableProof(tx, input.proofUrl, input.proofActorId ?? input.userId);
+    const proofUrls = normalizeProofUrls(input.proofUrls, input.proofUrl);
+    await assertAttachableProofs(tx, proofUrls, input.proofActorId ?? input.userId);
     const settings = await ledgerSettings(tx);
     const category = resolveEffectiveCategory(input.category, input.pace, settings.rules);
     const friends = await resolveActivityFriends(tx, input.userId, input);
@@ -24,7 +25,7 @@ export async function createActivity(input: CreateActivityInput) {
     const created = await tx.activity.create({ data: {
       userId: input.userId, columnId: input.columnId, category,
       distance: category === 'TROOP_GAMES' ? (input.distance ?? 0) : input.distance!, pace: input.pace,
-      ...friends, proofUrl: input.proofUrl, stravaActivityId: input.stravaActivityId,
+      ...friends, proofUrls, proofUrl: proofUrls[0] ?? input.proofUrl, stravaActivityId: input.stravaActivityId,
       mapPolyline: input.mapPolyline, elevationGain: input.elevationGain, duration: input.duration,
       points: calculateActivityPoints({ category, distance: input.distance, pace: input.pace }, settings.rules).totalPoints,
       status: 'PENDING', occurredAt, weekStart: getWeekStart(occurredAt), weekNumber: getWeekNumber(occurredAt, settings.startDate),
@@ -77,7 +78,7 @@ export async function resetActivityToPending(activityId: string) {
 }
 
 interface UpdateActivityInput {
-  category?: ActivityCategory; distance?: number; pace?: number | null; proofUrl?: string | null;
+  category?: ActivityCategory; distance?: number; pace?: number | null; proofUrl?: string | null; proofUrls?: string[];
   companionUserId?: string | null; companionUserIds?: string[]; companionName?: string | null;
   basePointsOverride?: number | null; totalPointsOverride?: number | null;
 }
@@ -90,10 +91,15 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
       throw new ActivityEditError('Only administrators can override saved points.', 403);
     }
     if (ownerId) await assertCompetitionWritable(tx, true);
-    if (ownerId && activity.stravaActivityId && (input.category !== undefined || input.distance !== undefined || input.pace !== undefined || input.proofUrl !== undefined)) {
+    const proofChange = input.proofUrls !== undefined || input.proofUrl !== undefined;
+    if (ownerId && activity.stravaActivityId && (input.category !== undefined || input.distance !== undefined || input.pace !== undefined || proofChange)) {
       throw new ActivityEditError('Strava workout details must be corrected in Strava. You can update friends here.', 400);
     }
-    if (ownerId) await assertAttachableProof(tx, input.proofUrl, ownerId, activity.proofUrl);
+    let nextProofUrls = normalizeProofUrls(activity.proofUrls, activity.proofUrl);
+    if (input.proofUrls !== undefined) nextProofUrls = normalizeProofUrls(input.proofUrls);
+    else if (input.proofUrl !== undefined) nextProofUrls = input.proofUrl ? [input.proofUrl] : [];
+    if (ownerId && proofChange) await assertAttachableProofs(tx, nextProofUrls, ownerId, normalizeProofUrls(activity.proofUrls, activity.proofUrl));
+    else if (ownerId && input.proofUrl !== undefined) await assertAttachableProof(tx, input.proofUrl, ownerId, activity.proofUrl);
     const settings = await ledgerSettings(tx);
     const pace = input.pace === undefined ? activity.pace : input.pace;
     const category = resolveEffectiveCategory(input.category ?? activity.category, pace ?? undefined, settings.rules);
@@ -107,7 +113,9 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
     }
     await tx.activity.update({ where: { id: activityId }, data: {
       category, distance: category === 'TROOP_GAMES' ? 0 : input.distance ?? activity.distance,
-      pace, proofUrl: input.proofUrl, ...friends,
+      pace,
+      ...(proofChange ? { proofUrls: nextProofUrls, proofUrl: nextProofUrls[0] ?? null } : {}),
+      ...friends,
       basePointsOverride: input.basePointsOverride,
       totalPointsOverride: input.totalPointsOverride,
     } });
