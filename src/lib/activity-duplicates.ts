@@ -1,4 +1,4 @@
-export type DuplicateCandidate = { id?: string; userId: string; category: string; distance: number; occurredAt: Date | string; proofUrl?: string | null; status?: string };
+export type DuplicateCandidate = { id?: string; userId: string; category: string; distance: number; occurredAt: Date | string; proofUrl?: string | null; proofUrls?: string[]; status?: string };
 export function proofKey(value?: string | null): string | null {
   if (!value) return null;
   try {
@@ -12,12 +12,16 @@ export function proofKey(value?: string | null): string | null {
     url.hash = ''; return url.toString();
   } catch { return value; }
 }
+function proofKeys(candidate: DuplicateCandidate): Set<string> {
+  const values = candidate.proofUrls?.length ? candidate.proofUrls : candidate.proofUrl ? [candidate.proofUrl] : [];
+  return new Set(values.map(proofKey).filter((value): value is string => Boolean(value)));
+}
 const singaporeDay = (date: Date | string) => new Date(new Date(date).getTime() + 8 * 3600000).toISOString().slice(0, 10);
 export function duplicateReason(a: DuplicateCandidate, b: DuplicateCandidate): string | null {
   if (a.id && a.id === b.id) return null;
   if (a.userId !== b.userId || b.status === 'REJECTED') return null;
-  const proof = proofKey(a.proofUrl);
-  if (proof && proof === proofKey(b.proofUrl)) return 'Same proof attachment';
+  const aProofs = proofKeys(a); const bProofs = proofKeys(b);
+  if ([...aProofs].some(proof => bProofs.has(proof))) return 'Same proof attachment';
   if (a.category !== b.category || a.distance <= 0 || b.distance <= 0) return null;
   if (Math.abs(a.distance - b.distance) <= Math.max(a.distance, b.distance) * 0.02 && singaporeDay(a.occurredAt) === singaporeDay(b.occurredAt)) return 'Similar distance on the same Singapore date';
   return null;
