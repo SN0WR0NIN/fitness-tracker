@@ -22,6 +22,15 @@ const errors = [];
 const check = (value, message) => { if (!value) errors.push(message); };
 check(Array.isArray(backup.pointsLogs), 'Version 7 requires a pointsLogs array.');
 const activities = new Map(backup.activities.map(a => [a.id, a]));
+for (const activity of backup.activities) {
+  for (const key of ['basePointsOverride','totalPointsOverride']) {
+    const value = activity[key];
+    if (value !== undefined && value !== null) check(typeof value === 'number' && Number.isFinite(value) && value >= 0, `Invalid ${key}.`);
+  }
+  if (activity.totalPointsOverride !== undefined && activity.totalPointsOverride !== null) {
+    check(Math.abs(activity.totalPointsOverride * 2 - Math.round(activity.totalPointsOverride * 2)) < 1e-9, 'Total score override must use 0.5-point increments.');
+  }
+}
 const logIds = new Set(); const activityIds = new Set();
 for (const log of Array.isArray(backup.pointsLogs) ? backup.pointsLogs : []) {
   if (!log || typeof log !== 'object') { errors.push('Invalid PointsLog record.'); continue; }
