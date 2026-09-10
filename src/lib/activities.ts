@@ -1,4 +1,4 @@
-import { assertAttachableProof, assertAttachableProofs, normalizeProofUrls } from './proof-access';
+import { assertAttachableProofs, normalizeProofUrls } from './proof-access';
 import type { Activity, Prisma } from '@prisma/client';
 import { resolveActivityFriends } from './activity-friends';
 import { activityFriendIds } from './friend-selection';
@@ -83,6 +83,12 @@ interface UpdateActivityInput {
   basePointsOverride?: number | null; totalPointsOverride?: number | null;
 }
 
+function replacePrimaryProof(activity: Pick<Activity, 'proofUrl' | 'proofUrls'>, primary: string | null): string[] {
+  const current = normalizeProofUrls(activity.proofUrls, activity.proofUrl);
+  const secondary = current.filter(value => value !== activity.proofUrl && value !== primary);
+  return primary ? normalizeProofUrls([primary, ...secondary]).slice(0, 5) : secondary.slice(0, 5);
+}
+
 export async function updateActivity(activityId: string, input: UpdateActivityInput, ownerId?: string) {
   return changeActivity(activityId, async (tx, activity) => {
     if (ownerId && activity.userId !== ownerId) throw new ActivityEditError('Not your activity', 403);
@@ -97,9 +103,10 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
     }
     let nextProofUrls = normalizeProofUrls(activity.proofUrls, activity.proofUrl);
     if (input.proofUrls !== undefined) nextProofUrls = normalizeProofUrls(input.proofUrls);
-    else if (input.proofUrl !== undefined) nextProofUrls = input.proofUrl ? [input.proofUrl] : [];
-    if (ownerId && proofChange) await assertAttachableProofs(tx, nextProofUrls, ownerId, normalizeProofUrls(activity.proofUrls, activity.proofUrl));
-    else if (ownerId && input.proofUrl !== undefined) await assertAttachableProof(tx, input.proofUrl, ownerId, activity.proofUrl);
+    else if (input.proofUrl !== undefined) nextProofUrls = replacePrimaryProof(activity, input.proofUrl);
+    if (ownerId && proofChange) {
+      await assertAttachableProofs(tx, nextProofUrls, ownerId, normalizeProofUrls(activity.proofUrls, activity.proofUrl));
+    }
     const settings = await ledgerSettings(tx);
     const pace = input.pace === undefined ? activity.pace : input.pace;
     const category = resolveEffectiveCategory(input.category ?? activity.category, pace ?? undefined, settings.rules);
