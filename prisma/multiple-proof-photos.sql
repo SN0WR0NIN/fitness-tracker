@@ -32,8 +32,9 @@ CREATE INDEX IF NOT EXISTS activity_proof_urls_gin
   ON public."Activity" USING gin ("proofUrls");
 
 -- Keep the v7 operational backup format while enriching each Activity object
--- with the proof list. Older v7 backups remain valid because proofUrls is
--- optional to the validator and the restore drill targets the current schema.
+-- from the current database row. Refresh both the legacy primary proofUrl and
+-- the complete proofUrls gallery together so recovery snapshots cannot contain
+-- a stale primary reference beside a newer gallery.
 CREATE OR REPLACE FUNCTION app_internal.enrich_multiple_proofs_backup_v7()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -42,7 +43,10 @@ AS $$
 DECLARE enriched jsonb;
 BEGIN
   SELECT coalesce(jsonb_agg(
-    item || jsonb_build_object('proofUrls', to_jsonb(a."proofUrls"))
+    item || jsonb_build_object(
+      'proofUrl', a."proofUrl",
+      'proofUrls', to_jsonb(a."proofUrls")
+    )
     ORDER BY item->>'id'
   ), '[]'::jsonb)
   INTO enriched
