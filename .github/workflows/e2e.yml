@@ -19,17 +19,17 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: fitness_tracker_e2e
-        ports: ['5432:5432']
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres -d fitness_tracker_e2e"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      CI: 'true'
+      CI: "true"
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/fitness_tracker_e2e?schema=public
       DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/fitness_tracker_e2e?schema=public
       NEXTAUTH_SECRET: e2e-nextauth-secret-only-for-ci
       NEXTAUTH_URL: http://127.0.0.1:3000
-      E2E_TEST_MODE: '1'
+      E2E_TEST_MODE: "1"
       E2E_PASSWORD: E2E-only-Password-123!
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +57,8 @@ jobs:
           npx eslint src/lib/system-automation.ts src/lib/duplicate-review.ts src/lib/competition-results.ts src/lib/notifications.ts
           src/lib/operating-mode.ts src/lib/activity-corrections.ts src/lib/achievement-engine.ts src/lib/notification-preferences.ts src/lib/feature-response.ts
           src/lib/proof-reference.ts src/lib/proof-access.ts src/lib/operational-backup.ts src/lib/score-explanation.ts src/lib/activity-duplicates.ts
-          src/app/api/proofs/route.ts src/app/admin/operations/page.tsx src/components/ScoreExplanation.tsx src/components/ActivityProof.tsx
+          src/app/api/proofs/route.ts src/app/admin/operations/page.tsx src/components/ScoreExplanation.tsx src/components/ActivityProof.tsx src/components/ProofGallery.tsx
+          src/lib/admin-operations.ts src/components/AdminOperationsAnalytics.tsx src/app/api/admin/proofs/orphans/route.ts
           src/lib/friend-selection.ts src/lib/activity-friends.ts src/components/FriendMultiSelect.tsx
           src/lib/daily-friend-bonus.ts src/lib/scoring-ledger.ts src/lib/activities.ts src/components/useDailyFriendBonus.ts src/app/api/activities/friend-bonus/route.ts
           src/app/api/activities/route.ts src/app/api/activities/[id]/route.ts src/components/MyActivitiesHistory.tsx
