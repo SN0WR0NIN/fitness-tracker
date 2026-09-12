@@ -258,6 +258,33 @@ test('achievement awards are approved-only, idempotent, reversible and silently 
   await reconcile(s.db, s.member.id);
 });
 
+test('participant admins receive activity achievements and batch repair stays silent', async ({ sandbox: s }) => {
+  const activity = await json(await s.admin.api.post('/api/activities', { data: {
+    activityDate: '2026-09-02', category: 'RUN', distance: 5, pace: 6,
+  } }), 201);
+  const badge = async (id) => (await s.db.$queryRaw`
+    SELECT current_value, unlocked, notified_at
+    FROM app_internal.user_achievement
+    WHERE user_id=${s.admin.id} AND achievement_id=${id}
+  `)[0];
+  expect((await badge('first-move')).unlocked).toBe(false);
+
+  await json(await s.admin.api.post(`/api/admin/activities/${activity.id}/approve`, { data: {} }));
+  expect(await badge('first-move')).toMatchObject({ current_value: 1, unlocked: true });
+  expect(await badge('momentum')).toMatchObject({ current_value: 1, unlocked: false });
+
+  await s.db.$executeRaw`DELETE FROM app_internal.notification WHERE user_id=${s.admin.id} AND kind='ACHIEVEMENT'`;
+  await s.db.$executeRaw`DELETE FROM app_internal.user_achievement WHERE user_id=${s.admin.id}`;
+  await s.db.$executeRaw`SELECT app_internal.refresh_all_achievements(false)`;
+
+  expect(await badge('first-move')).toMatchObject({ current_value: 1, unlocked: true });
+  expect((await s.db.$queryRaw`
+    SELECT count(*)::int AS n FROM app_internal.notification
+    WHERE user_id=${s.admin.id} AND kind='ACHIEVEMENT'
+  `)[0].n).toBe(0);
+  await reconcile(s.db, s.admin.id);
+});
+
 test('new feature records and PointsLog are exported while the legacy v6 snapshot checksum validates', async ({ sandbox: s }, testInfo) => {
   const activity = await s.create();
   await json(await s.requestCorrection(activity, { distance: 8 }), 201);
