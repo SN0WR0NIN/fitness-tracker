@@ -134,4 +134,14 @@ test("admin navigation exposes one Admin hub entry with grouped tools", async ({
     page.getByRole("heading", { name: "Operational analytics" }),
   ).toBeVisible();
   await expect(page.getByText("Upload failures · 7 days")).toBeVisible();
+
+  const rebuild = await page.request.post("/api/admin/awards/generate", {
+    data: { weekNumber: 1 },
+  });
+  expect(rebuild.status()).toBe(200);
+  expect(await rebuild.json()).toMatchObject({
+    ok: true,
+    weekNumber: 1,
+    resultKey: "e2e:1:true",
+  });
 });
