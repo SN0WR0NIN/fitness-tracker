@@ -56,7 +56,9 @@ DECLARE start_day date; end_day date; default_goal double precision; today_sg da
   metrics jsonb; category_counts jsonb; streak integer; active_weeks integer; wins integer;
   definition record; progress_value double precision; qualified boolean; already_notified timestamptz; enabled boolean; notification_key text;
 BEGIN
-  IF NOT EXISTS(SELECT 1 FROM public."User" WHERE id=p_user_id AND role='MEMBER') THEN RETURN; END IF;
+  -- A participant is defined by column assignment, not by account role. Admins
+  -- can compete too, while operator-only accounts without a column stay out.
+  IF NOT EXISTS(SELECT 1 FROM public."User" WHERE id=p_user_id AND "columnId" IS NOT NULL) THEN RETURN; END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('kg-achievement:'||p_user_id,0));
   SELECT "startDate"::date,"endDate"::date,"weeklyGoal" INTO start_day,end_day,default_goal FROM public."ChallengeSetting" WHERE id='primary';
   IF start_day IS NULL THEN RETURN; END IF;
@@ -112,7 +114,7 @@ CREATE OR REPLACE FUNCTION app_internal.refresh_all_achievements(p_notify boolea
 RETURNS integer LANGUAGE plpgsql SET search_path=pg_catalog,public,app_internal AS $$
 DECLARE u record; n integer:=0;
 BEGIN
-  FOR u IN SELECT id FROM public."User" WHERE role='MEMBER' ORDER BY id LOOP
+  FOR u IN SELECT id FROM public."User" WHERE "columnId" IS NOT NULL ORDER BY id LOOP
     PERFORM app_internal.refresh_user_achievements(u.id,p_notify); n:=n+1;
   END LOOP;
   RETURN n;

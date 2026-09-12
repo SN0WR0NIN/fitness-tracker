@@ -50,6 +50,7 @@ jobs:
           npx prisma db execute --schema prisma/schema.prisma --file prisma/achievement-engine.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/multiple-activity-friends.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/achievement-final-state.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/achievement-participant-roles.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/admin-score-overrides.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/multiple-proof-photos.sql
       - name: Lint safety app changes
