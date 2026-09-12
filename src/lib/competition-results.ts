@@ -92,10 +92,12 @@ export async function getWeeklyCompetitionResult(weekNumber: number): Promise<We
 }
 
 export async function rebuildWeeklyCompetitionResult(weekNumber: number) {
-  const rows = await prisma.$queryRawUnsafe(
-    'SELECT app_internal.generate_weekly_result($1,true) AS "resultKey"',
-    weekNumber,
-  ) as Array<{ resultKey: string }>;
+  const rows = await prisma.$queryRaw<Array<{ resultKey: string }>>`
+    SELECT app_internal.generate_weekly_result(
+      ${weekNumber}::integer,
+      true::boolean
+    ) AS "resultKey"
+  `;
   return rows[0]?.resultKey ?? null;
 }
 

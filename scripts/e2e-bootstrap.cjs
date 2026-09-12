@@ -112,6 +112,12 @@ async function main() {
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (season_key, week_number)
   )`);
+  await prisma.$executeRawUnsafe(`CREATE OR REPLACE FUNCTION app_internal.generate_weekly_result(
+    p_week_number INTEGER,
+    p_force BOOLEAN
+  ) RETURNS TEXT LANGUAGE SQL AS $$
+    SELECT 'e2e:' || p_week_number::text || ':' || p_force::text
+  $$`);
   await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS app_internal.notification (
     id UUID PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
