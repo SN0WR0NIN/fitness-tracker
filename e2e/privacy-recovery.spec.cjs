@@ -106,7 +106,7 @@ test('external proof disclosure stays private and admin uploads attach to the ta
     expect((await s.other.api.get(href(drive),{maxRedirects:0})).status()).toBe(404);
     expect((await request.get(href(drive),{maxRedirects:0})).status()).toBe(401);
     const operations=await s.admin.api.get('/admin/operations');expect(operations.ok()).toBe(true);expect(await operations.text()).toContain('Provider configuration not verified');
-    await s.admin.page.goto('/admin/operations');await expect(s.admin.page.getByRole('heading',{name:'Operations & handover'})).toBeVisible();
+    await s.admin.page.goto('/admin/operations');await expect(s.admin.page.getByRole('heading',{name:'Operations & analytics'})).toBeVisible();
     await s.admin.page.screenshot({path:'test-results/admin-operations-mobile.png',fullPage:true});
   } finally {await s.cleanup();}
 });
