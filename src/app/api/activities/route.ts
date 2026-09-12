@@ -9,7 +9,9 @@ import type { Prisma } from '@prisma/client';
 import { getChallengeSettings } from '@/lib/admin-control';
 import { requestLog } from '@/lib/telemetry';
 import { challengeDateRangeLabel, isWithinChallengeWindow, parseActivityDate } from '@/lib/activity-date';
+import { MAX_ACTIVITY_PROOFS } from '@/lib/proof-access';
 
+const proofUrl = z.string().url().max(2048);
 // Validation schema for activity submission
 const ActivitySchema = z.object({
   activityDate: z.string().refine((value) => !!parseActivityDate(value), 'Choose a valid activity date, today or earlier.').optional(),
@@ -18,10 +20,14 @@ const ActivitySchema = z.object({
   pace: z.number().positive('Pace must be greater than zero').max(60, 'Pace is too large').optional(),
   companionUserIds: z.array(z.string().min(1).max(200)).max(100).optional(),
   companionUserId: z.string().optional(),
-  proofUrl: z.preprocess((val) => (val === '' ? undefined : val), z.string().url().optional()),
+  proofUrl: z.preprocess((val) => (val === '' ? undefined : val), proofUrl.optional()),
+  proofUrls: z.array(proofUrl).max(MAX_ACTIVITY_PROOFS, `Attach up to ${MAX_ACTIVITY_PROOFS} proof photos.`).optional(),
 }).superRefine((data, context) => {
   if (data.category !== 'TROOP_GAMES' && data.distance === undefined) {
     context.addIssue({ code: 'custom', path: ['distance'], message: 'Distance is required for this activity' });
+  }
+  if (data.proofUrls && new Set(data.proofUrls).size !== data.proofUrls.length) {
+    context.addIssue({ code: 'custom', path: ['proofUrls'], message: 'The same proof photo cannot be attached twice.' });
   }
 });
 
@@ -83,6 +89,7 @@ export async function POST(request: NextRequest) {
       companionUserId: validatedData.companionUserId,
       companionUserIds: validatedData.companionUserIds,
       proofUrl: validatedData.proofUrl,
+      proofUrls: validatedData.proofUrls,
       occurredAt,
     });
 
@@ -104,7 +111,8 @@ export async function POST(request: NextRequest) {
 /**
  * Public activity reads intentionally power the landing-page feed and public
  * participant history. Keep this endpoint approved-only and return only
- * public display fields — never participant email addresses or review data.
+ * public display fields — never participant email addresses, review data, or
+ * private proof references.
  */
 export async function GET(request: NextRequest) {
   try {

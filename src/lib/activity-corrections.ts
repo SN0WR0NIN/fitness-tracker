@@ -1,4 +1,4 @@
-import { assertAttachableProof } from '@/lib/proof-access';
+import { assertAttachableProof, normalizeProofUrls } from '@/lib/proof-access';
 import { resolveActivityFriends } from '@/lib/activity-friends';
 import { activityFriendIds, sameFriendSelection } from '@/lib/friend-selection';
 import { reconcileParticipantScores } from '@/lib/scoring-ledger';
@@ -47,6 +47,13 @@ async function settingsInTransaction(tx: Prisma.TransactionClient): Promise<Chal
   return { ...rows[0], scoringRules: { ...DEFAULT_SCORING_RULES, ...rows[0].scoringRules } };
 }
 
+function proofGalleryForCorrection(activity: Activity, proposedPrimary: string | null): string[] {
+  const current = normalizeProofUrls(activity.proofUrls, activity.proofUrl);
+  if (proposedPrimary === activity.proofUrl) return current;
+  const secondary = current.filter(value => value !== activity.proofUrl && value !== proposedPrimary);
+  return proposedPrimary ? normalizeProofUrls([proposedPrimary, ...secondary]).slice(0, 5) : secondary.slice(0, 5);
+}
+
 async function prepareChange(tx: Prisma.TransactionClient, activity: Activity, proposed: CorrectionValues, settings: ChallengeSettings) {
   const occurredAt = proposed.activityDate === singaporeDate(activity.occurredAt) ? activity.occurredAt : parseActivityDate(proposed.activityDate)!;
   if (!isWithinChallengeWindow(occurredAt, settings.startDate, settings.endDate)) throw new FeatureError('The corrected date must be inside the challenge period.');
@@ -59,10 +66,12 @@ async function prepareChange(tx: Prisma.TransactionClient, activity: Activity, p
   }
   const category = resolveEffectiveCategory(proposed.category, proposed.pace ?? undefined, settings.scoringRules);
   const distance = category === 'TROOP_GAMES' ? 0 : proposed.distance;
+  const proofUrls = proofGalleryForCorrection(activity, proposed.proofUrl);
+  const proofUrl = proofUrls[0] ?? null;
   const siblings = await tx.activity.findMany({ where: { userId: activity.userId, id: { not: activity.id } } });
-  const candidate = { ...activity, category, distance, pace: proposed.pace, occurredAt, completedWithFriend: Boolean(companion) };
+  const candidate = { ...activity, category, distance, pace: proposed.pace, occurredAt, proofUrl, proofUrls, completedWithFriend: Boolean(companion) };
   const scoring = planDailyActivityScores([...siblings, candidate], settings.scoringRules, settings.startDate).find(item => item.activity.id === activity.id)!.scoring;
-  return { category, distance, pace: proposed.pace, duration: proposed.duration, occurredAt, weekStart: getWeekStart(occurredAt), weekNumber: getWeekNumber(occurredAt,settings.startDate), proofUrl: proposed.proofUrl, companionUserId: friends.companionUserId, companionUserIds: friends.companionUserIds, companion, completedWithFriend: Boolean(companion), points: scoring.totalPoints, scoring };
+  return { category, distance, pace: proposed.pace, duration: proposed.duration, occurredAt, weekStart: getWeekStart(occurredAt), weekNumber: getWeekNumber(occurredAt,settings.startDate), proofUrl, proofUrls, companionUserId: friends.companionUserId, companionUserIds: friends.companionUserIds, companion, completedWithFriend: Boolean(companion), points: scoring.totalPoints, scoring };
 }
 
 async function audit(tx: Prisma.TransactionClient, actorId: string, action: string, target: string, details: unknown) {
