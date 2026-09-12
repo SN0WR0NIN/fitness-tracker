@@ -11,6 +11,7 @@ type ProofGalleryProps = {
   compact?: boolean;
   actionVerb?: "Enlarge" | "View";
   className?: string;
+  variant?: "grid" | "cover";
 };
 
 export default function ProofGallery({
@@ -19,6 +20,7 @@ export default function ProofGallery({
   compact = false,
   actionVerb = "Enlarge",
   className = "",
+  variant = "grid",
 }: ProofGalleryProps) {
   const proofs = useMemo(
     () => [...new Set(rawProofs.filter(Boolean))].slice(0, 5),
@@ -64,49 +66,83 @@ export default function ProofGallery({
         ? "max-w-2xl grid-cols-2"
         : "max-w-3xl grid-cols-2 sm:grid-cols-3";
 
+  const thumbnails = variant === "cover" ? (
+    <button
+      type="button"
+      onClick={() => setOpen(0)}
+      className="group relative flex h-36 w-full items-center justify-center overflow-hidden bg-slate-900 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-300"
+      aria-label={`${actionVerb} ${label} 1`}
+    >
+      {failed.has(0) ? (
+        <p className="grid h-full w-full place-items-center p-4 text-center text-xs text-slate-400">
+          Workout photo unavailable in this session.
+        </p>
+      ) : (
+        <Image
+          src={proofDisplayHref(proofs[0])!}
+          alt={`${label} 1`}
+          fill
+          unoptimized
+          referrerPolicy="no-referrer"
+          loading="lazy"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+          className="object-cover transition duration-500 group-hover:scale-105"
+          onError={() => setFailed((current) => new Set(current).add(0))}
+        />
+      )}
+      {proofs.length > 1 ? (
+        <span className="absolute bottom-3 left-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-bold text-white backdrop-blur">
+          {proofs.length} photos
+        </span>
+      ) : null}
+    </button>
+  ) : (
+    <div className={`grid gap-2 ${grid}`}>
+      {proofs.map((proof, index) => {
+        const preview = proofDisplayHref(proof)!;
+        return (
+          <button
+            key={proof}
+            type="button"
+            onClick={() => setOpen(index)}
+            className="group overflow-hidden rounded-xl border border-white/10 bg-black/20 text-left transition hover:border-orange-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
+            aria-label={`${actionVerb} ${label} ${index + 1}`}
+          >
+            {failed.has(index) ? (
+              <p className="grid min-h-24 place-items-center p-4 text-center text-xs text-slate-400">
+                Proof unavailable in this session.
+              </p>
+            ) : (
+              <div
+                className={`relative ${compact ? "h-24 sm:h-32" : "h-40 sm:h-48"}`}
+              >
+                <Image
+                  src={preview}
+                  alt={`${label} ${index + 1}`}
+                  fill
+                  unoptimized
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  sizes="(max-width: 640px) 46vw, 240px"
+                  className="object-cover transition duration-300 group-hover:scale-[1.02]"
+                  onError={() =>
+                    setFailed((current) => new Set(current).add(index))
+                  }
+                />
+              </div>
+            )}
+            <p className="border-t border-white/10 px-3 py-1.5 text-xs font-semibold text-orange-300">
+              {index + 1} / {proofs.length} · Tap to enlarge
+            </p>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className={className}>
-      <div className={`grid gap-2 ${grid}`}>
-        {proofs.map((proof, index) => {
-          const preview = proofDisplayHref(proof)!;
-          return (
-            <button
-              key={proof}
-              type="button"
-              onClick={() => setOpen(index)}
-              className="group overflow-hidden rounded-xl border border-white/10 bg-black/20 text-left transition hover:border-orange-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
-              aria-label={`${actionVerb} ${label} ${index + 1}`}
-            >
-              {failed.has(index) ? (
-                <p className="grid min-h-24 place-items-center p-4 text-center text-xs text-slate-400">
-                  Proof unavailable in this session.
-                </p>
-              ) : (
-                <div
-                  className={`relative ${compact ? "h-24 sm:h-32" : "h-40 sm:h-48"}`}
-                >
-                  <Image
-                    src={preview}
-                    alt={`${label} ${index + 1}`}
-                    fill
-                    unoptimized
-                    referrerPolicy="no-referrer"
-                    loading="lazy"
-                    sizes="(max-width: 640px) 46vw, 240px"
-                    className="object-cover transition duration-300 group-hover:scale-[1.02]"
-                    onError={() =>
-                      setFailed((current) => new Set(current).add(index))
-                    }
-                  />
-                </div>
-              )}
-              <p className="border-t border-white/10 px-3 py-1.5 text-xs font-semibold text-orange-300">
-                {index + 1} / {proofs.length} · Tap to enlarge
-              </p>
-            </button>
-          );
-        })}
-      </div>
+      {thumbnails}
 
       {selected ? (
         <div

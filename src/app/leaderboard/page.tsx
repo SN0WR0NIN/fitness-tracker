@@ -108,6 +108,9 @@ export default function LeaderboardPage() {
   const podium = view === 'individual' ? rankedIndividuals.slice(0, 3) : rankedTeams.slice(0, 3);
   const currentUserIndex = session?.user?.id ? individualRankMap.get(session.user.id) ?? -1 : -1;
   const currentUser = currentUserIndex >= 0 ? rankedIndividuals[currentUserIndex] : null;
+  const currentCategoryLabel = category === 'totalPoints'
+    ? 'points'
+    : `${categories.find((item) => item.key === category)?.label ?? 'activity'} pts`;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -152,7 +155,7 @@ export default function LeaderboardPage() {
           </div>
         </section>
 
-        <div className={`mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 ${currentUser ? 'pb-28' : ''}`}>
+        <div className={`mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 ${currentUser && view === 'individual' ? 'pb-32 md:pb-24' : ''}`}>
         <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-4 shadow-xl shadow-black/10">
           <div className="mb-4"><p className="text-xs font-black uppercase tracking-[0.18em] text-lime-300">Standings controls</p><p className="mt-1 text-sm text-slate-500">Choose a leaderboard, activity and time period.</p></div>
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -204,8 +207,8 @@ export default function LeaderboardPage() {
           }) : <Empty />}
         </div>
         </div>
-        {currentUser && view === 'individual' ? <div className="fixed inset-x-3 bottom-28 z-40 mx-auto max-w-xl rounded-2xl border border-lime-300/30 bg-slate-900/95 p-3 shadow-2xl shadow-black/50 backdrop-blur-xl sm:bottom-4 sm:p-4"><Link href={`/participants/${currentUser.userId}`} className="grid grid-cols-[auto_auto_1fr_auto] items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-lime-300 font-black text-slate-950">{currentUserIndex + 1}</span><span className="flex h-10 w-10 items-center justify-center rounded-full bg-lime-300/10 text-xs font-black text-lime-200">{initials(currentUser.userName)}</span><span className="min-w-0"><span className="block text-[0.6rem] font-black uppercase tracking-[0.18em] text-lime-300">Your position</span><span className="block truncate font-black">{currentUser.userName}</span></span><span className="text-right"><AnimatedNumber value={currentUser[category]} decimals={1} className="block font-black text-orange-300 tabular-nums" /><span className="block text-[0.6rem] uppercase text-slate-500">points</span></span></Link></div> : null}
       </main>
+      {currentUser && view === 'individual' ? <div aria-label="Your position" className="leaderboard-position-safe fixed inset-x-3 z-40 mx-auto max-w-xl rounded-2xl border border-lime-300/30 bg-slate-900/95 p-3 shadow-2xl shadow-black/50 backdrop-blur-xl sm:p-4"><Link href={`/participants/${currentUser.userId}`} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 sm:grid-cols-[auto_auto_1fr_auto]"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-lime-300 font-black text-slate-950">{currentUserIndex + 1}</span><span className="hidden h-10 w-10 items-center justify-center rounded-full bg-lime-300/10 text-xs font-black text-lime-200 sm:flex">{initials(currentUser.userName)}</span><span className="min-w-0"><span className="block text-[0.6rem] font-black uppercase tracking-[0.18em] text-lime-300">Your position</span><span className="block truncate font-black">{currentUser.userName}</span></span><span className="text-right"><AnimatedNumber value={currentUser[category]} decimals={1} className="block font-black text-orange-300 tabular-nums" /><span className="block text-[0.6rem] uppercase text-slate-500">{currentCategoryLabel}</span></span></Link></div> : null}
     </div>
   );
 }

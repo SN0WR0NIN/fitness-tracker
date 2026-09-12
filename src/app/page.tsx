@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { Activity, ArrowRight, Clock3, Medal, RefreshCw, Sparkles, Trophy, Users } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import HeroAtmosphere, { ActivityTicker } from '@/components/HeroAtmosphere';
+import ProofGallery from '@/components/ProofGallery';
 import { formatDistance, formatDuration, formatPace } from '@/lib/format';
 import { getMapboxStaticMapUrl } from '@/lib/mapbox';
 
@@ -29,7 +30,7 @@ interface RecentActivity {
   category: string;
   distance: number;
   points: number;
-  proofUrl?: string;
+  proofUrls?: string[];
   stravaActivityId?: string;
   mapPolyline?: string;
   elevationGain?: number;
@@ -59,7 +60,7 @@ export default function Home() {
       const responses = await Promise.all([
         fetch('/api/leaderboard?type=individual', { cache: 'no-store' }),
         fetch('/api/leaderboard?type=team', { cache: 'no-store' }),
-        fetch('/api/activities?status=APPROVED&limit=8', { cache: 'no-store' }),
+        fetch('/api/activities?status=APPROVED&limit=8&includeProofs=authorized', { cache: 'no-store' }),
       ]);
       if (responses.some((response) => !response.ok)) throw new Error('Dashboard request failed');
       const [individual, team, recent] = await Promise.all(responses.map((response) => response.json()));
@@ -198,13 +199,21 @@ export default function Home() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {activities.map((activity) => {
                   const mapUrl = getMapboxStaticMapUrl(activity.mapPolyline, { width: 400, height: 300 });
-                  const preview = activity.proofUrl || mapUrl;
+                  const proofs = activity.proofUrls ?? [];
                   return (
-                    <div key={activity.id} className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] text-left transition hover:-translate-y-1 hover:border-white/20">
-                      {preview ? <button type="button" onClick={() => setEnlargedPhoto(preview)} aria-label={`Enlarge ${activity.user.name}'s activity proof`} className="relative flex h-36 w-full items-center justify-center overflow-hidden bg-slate-900">
-                        <Image src={preview} alt={`${activity.user.name}'s activity`} fill unoptimized sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" className="object-cover transition duration-500 group-hover:scale-105" />
-                        <span className="absolute right-3 top-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-bold text-orange-300 backdrop-blur">+{activity.points.toFixed(1)} pts</span>
-                      </button> : <Link href={`/participants/${activity.user.id}`} className="relative flex h-36 items-center justify-center overflow-hidden bg-slate-900"><Activity className="h-14 w-14 text-slate-700" /><span className="absolute right-3 top-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-bold text-orange-300 backdrop-blur">+{activity.points.toFixed(1)} pts</span></Link>}
+                    <div key={activity.id} data-recent-activity-id={activity.id} className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] text-left transition hover:-translate-y-1 hover:border-white/20">
+                      <div className="relative">
+                        {proofs.length ? (
+                          <ProofGallery proofs={proofs} label={`${activity.user.name}'s workout photo`} actionVerb="View" variant="cover" />
+                        ) : mapUrl ? (
+                          <button type="button" onClick={() => setEnlargedPhoto(mapUrl)} aria-label={`Enlarge ${activity.user.name}'s activity map`} className="relative flex h-36 w-full items-center justify-center overflow-hidden bg-slate-900">
+                            <Image src={mapUrl} alt={`${activity.user.name}'s activity map`} fill unoptimized sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" className="object-cover transition duration-500 group-hover:scale-105" />
+                          </button>
+                        ) : (
+                          <Link href={`/participants/${activity.user.id}`} className="relative flex h-36 items-center justify-center overflow-hidden bg-slate-900"><Activity className="h-14 w-14 text-slate-700" /></Link>
+                        )}
+                        <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-bold text-orange-300 backdrop-blur">+{activity.points.toFixed(1)} pts</span>
+                      </div>
                       <div className="p-4">
                         <Link href={`/participants/${activity.user.id}`} className="font-bold transition hover:text-orange-300">{activity.user.name}</Link>
                         <p className="mt-1 text-sm text-slate-400">{activityLabel(activity.category)}{activity.distance ? ` · ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}` : ''}</p>
