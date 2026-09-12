@@ -19,6 +19,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof ZodError) return NextResponse.json({ error: error.issues[0]?.message || 'Invalid week number.' }, { status: 400 });
     console.error('Unable to rebuild weekly awards:', error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to rebuild weekly awards.' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Unable to rebuild this week. Clear any pending activities, then try again.' },
+      { status: 500 },
+    );
   }
 }
