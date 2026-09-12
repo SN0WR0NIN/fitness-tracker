@@ -9,9 +9,26 @@ import type { Prisma } from '@prisma/client';
 import { getChallengeSettings } from '@/lib/admin-control';
 import { requestLog } from '@/lib/telemetry';
 import { challengeDateRangeLabel, isWithinChallengeWindow, parseActivityDate } from '@/lib/activity-date';
-import { MAX_ACTIVITY_PROOFS } from '@/lib/proof-access';
+import { MAX_ACTIVITY_PROOFS, normalizeProofUrls } from '@/lib/proof-access';
 
 const proofUrl = z.string().url().max(2048);
+type ActivityFeedRow = {
+  id: string;
+  category: string;
+  distance: number;
+  pace: number | null;
+  duration: number | null;
+  points: number;
+  completedWithFriend: boolean;
+  companion: string | null;
+  occurredAt: Date;
+  stravaActivityId: string | null;
+  mapPolyline: string | null;
+  elevationGain: number | null;
+  proofUrl: string | null;
+  proofUrls: string[];
+  user: { id: string; name: string };
+};
 // Validation schema for activity submission
 const ActivitySchema = z.object({
   activityDate: z.string().refine((value) => !!parseActivityDate(value), 'Choose a valid activity date, today or earlier.').optional(),
@@ -111,8 +128,8 @@ export async function POST(request: NextRequest) {
 /**
  * Public activity reads intentionally power the landing-page feed and public
  * participant history. Keep this endpoint approved-only and return only
- * public display fields — never participant email addresses, review data, or
- * private proof references.
+ * public display fields. Private proof references are included only when the
+ * caller explicitly asks for authorized proofs and is the owner or an admin.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -122,6 +139,8 @@ export async function GET(request: NextRequest) {
     const weekNumber = searchParams.get('weekNumber');
     const requestedStatus = searchParams.get('status');
     const requestedLimit = Number.parseInt(searchParams.get('limit') || '50', 10);
+    const includeAuthorizedProofs = searchParams.get('includeProofs') === 'authorized';
+    const session = includeAuthorizedProofs ? await getServerSession(authOptions) : null;
 
     if (requestedStatus && requestedStatus !== 'APPROVED') {
       return NextResponse.json({ error: 'Only approved activities are publicly available.' }, { status: 403 });
@@ -154,13 +173,29 @@ export async function GET(request: NextRequest) {
         stravaActivityId: true,
         mapPolyline: true,
         elevationGain: true,
+        proofUrl: true,
+        proofUrls: true,
         user: { select: { id: true, name: true } },
       },
       orderBy: { reviewedAt: 'desc' },
       take: limit,
+    }) as ActivityFeedRow[];
+
+    const visibleActivities = activities.map((activity) => {
+      const { proofUrl: legacyProof, proofUrls, ...publicActivity } = activity;
+      const maySeeProofs = includeAuthorizedProofs
+        && session?.user?.id
+        && (session.user.role === 'ADMIN' || session.user.id === activity.user.id);
+      return maySeeProofs
+        ? { ...publicActivity, proofUrls: normalizeProofUrls(proofUrls, legacyProof) }
+        : publicActivity;
     });
 
-    return NextResponse.json(activities, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json(visibleActivities, {
+      headers: includeAuthorizedProofs
+        ? { 'Cache-Control': 'private, no-store, max-age=0', Vary: 'Cookie' }
+        : { 'Cache-Control': 'no-store' },
+    });
   } catch (error) {
     console.error('Error fetching public activities:', error);
     return NextResponse.json(

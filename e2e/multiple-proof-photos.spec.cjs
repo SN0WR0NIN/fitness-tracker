@@ -204,6 +204,77 @@ test("participants can attach multiple private proof photos and admins can vet a
     expect(publicActivity).toBeTruthy();
     expect(publicActivity).not.toHaveProperty("proofUrl");
     expect(publicActivity).not.toHaveProperty("proofUrls");
+
+    const ownerRows = await json(
+      await memberContext.request.get(
+        `/api/activities?userId=${member.id}&includeProofs=authorized`,
+      ),
+    );
+    expect(ownerRows.find((row) => row.id === activity.id).proofUrls).toEqual([
+      replacement,
+      second,
+    ]);
+    const adminRowsWithProofs = await json(
+      await adminContext.request.get(
+        `/api/activities?userId=${member.id}&includeProofs=authorized`,
+      ),
+    );
+    expect(
+      adminRowsWithProofs.find((row) => row.id === activity.id).proofUrls,
+    ).toEqual([replacement, second]);
+    const strangerRows = await json(
+      await strangerContext.request.get(
+        `/api/activities?userId=${member.id}&includeProofs=authorized`,
+      ),
+    );
+    const strangerActivity = strangerRows.find((row) => row.id === activity.id);
+    expect(strangerActivity).not.toHaveProperty("proofUrl");
+    expect(strangerActivity).not.toHaveProperty("proofUrls");
+
+    const ownerHome = await memberContext.newPage();
+    await ownerHome.goto("/");
+    const ownerRecentCard = ownerHome.locator(
+      `[data-recent-activity-id="${activity.id}"]`,
+    );
+    await expect(
+      ownerRecentCard.getByRole("button", {
+        name: "View Multi Proof Member's workout photo 1",
+      }),
+    ).toBeVisible();
+    await expect(ownerRecentCard.getByText("2 photos", { exact: true })).toBeVisible();
+    await expect
+      .poll(() =>
+        ownerRecentCard.locator("img").evaluate((image) =>
+          image.complete && image.naturalWidth > 0,
+        ),
+      )
+      .toBe(true);
+
+    const adminHome = await adminContext.newPage();
+    await adminHome.goto("/");
+    await expect(
+      adminHome
+        .locator(`[data-recent-activity-id="${activity.id}"]`)
+        .getByRole("button", {
+          name: "View Multi Proof Member's workout photo 1",
+        }),
+    ).toBeVisible();
+
+    const strangerHome = await strangerContext.newPage();
+    await strangerHome.goto("/");
+    const strangerRecentCard = strangerHome.locator(
+      `[data-recent-activity-id="${activity.id}"]`,
+    );
+    await expect(strangerRecentCard).toBeVisible();
+    await expect(
+      strangerRecentCard.getByRole("button", {
+        name: "View Multi Proof Member's workout photo 1",
+      }),
+    ).toHaveCount(0);
+    await expect(
+      strangerRecentCard.locator('img[src^="/api/proofs"]'),
+    ).toHaveCount(0);
+
     const page = await adminContext.newPage();
     await page.goto("/admin/score-overrides");
     await page

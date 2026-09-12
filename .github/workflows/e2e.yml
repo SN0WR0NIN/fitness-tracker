@@ -58,6 +58,7 @@ jobs:
           src/lib/operating-mode.ts src/lib/activity-corrections.ts src/lib/achievement-engine.ts src/lib/notification-preferences.ts src/lib/feature-response.ts
           src/lib/proof-reference.ts src/lib/proof-access.ts src/lib/operational-backup.ts src/lib/score-explanation.ts src/lib/activity-duplicates.ts
           src/app/api/proofs/route.ts src/app/admin/operations/page.tsx src/components/ScoreExplanation.tsx src/components/ActivityProof.tsx src/components/ProofGallery.tsx
+          src/app/page.tsx src/app/leaderboard/page.tsx
           src/lib/admin-operations.ts src/components/AdminOperationsAnalytics.tsx src/app/api/admin/proofs/orphans/route.ts
           src/lib/friend-selection.ts src/lib/activity-friends.ts src/components/FriendMultiSelect.tsx
           src/lib/daily-friend-bonus.ts src/lib/scoring-ledger.ts src/lib/activities.ts src/components/useDailyFriendBonus.ts src/app/api/activities/friend-bonus/route.ts

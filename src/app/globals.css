@@ -29,6 +29,16 @@ body {
   bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
+.leaderboard-position-safe {
+  bottom: calc(6.25rem + max(0.75rem, env(safe-area-inset-bottom)));
+}
+
+@media (min-width: 768px) {
+  .leaderboard-position-safe {
+    bottom: 1rem;
+  }
+}
+
 @media (max-width: 767px) {
   body:has(.mobile-dock-safe) {
     padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
