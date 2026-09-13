@@ -13,14 +13,14 @@ export default function ScoreExplanation({ activity, compact = false }: { activi
         <p className={`font-semibold ${statusTone}`}>{explanation.status}</p>
         {explanation.breakdown ? <span className="font-black text-orange-300">{explanation.breakdown.totalPoints.toFixed(1)} pts</span> : null}
       </div>
-      {explanation.breakdown ? <p className="mt-1 text-slate-400">Base {explanation.breakdown.basePoints.toFixed(2)} · Friend +{explanation.breakdown.friendBonus.toFixed(1)}</p> : <p className="mt-1">{explanation.message}</p>}
+      {explanation.breakdown ? <p className="mt-1 text-slate-400">Distance points {explanation.breakdown.distancePoints.toFixed(1)} · Pace points {explanation.breakdown.pacePoints.toFixed(1)} · Friend bonus +{explanation.breakdown.friendBonus.toFixed(1)} · Total Points {explanation.breakdown.totalPoints.toFixed(1)}</p> : <p className="mt-1">{explanation.message}</p>}
       {explanation.breakdown ? <p className="mt-2 border-t border-white/5 pt-2 text-slate-500">{explanation.message} {roundingNote}</p> : null}
     </div>;
   }
 
   return <div data-testid="score-explanation" className="mt-2 rounded-xl border border-white/10 bg-black/10 p-3 text-xs leading-5 text-slate-400">
     <p className={`font-semibold ${statusTone}`}>{explanation.status}</p>
-    {explanation.breakdown ? <p>Activity points {explanation.breakdown.basePoints.toFixed(2)} · Friend bonus +{explanation.breakdown.friendBonus.toFixed(1)} · Saved total {explanation.breakdown.totalPoints.toFixed(1)}</p> : null}
+    {explanation.breakdown ? <p>Distance points {explanation.breakdown.distancePoints.toFixed(1)} · Pace points {explanation.breakdown.pacePoints.toFixed(1)} · Friend bonus +{explanation.breakdown.friendBonus.toFixed(1)} · Total Points {explanation.breakdown.totalPoints.toFixed(1)}</p> : null}
     <p>{explanation.message}</p>
     {explanation.breakdown ? <p className="text-slate-500">{roundingNote}</p> : null}
   </div>;
