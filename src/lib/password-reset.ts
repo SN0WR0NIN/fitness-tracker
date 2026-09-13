@@ -1,7 +1,8 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import type { Prisma } from '@prisma/client';
 import { ContactEmailSchema, NewPasswordSchema } from '@/lib/account-credentials';
+import { recordAdminAudit } from '@/lib/admin-control';
 import { sendPasswordResetEmail } from '@/lib/password-reset-email';
 import { prisma } from '@/lib/prisma';
 
@@ -185,15 +186,9 @@ export async function sendPasswordResetForUser(userId: string, adminId: string) 
     issuedByName: admin.name,
     respectCooldown: false,
   });
-  await prisma.adminAudit.create({
-    data: {
-      id: randomUUID(),
-      actorId: admin.id,
-      actorName: admin.name,
-      action: 'PASSWORD_RESET_EMAIL_SENT',
-      target: user.id,
-      details: { requestId: result.requestId, recipient: user.email } as Prisma.InputJsonValue,
-    },
+  await recordAdminAudit(admin.id, 'PASSWORD_RESET_EMAIL_SENT', user.id, {
+    requestId: result.requestId,
+    recipient: user.email,
   });
   return result;
 }
