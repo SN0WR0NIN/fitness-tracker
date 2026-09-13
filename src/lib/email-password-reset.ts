@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { NewPasswordSchema } from '@/lib/account-credentials';
 
 const RESET_TTL_SECONDS = 60 * 60;
+const DEFAULT_RESET_FROM = 'KG Stay Active <no-reply@kgstayactivechallenge.app>';
 
 type ResetPayload = {
   uid: string;
@@ -73,7 +74,7 @@ function normalizeOrigin(origin: string) {
 }
 
 function normalizeFromAddress(value: string | undefined) {
-  if (!value?.trim()) return 'KG Stay Active <onboarding@resend.dev>';
+  if (!value?.trim()) return DEFAULT_RESET_FROM;
 
   let raw = value.trim();
   raw = raw.replace(/^PASSWORD_RESET_FROM_EMAIL\s*=\s*/i, '').trim();
@@ -90,7 +91,7 @@ function normalizeFromAddress(value: string | undefined) {
   const plainEmail = raw.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i)?.[1];
   const email = angleEmail || plainEmail;
 
-  if (!email) throw new Error('PASSWORD_RESET_FROM_EMAIL_INVALID');
+  if (!email) return DEFAULT_RESET_FROM;
   return `KG Stay Active <${email}>`;
 }
 
