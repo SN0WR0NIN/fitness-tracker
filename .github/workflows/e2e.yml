@@ -46,6 +46,7 @@ jobs:
           npx prisma generate
           npx prisma db push --skip-generate --accept-data-loss
           node scripts/e2e-bootstrap.cjs
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/email-password-reset.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/focused-controls.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/achievement-engine.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/multiple-activity-friends.sql
@@ -71,6 +72,9 @@ jobs:
           src/app/api/admin/maintenance/route.ts src/app/api/admin/corrections/route.ts src/app/api/corrections/route.ts
           src/app/admin/page.tsx src/app/admin/duplicates/page.tsx src/app/admin/awards/page.tsx src/app/results/page.tsx src/app/notifications/page.tsx
           src/components/DuplicateReviewCentre.tsx src/components/NotificationBell.tsx src/components/Navbar.tsx src/components/WeeklyAwardsAdminControls.tsx src/components/NotificationPreferencesForm.tsx
+          src/lib/password-reset.ts src/lib/password-reset-email.ts src/app/api/account/forgot-password/route.ts src/app/api/account/reset-password/route.ts
+          src/app/auth/forgot-password/page.tsx src/app/auth/reset-password/page.tsx src/components/PasswordResetForm.tsx src/app/api/admin/password-resets/route.ts
+          src/app/admin/password-resets/page.tsx src/components/AdminPasswordResets.tsx src/app/admin/accounts/page.tsx src/components/AdminAccounts.tsx
       - name: Production build
         run: npm run build
       - name: Install Playwright

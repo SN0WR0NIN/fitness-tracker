@@ -158,7 +158,7 @@ export default async function AdminActionHub({
     {
       href: "/admin/password-resets",
       label: "Password resets",
-      description: "Handle participant forgot-password requests.",
+      description: "View one-time reset emails and completion history.",
       icon: <KeyRound className="h-5 w-5" />,
       badge: countBadge(passwordResets),
     },

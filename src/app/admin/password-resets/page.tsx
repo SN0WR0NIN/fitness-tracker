@@ -21,6 +21,7 @@ export default async function AdminPasswordResetsPage() {
         lastRequestedAt: request.lastRequestedAt.toISOString(),
         issuedAt: request.issuedAt?.toISOString() ?? null,
         expiresAt: request.expiresAt?.toISOString() ?? null,
+        emailSentAt: request.emailSentAt?.toISOString() ?? null,
         completedAt: request.completedAt?.toISOString() ?? null,
         cancelledAt: request.cancelledAt?.toISOString() ?? null,
       }))} />

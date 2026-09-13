@@ -68,11 +68,16 @@ A comprehensive fitness activity tracking web application built with Next.js, fe
    STRAVA_INTEGRATION_ENABLED="false"
    NEXTAUTH_URL="http://localhost:3000"
    NEXTAUTH_SECRET="your_secret_key_here"
+   RESEND_API_KEY="re_your_resend_api_key"
+   PASSWORD_RESET_FROM_EMAIL="KG Stay Active <no-reply@your-verified-domain.example>"
+   PASSWORD_RESET_BASE_URL="http://localhost:3000"
    AWS_REGION="us-east-1"
    AWS_ACCESS_KEY_ID="your_aws_access_key"
    AWS_SECRET_ACCESS_KEY="your_aws_secret_key"
    AWS_S3_BUCKET_NAME="fitness-tracker-uploads"
    ```
+
+   `PASSWORD_RESET_BASE_URL` may be omitted when it is the same as `NEXTAUTH_URL`. In production, verify the sender domain in Resend before enabling password-reset emails.
 
    Strava is disabled unless `STRAVA_INTEGRATION_ENABLED` is explicitly set to `true`. This keeps the connection controls and OAuth/sync endpoints unavailable while the Strava athlete limit is restricted.
 

@@ -5,6 +5,7 @@ const { PrismaClient } = require('@prisma/client');
 const PASSWORD = process.env.E2E_PASSWORD || 'E2E-only-Password-123!';
 const NEW_PASSWORD = 'E2E-new-Password-456!';
 const ADMIN = 'admin-e2e@example.test';
+const RESET_EMAIL = 'reset-e2e@example.test';
 const RESET_LOGIN = 'e2e-reset';
 const prisma = new PrismaClient();
 
@@ -17,12 +18,13 @@ async function loginWith(page, identifier, password) {
 
 test.beforeEach(async () => {
   const hash = await bcrypt.hash(PASSWORD, 10);
+  await prisma.$executeRawUnsafe(`DELETE FROM app_internal.password_reset_test_delivery WHERE email='reset-e2e@example.test'`);
   await prisma.$executeRawUnsafe(`DELETE FROM app_internal.password_reset_request WHERE user_id='e2e_reset_member'`);
-  await prisma.$executeRawUnsafe(`DELETE FROM app_internal.notification WHERE kind='ACCOUNT_RESET_REQUEST' AND metadata->>'participantId'='e2e_reset_member'`);
   await prisma.user.update({
     where: { id: 'e2e_reset_member' },
     data: {
       password: hash,
+      emailConfirmedAt: new Date(),
       mustChangePassword: false,
       temporaryPasswordExpiresAt: null,
       loginAttempts: 0,
@@ -34,68 +36,75 @@ test.beforeEach(async () => {
 
 test.afterAll(async () => prisma.$disconnect());
 
-test('forgot password request can be safely administered and completed once', async ({ browser, request }) => {
-  const unknownResponse = await request.post('/api/account/forgot-password', { data: { identifier: 'not-a-real-e2e-user' } });
-  const validResponse = await request.post('/api/account/forgot-password', { data: { identifier: RESET_LOGIN } });
+test('forgot password emails a one-time link that changes the password once', async ({ browser, page, request }) => {
+  const unknownResponse = await request.post('/api/account/forgot-password', { data: { email: 'not-a-real-e2e-user@example.test' } });
+  const validResponse = await request.post('/api/account/forgot-password', { data: { email: RESET_EMAIL } });
   expect(unknownResponse.ok()).toBeTruthy();
   expect(validResponse.ok()).toBeTruthy();
-  const unknownPayload = await unknownResponse.json();
-  const validPayload = await validResponse.json();
-  expect(validPayload.message).toBe(unknownPayload.message);
+  expect(await validResponse.json()).toEqual(await unknownResponse.json());
 
-  const requestRows = await prisma.$queryRawUnsafe(`SELECT id, status FROM app_internal.password_reset_request WHERE user_id='e2e_reset_member'`);
+  await expect.poll(async () => {
+    const rows = await prisma.$queryRawUnsafe(`SELECT count(*)::int AS count FROM app_internal.password_reset_request WHERE user_id='e2e_reset_member' AND email_sent_at IS NOT NULL`);
+    return rows[0].count;
+  }).toBe(1);
+  const requestRows = await prisma.$queryRawUnsafe(`SELECT id,status,token_hash,email_sent_at FROM app_internal.password_reset_request WHERE user_id='e2e_reset_member'`);
   expect(requestRows).toHaveLength(1);
-  expect(requestRows[0].status).toBe('OPEN');
+  expect(requestRows[0].status).toBe('ISSUED');
+  expect(requestRows[0].token_hash).toMatch(/^[a-f0-9]{64}$/);
+  expect(requestRows[0].email_sent_at).toBeTruthy();
 
-  const adminContext = await browser.newContext();
-  const adminPage = await adminContext.newPage();
-  await loginWith(adminPage, ADMIN, PASSWORD);
-  await expect(adminPage).toHaveURL(/\/dashboard/);
-  await adminPage.goto('/admin/password-resets');
-  await expect(adminPage.getByRole('heading', { name: 'Password reset requests' })).toBeVisible();
-  const resetCard = adminPage.locator('article').filter({ hasText: 'E2E Reset Member' }).first();
-  await expect(resetCard).toBeVisible();
-  await resetCard.getByRole('button', { name: 'Issue reset' }).click();
-  const credentialBox = adminPage.locator('section').filter({ hasText: 'Temporary reset credentials — shown once' }).first();
-  await expect(credentialBox).toBeVisible();
-  const codes = credentialBox.locator('code');
-  expect(await codes.nth(0).textContent()).toBe(RESET_LOGIN);
-  const temporaryPassword = (await codes.nth(1).textContent()) || '';
-  expect(temporaryPassword.length).toBeGreaterThan(10);
+  const deliveryRows = await prisma.$queryRawUnsafe(`SELECT token,reset_url FROM app_internal.password_reset_test_delivery WHERE request_id=$1::uuid`, requestRows[0].id);
+  expect(deliveryRows).toHaveLength(1);
+  expect(deliveryRows[0].token).not.toBe(requestRows[0].token_hash);
+  expect(deliveryRows[0].reset_url).toContain('/auth/reset-password?token=');
 
-  const issuedUser = await prisma.user.findUnique({ where: { id: 'e2e_reset_member' }, select: { mustChangePassword: true, sessionVersion: true } });
-  expect(issuedUser.mustChangePassword).toBeTruthy();
-  expect(issuedUser.sessionVersion).toBeGreaterThan(0);
+  const unchangedUser = await prisma.user.findUnique({ where: { id: 'e2e_reset_member' }, select: { mustChangePassword: true, sessionVersion: true } });
+  expect(unchangedUser.mustChangePassword).toBeFalsy();
+  expect(unchangedUser.sessionVersion).toBe(0);
 
-  const memberContext = await browser.newContext();
-  const memberPage = await memberContext.newPage();
-  await loginWith(memberPage, RESET_LOGIN, temporaryPassword);
-  await expect(memberPage).toHaveURL(/\/auth\/reset-password/);
+  const existingPasswordContext = await browser.newContext();
+  const existingPasswordPage = await existingPasswordContext.newPage();
+  await loginWith(existingPasswordPage, RESET_LOGIN, PASSWORD);
+  await expect(existingPasswordPage).toHaveURL(/\/dashboard/);
+  await existingPasswordContext.close();
 
-  await memberPage.getByLabel('Temporary reset password', { exact: true }).fill(temporaryPassword);
-  const newPasswordFields = memberPage.locator('input[autocomplete="new-password"]');
+  await page.goto(deliveryRows[0].reset_url);
+  await expect(page.getByRole('heading', { name: 'Reset password' })).toBeVisible();
+  const newPasswordFields = page.locator('input[autocomplete="new-password"]');
   await newPasswordFields.nth(0).fill(NEW_PASSWORD);
   await newPasswordFields.nth(1).fill(NEW_PASSWORD);
-  await memberPage.getByRole('button', { name: 'Set new password' }).click();
-  await expect(memberPage.getByText('Password reset complete. Log in with your new password.')).toBeVisible();
+  await page.getByRole('button', { name: 'Set new password' }).click();
+  await expect(page.getByText('Password reset complete. Log in with your new password.')).toBeVisible();
 
-  const completedRows = await prisma.$queryRawUnsafe(`SELECT status, completed_at FROM app_internal.password_reset_request WHERE user_id='e2e_reset_member' ORDER BY created_at DESC LIMIT 1`);
+  const completedRows = await prisma.$queryRawUnsafe(`SELECT status,completed_at FROM app_internal.password_reset_request WHERE user_id='e2e_reset_member' ORDER BY created_at DESC LIMIT 1`);
   expect(completedRows[0].status).toBe('COMPLETED');
   expect(completedRows[0].completed_at).toBeTruthy();
 
   const reuse = await request.post('/api/account/reset-password', {
-    data: { identifier: RESET_LOGIN, temporaryPassword, newPassword: 'Another-E2E-Password-789!' },
+    data: { token: deliveryRows[0].token, newPassword: 'Another-E2E-Password-789!' },
   });
   expect(reuse.status()).toBe(400);
+  await page.goto(deliveryRows[0].reset_url);
+  await expect(page.getByText('This reset link is invalid, expired, or has already been used.')).toBeVisible();
 
-  await loginWith(memberPage, RESET_LOGIN, NEW_PASSWORD);
-  await expect(memberPage).toHaveURL(/\/dashboard/);
-  await expect(memberPage.getByText('E2E Reset Member').first()).toBeVisible();
+  await loginWith(page, RESET_LOGIN, NEW_PASSWORD);
+  await expect(page).toHaveURL(/\/dashboard/);
+  await expect(page.getByText('E2E Reset Member').first()).toBeVisible();
+});
 
-  await adminPage.goto('/admin/password-resets');
-  await adminPage.getByRole('button', { name: 'History' }).click();
-  await expect(adminPage.locator('article').filter({ hasText: 'E2E Reset Member' }).getByText('Completed')).toBeVisible();
+test('an admin can send the same reset email from participant accounts', async ({ page }) => {
+  await loginWith(page, ADMIN, PASSWORD);
+  await expect(page).toHaveURL(/\/dashboard/);
+  await page.goto('/admin/accounts');
+  const account = page.locator('article').filter({ hasText: 'E2E Reset Member' }).first();
+  await expect(account.getByText(RESET_EMAIL)).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await account.getByRole('button', { name: 'Send password reset' }).click();
+  await expect(page.getByText(`Password reset email sent to ${RESET_EMAIL}.`)).toBeVisible();
 
-  await memberContext.close();
-  await adminContext.close();
+  const deliveries = await prisma.$queryRawUnsafe(`SELECT token FROM app_internal.password_reset_test_delivery WHERE email=$1`, RESET_EMAIL);
+  expect(deliveries).toHaveLength(1);
+  await page.goto('/admin/password-resets');
+  await expect(page.getByRole('heading', { name: 'Password reset emails' })).toBeVisible();
+  await expect(page.locator('article').filter({ hasText: 'E2E Reset Member' }).getByText('Email sent')).toBeVisible();
 });

@@ -34,7 +34,7 @@ export async function captureOperationalBackup() {
     for (const [key, query] of Object.entries(queries)) collections[key] = await tx.$queryRawUnsafe<unknown[]>(query);
     return {
       format: 'kg-stay-active-operational-backup', version: 7, exportedAt: new Date().toISOString(),
-      excludes: ['passwords', 'Strava access tokens', 'Strava refresh tokens', 'temporary password reset secrets', 'binary storage objects'],
+      excludes: ['passwords', 'Strava access tokens', 'Strava refresh tokens', 'password reset tokens', 'binary storage objects'],
       challenge: challengeRows[0], ...collections,
       counts: Object.fromEntries(Object.entries(collections).map(([key, rows]) => [key, rows.length])),
       mediaCoverage: 'References only. Copy and verify storage objects separately; externally hosted proofs need their own provider recovery plan.',

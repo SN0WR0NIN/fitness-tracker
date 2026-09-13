@@ -98,7 +98,6 @@ export default function LoginPage() {
 
           <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
             <Link href="/auth/setup" className="mb-3 block text-blue-500">Have first-time temporary credentials? Set up your account</Link>
-            <Link href="/auth/reset-password" className="mb-4 block text-blue-500">Have a password-reset temporary password?</Link>
             Don&apos;t have an account?{' '}
             <Link href="/auth/signup" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium">
               Sign up

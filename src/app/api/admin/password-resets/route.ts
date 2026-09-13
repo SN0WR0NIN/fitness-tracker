@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAdmin } from '@/lib/adminGuard';
-import { cancelPasswordReset, issuePasswordReset } from '@/lib/password-reset';
+import { sendPasswordResetForUser } from '@/lib/password-reset';
 
 const ActionSchema = z.object({
-  requestId: z.string().uuid(),
-  action: z.enum(['ISSUE','CANCEL']),
+  userId: z.string().min(1).max(128),
 });
 
 export async function POST(request: Request) {
@@ -14,15 +13,12 @@ export async function POST(request: Request) {
 
   try {
     const data = ActionSchema.parse(await request.json());
-    if (data.action === 'CANCEL') {
-      await cancelPasswordReset(data.requestId, guard.userId);
-      return NextResponse.json({ saved: true }, { headers: { 'Cache-Control': 'no-store' } });
-    }
-    const credentials = await issuePasswordReset(data.requestId, guard.userId);
-    return NextResponse.json(credentials, { headers: { 'Cache-Control': 'no-store' } });
+    await sendPasswordResetForUser(data.userId, guard.userId);
+    return NextResponse.json({ message: 'Password reset email sent.' }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     const code = error instanceof Error ? error.message : '';
-    if (code === 'RESET_REQUEST_CHANGED') return NextResponse.json({ error: 'This reset request changed. Refresh and try again.' }, { status: 409 });
-    return NextResponse.json({ error: 'Unable to process this password reset request.' }, { status: 400 });
+    if (code === 'RESET_EMAIL_UNAVAILABLE') return NextResponse.json({ error: 'Add a real email to this active account before sending a reset link.' }, { status: 409 });
+    if (code === 'PASSWORD_RESET_EMAIL_NOT_CONFIGURED') return NextResponse.json({ error: 'Password reset email delivery is not configured.' }, { status: 503 });
+    return NextResponse.json({ error: 'Unable to send this password reset email.' }, { status: 400 });
   }
 }
