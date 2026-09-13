@@ -143,11 +143,22 @@ async function main() {
     cancelled_at TIMESTAMPTZ,
     issued_by_id TEXT REFERENCES "User"(id) ON DELETE SET NULL,
     issued_by_name TEXT,
+    token_hash TEXT,
+    email_sent_at TIMESTAMPTZ,
+    delivery_id TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
   await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS password_reset_request_one_active_idx
     ON app_internal.password_reset_request(user_id) WHERE status IN ('OPEN','ISSUED')`);
+  await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS app_internal.password_reset_test_delivery (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    request_id UUID NOT NULL UNIQUE REFERENCES app_internal.password_reset_request(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    token TEXT NOT NULL,
+    reset_url TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
 
   const hash = await bcrypt.hash(password, 10);
   await prisma.column.upsert({
@@ -167,18 +178,18 @@ async function main() {
   });
   await prisma.user.upsert({
     where: { email: 'reset-e2e@example.test' },
-    update: { password: hash, role: 'MEMBER', columnId: 'e2e_column', mustChangePassword: false, temporaryPasswordExpiresAt: null, loginAttempts: 0, loginWindowStartedAt: null },
+    update: { password: hash, role: 'MEMBER', columnId: 'e2e_column', mustChangePassword: false, temporaryPasswordExpiresAt: null, loginAttempts: 0, loginWindowStartedAt: null, emailConfirmedAt: new Date() },
     create: {
       id: 'e2e_reset_member', name: 'E2E Reset Member', email: 'reset-e2e@example.test', username: 'e2e-reset',
-      password: hash, role: 'MEMBER', columnId: 'e2e_column', mustChangePassword: false,
+      password: hash, role: 'MEMBER', columnId: 'e2e_column', mustChangePassword: false, emailConfirmedAt: new Date(),
     },
   });
   await prisma.user.upsert({
     where: { email: 'admin-e2e@example.test' },
-    update: { password: hash, role: 'ADMIN', columnId: 'e2e_column', mustChangePassword: false },
+    update: { password: hash, role: 'ADMIN', columnId: 'e2e_column', mustChangePassword: false, emailConfirmedAt: new Date() },
     create: {
       id: 'e2e_admin', name: 'E2E Admin', email: 'admin-e2e@example.test', username: 'e2e-admin',
-      password: hash, role: 'ADMIN', columnId: 'e2e_column', mustChangePassword: false,
+      password: hash, role: 'ADMIN', columnId: 'e2e_column', mustChangePassword: false, emailConfirmedAt: new Date(),
     },
   });
 
