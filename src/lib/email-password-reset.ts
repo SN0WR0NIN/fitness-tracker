@@ -114,7 +114,6 @@ export async function requestEmailPasswordReset(identifier: string, origin: stri
 
   const user = await prisma.user.findFirst({
     where: {
-      role: 'MEMBER',
       password: { not: '!UNCLAIMED' },
       ...(login.includes('@')
         ? { email: { equals: login, mode: 'insensitive' } }
@@ -135,9 +134,9 @@ export async function completeEmailPasswordReset(token: string, newPassword: str
 
   const user = await prisma.user.findUnique({
     where: { id: payload.uid },
-    select: { id: true, password: true, sessionVersion: true, role: true },
+    select: { id: true, password: true, sessionVersion: true },
   });
-  if (!user || user.role !== 'MEMBER' || user.sessionVersion !== payload.sv) {
+  if (!user || user.sessionVersion !== payload.sv) {
     throw new Error('INVALID_RESET_TOKEN');
   }
   if (await bcrypt.compare(parsedNewPassword, user.password)) throw new Error('PASSWORD_REUSE');
