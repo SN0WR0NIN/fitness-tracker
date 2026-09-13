@@ -72,11 +72,33 @@ function normalizeOrigin(origin: string) {
   }
 }
 
+function normalizeFromAddress(value: string | undefined) {
+  if (!value?.trim()) return 'KG Stay Active <onboarding@resend.dev>';
+
+  let raw = value.trim();
+  raw = raw.replace(/^PASSWORD_RESET_FROM_EMAIL\s*=\s*/i, '').trim();
+
+  if (
+    (raw.startsWith('"') && raw.endsWith('"')) ||
+    (raw.startsWith("'") && raw.endsWith("'")) ||
+    (raw.startsWith('`') && raw.endsWith('`'))
+  ) {
+    raw = raw.slice(1, -1).trim();
+  }
+
+  const angleEmail = raw.match(/<\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\s*>/i)?.[1];
+  const plainEmail = raw.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i)?.[1];
+  const email = angleEmail || plainEmail;
+
+  if (!email) throw new Error('PASSWORD_RESET_FROM_EMAIL_INVALID');
+  return `KG Stay Active <${email}>`;
+}
+
 async function sendResetEmail(email: string, name: string, resetUrl: string) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error('PASSWORD_RESET_EMAIL_NOT_CONFIGURED');
 
-  const from = process.env.PASSWORD_RESET_FROM_EMAIL || 'KG Stay Active <onboarding@resend.dev>';
+  const from = normalizeFromAddress(process.env.PASSWORD_RESET_FROM_EMAIL);
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -97,6 +119,9 @@ async function sendResetEmail(email: string, name: string, resetUrl: string) {
     console.error('Password reset email failed', response.status, detail.slice(0, 300));
     throw new Error('PASSWORD_RESET_EMAIL_FAILED');
   }
+
+  const result = await response.json().catch(() => null) as { id?: string } | null;
+  console.info('Password reset email accepted by Resend', result?.id ? `id=${result.id}` : 'accepted');
 }
 
 function escapeHtml(value: string) {
