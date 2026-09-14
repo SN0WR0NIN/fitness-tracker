@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma';
 import type { ActivityCategory } from '@prisma/client';
 import { getUserProfileSettings } from '@/lib/user-profile-settings';
 import { getEngineAchievements } from '@/lib/achievement-engine';
+import { getActiveSeason } from '@/lib/seasons';
+import { getWeekStart } from '@/lib/scoring';
 const CATEGORY_DETAILS={RUN:{label:'Run',colour:'bg-orange-400'},CYCLE:{label:'Cycle',colour:'bg-sky-400'},SWIM:{label:'Swim',colour:'bg-cyan-300'},WALK_OR_HIKE:{label:'Walk / Hike',colour:'bg-emerald-400'},TROOP_GAMES:{label:'Troop Games',colour:'bg-violet-400'}} as const;
 export type ProfileAchievement={name:string;description:string;unlocked:boolean;progress:number;category:'Milestones'|'Consistency'|'Social'|'Variety'|'Competition';tier:'bronze'|'silver'|'gold';progressLabel:string;};
 type ProfileActivity={id:string;category:ActivityCategory;distance:number;pace:number|null;duration:number|null;elevationGain:number|null;points:number;completedWithFriend:boolean;companion:string|null;proofUrl:string|null;stravaActivityId:string|null;occurredAt:Date;weekNumber:number;};
@@ -10,12 +12,15 @@ type ProfileUser={id:string;name:string;createdAt:Date;column:{id:string;name:st
 type RankedScore={userId:string;_sum:{totalPoints:number|null};};
 type CategoryScore={category:ActivityCategory;_sum:{points:number|null};};
 export async function getParticipantProfile(userId:string,options:{includeActivities?:boolean;activityLimit?:number}={}){
+  const season=await getActiveSeason();
+  const seasonWeekStart=getWeekStart(season.startDate),seasonWeekEnd=getWeekStart(season.endDate);
   const includeActivities=options.includeActivities ?? true;
   const activityLimit=options.activityLimit && options.activityLimit>0 ? Math.min(Math.floor(options.activityLimit),100) : undefined;
-  const activityWhere={userId,status:'APPROVED' as const};
+  const activityWhere={userId,status:'APPROVED' as const,occurredAt:{gte:season.startDate,lte:season.endDate}};
+  const weeklyWhere={weekStart:{gte:seasonWeekStart,lte:seasonWeekEnd}};
   const [userResult,rankedScoresResult,profileSettings,activityCount,friendActivities,categoryScoresResult,activitiesResult,engineAchievements]=await Promise.all([
-    prisma.user.findUnique({where:{id:userId},select:{id:true,name:true,createdAt:true,column:{select:{id:true,name:true}},weeklyScores:{orderBy:{weekStart:'asc'},select:{weekNumber:true,weekStart:true,totalPoints:true,runPoints:true,cyclePoints:true,swimPoints:true,hikePoints:true,troopGamePoints:true}}}}),
-    prisma.weeklyScore.groupBy({by:['userId'],_sum:{totalPoints:true},orderBy:{_sum:{totalPoints:'desc'}}}),
+    prisma.user.findUnique({where:{id:userId},select:{id:true,name:true,createdAt:true,column:{select:{id:true,name:true}},weeklyScores:{where:weeklyWhere,orderBy:{weekStart:'asc'},select:{weekNumber:true,weekStart:true,totalPoints:true,runPoints:true,cyclePoints:true,swimPoints:true,hikePoints:true,troopGamePoints:true}}}}),
+    prisma.weeklyScore.groupBy({by:['userId'],where:weeklyWhere,_sum:{totalPoints:true},orderBy:{_sum:{totalPoints:'desc'}}}),
     getUserProfileSettings(userId),prisma.activity.count({where:activityWhere}),prisma.activity.count({where:{...activityWhere,completedWithFriend:true}}),
     prisma.activity.groupBy({by:['category'],where:activityWhere,_sum:{points:true}}),
     includeActivities?prisma.activity.findMany({where:activityWhere,orderBy:{occurredAt:'desc'},take:activityLimit,select:{id:true,category:true,distance:true,pace:true,duration:true,elevationGain:true,points:true,completedWithFriend:true,companion:true,stravaActivityId:true,occurredAt:true,weekNumber:true}}):Promise.resolve([] as ProfileActivity[]),
@@ -37,5 +42,5 @@ export async function getParticipantProfile(userId:string,options:{includeActivi
     {name:'Podium',description:'Currently rank in the overall top 3',unlocked:Boolean(totalPoints>0&&rank&&rank<=3),progress:rank&&totalPoints>0?Math.min(1,3/rank):0,category:'Competition',tier:'gold',progressLabel:rank?`Current rank #${rank}`:'Not ranked yet'},
     {name:'Number One',description:'Hold the #1 overall position',unlocked:totalPoints>0&&rank===1,progress:rank&&totalPoints>0?Math.min(1,1/rank):0,category:'Competition',tier:'gold',progressLabel:rank?`Current rank #${rank}`:'Not ranked yet'},
   ];
-  return {...user,activities,activityCount,weeklyScores,totalPoints,rank,participantCount:rankedScores.length,categories,friendActivities,activeCategories,bestWeek,achievements:[...engineAchievements,...rankBadges],bio:profileSettings?.bio ?? '',profilePhotoUrl:profileSettings?.profilePhotoUrl ?? null};
+  return {...user,seasonKey:season.seasonKey,activities,activityCount,weeklyScores,totalPoints,rank,participantCount:rankedScores.length,categories,friendActivities,activeCategories,bestWeek,achievements:[...engineAchievements,...rankBadges],bio:profileSettings?.bio ?? '',profilePhotoUrl:profileSettings?.profilePhotoUrl ?? null};
 }
