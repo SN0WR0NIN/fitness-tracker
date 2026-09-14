@@ -1,7 +1,8 @@
 import { after, NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getActiveColumnIds } from '@/lib/admin-control';
+import { getActiveColumnIds, getChallengeSettings } from '@/lib/admin-control';
 import { captureRankingSnapshot, getRankingDynamics } from '@/lib/ranking-dynamics';
+import { getWeekStart } from '@/lib/scoring';
 import { requestLog, timed } from '@/lib/telemetry';
 
 type WeeklyScoreRow = {
@@ -26,6 +27,30 @@ type TeamColumn = {
 
 type TeamActivityTotal = { columnId: string; _sum: { points: number | null } };
 
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function calendarDate(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+/**
+ * Week 1 begins on the configured challenge start date. From week 2 onward the
+ * challenge uses the Sunday-based week returned by getWeekStart(). All-time
+ * movement uses the start of the current challenge week.
+ */
+function movementBaselineStart(weekNumber: number | null, challengeStart: Date) {
+  const challengeDay = calendarDate(challengeStart);
+  if (weekNumber === 1) return challengeDay;
+
+  const firstSunday = getWeekStart(challengeDay);
+  if (weekNumber && weekNumber > 1) {
+    return new Date(firstSunday.getTime() + (weekNumber - 1) * WEEK_MS);
+  }
+
+  const currentWeekStart = getWeekStart(new Date());
+  return currentWeekStart.getTime() < challengeDay.getTime() ? challengeDay : currentWeekStart;
+}
+
 function scheduleRankingCapture(scope: string, periodKey: string, entities: Array<{ id: string; points: number }>) {
   after(async () => {
     try {
@@ -43,14 +68,15 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type') || 'individual';
     const weekNumber = searchParams.get('weekNumber');
     const timingMeta = { route: '/api/leaderboard', type, period: weekNumber ? `week:${weekNumber}` : 'all-time' };
+    const settings = await timed('perf.leaderboard.settings', () => getChallengeSettings(), timingMeta);
 
     if (type === 'individual') {
-      const response = await timed('perf.leaderboard.individual.total', () => getIndividualLeaderboard(weekNumber), timingMeta);
+      const response = await timed('perf.leaderboard.individual.total', () => getIndividualLeaderboard(weekNumber, settings.startDate), timingMeta);
       log.success({ status: response.status, type, weekNumber });
       return response;
     }
     if (type === 'team') {
-      const response = await timed('perf.leaderboard.team.total', () => getTeamLeaderboard(weekNumber), timingMeta);
+      const response = await timed('perf.leaderboard.team.total', () => getTeamLeaderboard(weekNumber, settings.startDate), timingMeta);
       log.success({ status: response.status, type, weekNumber });
       return response;
     }
@@ -63,14 +89,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function getIndividualLeaderboard(weekNumber: string | null) {
+async function getIndividualLeaderboard(weekNumber: string | null, challengeStart: Date) {
   const where: { weekNumber?: number } = {};
+  let parsedWeek: number | null = null;
   if (weekNumber) {
-    const parsed = Number.parseInt(weekNumber, 10);
-    if (!Number.isFinite(parsed) || parsed < 1) return NextResponse.json({ error: 'Invalid week number' }, { status: 400 });
-    where.weekNumber = parsed;
+    parsedWeek = Number.parseInt(weekNumber, 10);
+    if (!Number.isFinite(parsedWeek) || parsedWeek < 1) return NextResponse.json({ error: 'Invalid week number' }, { status: 400 });
+    where.weekNumber = parsedWeek;
   }
-  const meta = { route: '/api/leaderboard', type: 'individual', period: weekNumber ? `week:${weekNumber}` : 'all-time' };
+  const meta = { route: '/api/leaderboard', type: 'individual', period: parsedWeek ? `week:${parsedWeek}` : 'all-time' };
 
   const weeklyScores = await timed('perf.leaderboard.individual.scores', () => prisma.weeklyScore.findMany({
     where,
@@ -120,24 +147,25 @@ async function getIndividualLeaderboard(weekNumber: string | null) {
   }
 
   const leaderboard = Array.from(userScores.values()).sort((a, b) => b.totalPoints - a.totalPoints);
-  const periodKey = weekNumber ? `week:${Number.parseInt(weekNumber, 10)}` : 'all-time';
+  const periodKey = parsedWeek ? `week:${parsedWeek}` : 'all-time';
   const rankedEntities = leaderboard.map((entry) => ({ id: entry.userId, points: entry.totalPoints }));
-  const dynamics = await timed('perf.leaderboard.individual.dynamics', () => getRankingDynamics('individual', periodKey, rankedEntities), meta);
+  const baselineStart = movementBaselineStart(parsedWeek, challengeStart);
+  const dynamics = await timed('perf.leaderboard.individual.dynamics', () => getRankingDynamics('individual', periodKey, rankedEntities, baselineStart), meta);
   scheduleRankingCapture('individual', periodKey, rankedEntities);
 
   return NextResponse.json({
     type: 'individual',
-    weekNumber: weekNumber ? Number.parseInt(weekNumber, 10) : null,
+    weekNumber: parsedWeek,
     leaderboard: leaderboard.map((entry) => ({ ...entry, ...dynamics.get(entry.userId) })),
   });
 }
 
-async function getTeamLeaderboard(weekNumber: string | null) {
+async function getTeamLeaderboard(weekNumber: string | null, challengeStart: Date) {
   const parsedWeek = weekNumber ? Number.parseInt(weekNumber, 10) : null;
   if (weekNumber && (!Number.isFinite(parsedWeek) || (parsedWeek ?? 0) < 1)) {
     return NextResponse.json({ error: 'Invalid week number' }, { status: 400 });
   }
-  const meta = { route: '/api/leaderboard', type: 'team', period: weekNumber ? `week:${weekNumber}` : 'all-time' };
+  const meta = { route: '/api/leaderboard', type: 'team', period: parsedWeek ? `week:${parsedWeek}` : 'all-time' };
   const activeColumnIds = await timed('perf.leaderboard.team.active_columns', () => getActiveColumnIds(), meta);
   const [columnsResult, totalsResult] = await Promise.all([
     timed('perf.leaderboard.team.columns', () => prisma.column.findMany({
@@ -170,7 +198,8 @@ async function getTeamLeaderboard(weekNumber: string | null) {
   const leaderboard = teamScores.sort((a, b) => b.totalPoints - a.totalPoints);
   const periodKey = parsedWeek ? `week:${parsedWeek}` : 'all-time';
   const rankedEntities = leaderboard.map((entry) => ({ id: entry.columnId, points: entry.totalPoints }));
-  const dynamics = await timed('perf.leaderboard.team.dynamics', () => getRankingDynamics('column', periodKey, rankedEntities), meta);
+  const baselineStart = movementBaselineStart(parsedWeek, challengeStart);
+  const dynamics = await timed('perf.leaderboard.team.dynamics', () => getRankingDynamics('column', periodKey, rankedEntities, baselineStart), meta);
   scheduleRankingCapture('column', periodKey, rankedEntities);
 
   return NextResponse.json({
