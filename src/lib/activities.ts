@@ -6,6 +6,7 @@ import { duplicateReason, DuplicateApprovalError, ActivityEditError } from './ac
 import { calculateActivityPoints, resolveEffectiveCategory, getWeekStart, getWeekNumber, type ActivityCategory, type ScoringRules } from './scoring';
 import { scoringTransaction, ledgerSettings, reconcileParticipantScores } from './scoring-ledger';
 import { assertCompetitionWritable } from './operating-mode';
+import { assertActivityWeekWritable } from './week-finalization';
 
 interface CreateActivityInput {
   userId: string; columnId: string; proofActorId?: string; category: ActivityCategory; distance?: number; pace?: number;
@@ -22,13 +23,15 @@ export async function createActivity(input: CreateActivityInput) {
     const category = resolveEffectiveCategory(input.category, input.pace, settings.rules);
     const friends = await resolveActivityFriends(tx, input.userId, input);
     const occurredAt = input.occurredAt ?? new Date();
+    const weekNumber = getWeekNumber(occurredAt, settings.startDate);
+    await assertActivityWeekWritable(tx, occurredAt, weekNumber);
     const created = await tx.activity.create({ data: {
       userId: input.userId, columnId: input.columnId, category,
       distance: category === 'TROOP_GAMES' ? (input.distance ?? 0) : input.distance!, pace: input.pace,
       ...friends, proofUrls, proofUrl: proofUrls[0] ?? input.proofUrl, stravaActivityId: input.stravaActivityId,
       mapPolyline: input.mapPolyline, elevationGain: input.elevationGain, duration: input.duration,
       points: calculateActivityPoints({ category, distance: input.distance, pace: input.pace }, settings.rules).totalPoints,
-      status: 'PENDING', occurredAt, weekStart: getWeekStart(occurredAt), weekNumber: getWeekNumber(occurredAt, settings.startDate),
+      status: 'PENDING', occurredAt, weekStart: getWeekStart(occurredAt), weekNumber,
     } });
     await reconcileParticipantScores(tx, input.userId, settings);
     return tx.activity.findUniqueOrThrow({ where: { id: created.id } });
@@ -41,6 +44,7 @@ async function changeActivity(activityId: string, change: (tx: Prisma.Transactio
     const rows = await tx.$queryRaw<Activity[]>`SELECT * FROM "Activity" WHERE id=${activityId} FOR UPDATE`;
     const activity = rows[0];
     if (!activity) throw new ActivityEditError('Activity not found.', 404);
+    await assertActivityWeekWritable(tx, activity.occurredAt, activity.weekNumber);
     await change(tx, activity);
     await reconcileParticipantScores(tx, activity.userId);
     return tx.activity.findUniqueOrThrow({ where: { id: activityId } });
