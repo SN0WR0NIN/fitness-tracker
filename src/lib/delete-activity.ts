@@ -1,4 +1,5 @@
 import type { PrismaClient, Activity } from '@prisma/client';
+import { assertActivityWeekWritable } from '@/lib/week-finalization';
 
 export class ActivityDeletionError extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -12,6 +13,7 @@ export async function deleteOwnActivity(db: PrismaClient, id: string, ownerId: s
     const activity = rows[0];
     if (!activity) throw new ActivityDeletionError('Activity not found', 404);
     if (activity.userId !== ownerId) throw new ActivityDeletionError('Not your activity', 403);
+    await assertActivityWeekWritable(tx, activity.occurredAt, activity.weekNumber);
     if (activity.status === 'APPROVED') {
       const fields = { RUN: 'runPoints', CYCLE: 'cyclePoints', SWIM: 'swimPoints', WALK_OR_HIKE: 'hikePoints', TROOP_GAMES: 'troopGamePoints' } as const;
       await tx.weeklyScore.update({
