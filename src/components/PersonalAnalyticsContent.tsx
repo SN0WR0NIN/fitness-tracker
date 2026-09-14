@@ -3,11 +3,12 @@
 import { useId, useMemo, useState } from 'react';
 import { personalMetrics, type MetricActivity } from '@/lib/personal-metrics';
 import { formatPace } from '@/lib/format';
+import type { ScoringRules } from '@/lib/scoring';
 
-type Props = { activities: MetricActivity[]; today: string; weeklyChart?: React.ReactNode };
+type Props = { activities: MetricActivity[]; today: string; scoringRules: ScoringRules; weeklyChart?: React.ReactNode };
 
-export default function PersonalAnalyticsContent({activities,today,weeklyChart}: Props) {
-  const data=useMemo(()=>personalMetrics(activities,today),[activities,today]);
+export default function PersonalAnalyticsContent({activities,today,scoringRules,weeklyChart}: Props) {
+  const data=useMemo(()=>personalMetrics(activities,today,scoringRules),[activities,today,scoringRules]);
   const [day,setDay]=useState(6),[category,setCategory]=useState<string|null>(null);
   const gradient=useId();
   const max=Math.max(10,...data.days.map(d=>d.points))*1.1;
@@ -23,11 +24,46 @@ export default function PersonalAnalyticsContent({activities,today,weeklyChart}:
     ['🏊','Longest swim',data.longestSwim?`${data.longestSwim.toFixed(0)} m`:'—','#a78bfa'],
     ['🥾','Longest walk / hike',data.longestHike?`${data.longestHike.toFixed(2)} km`:'—','#fb923c'],
     ['⚡','Fastest run pace',data.fastestPace?`${formatPace(data.fastestPace)} /km`:'—','#b4ff45'],
+    ['🎯','Average run pace',data.averageRunPace?`${formatPace(data.averageRunPace)} /km`:'—','#facc15'],
     ['🔥','Best week',data.bestWeek?`${data.bestWeek.points.toFixed(1)} pts · W${data.bestWeek.week}`:'—','#fb923c'],
     ['📅','Longest active streak',`${data.bestStreak} ${data.bestStreak===1?'day':'days'}`,'#40d4f4'],
     ['👥','Buddy sessions',`${data.buddies} ${data.buddies===1?'activity':'activities'}`,'#f472b6'],
   ];
+  const scoreMixTotal=data.scoreMix.distancePoints+data.scoreMix.pacePoints+data.scoreMix.friendBonus;
+  const mix=[
+    {label:'Distance points',value:data.scoreMix.distancePoints,colour:'#40d4f4'},
+    {label:'Pace points',value:data.scoreMix.pacePoints,colour:'#b4ff45'},
+    {label:'Friend bonus',value:data.scoreMix.friendBonus,colour:'#f472b6'},
+  ];
+  const weekTrend=data.weekChange===null
+    ? data.currentWeekPoints>0&&data.previousWeekPoints===0?'New scoring week':'No previous-week baseline'
+    : `${data.weekChange>=0?'+':''}${data.weekChange.toFixed(0)}% vs last week`;
+  const summaryCards=[
+    ['Approved sessions',data.approvedActivities.toString()],
+    ['Active days',data.activeDays.toString()],
+    ['Total distance',`${data.totalDistance.toFixed(1)} km`],
+    ['Avg points / session',data.averagePoints.toFixed(1)],
+    ['Current streak',`${data.currentStreak} ${data.currentStreak===1?'day':'days'}`],
+    ['Strongest sport',data.strongestSport?.label??'—'],
+  ];
   return <div className="space-y-6 pt-3">
+    <details open className="dashboard-fold"><summary>Season snapshot</summary><section className={panel}>
+      <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black">Season snapshot</h2><p className="mt-1 text-xs text-slate-400">Approved activity performance only</p></div><div className="text-right"><p className="text-xs text-slate-500">Week {data.currentWeek}</p><p className="text-lg font-black text-lime-300">{data.currentWeekPoints.toFixed(1)} pts</p><p className="text-xs text-slate-400">{weekTrend}</p></div></div>
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">{summaryCards.map(([label,value])=><div key={label} className="rounded-xl border border-white/5 bg-black/10 p-4"><p className="text-[0.68rem] uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-lg font-black text-slate-100">{value}</p></div>)}</div>
+    </section></details>
+
+    <details open className="dashboard-fold"><summary>Score composition</summary><section className={panel}>
+      <h2 className="text-lg font-black">Where your points came from</h2><p className="mt-1 text-xs text-slate-400">Distance, running pace and friend-bonus contributions from saved approved score logs</p>
+      <div className="mt-5 space-y-4">{mix.map(item=>{const share=scoreMixTotal?item.value/scoreMixTotal*100:0;return <div key={item.label}><div className="flex items-center justify-between gap-3 text-sm"><span className="text-slate-300">{item.label}</span><strong>{item.value.toFixed(1)} pts</strong></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full transition-[width] duration-700" style={{width:`${share}%`,background:item.colour}}/></div></div>;})}</div>
+      {!scoreMixTotal?<p className="mt-4 text-xs text-slate-500">Score components will appear after approved activities have saved point logs.</p>:null}
+    </section></details>
+
+    <details open className="dashboard-fold"><summary>28-day consistency</summary><section className={panel}>
+      <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black">28-day consistency</h2><p className="mt-1 text-xs text-slate-400">One tile per Singapore calendar day</p></div><div className="text-right text-xs text-slate-400"><span className="font-black text-lime-300">{data.currentStreak}</span> current · <span className="font-black text-sky-300">{data.bestStreak}</span> best</div></div>
+      <div className="mt-5 grid grid-cols-7 gap-2">{data.consistency.map(dayItem=>{const intensity=Math.min(1,dayItem.points/25);return <div key={dayItem.date} title={`${dateLabel(dayItem.date)} · ${dayItem.activities} activities · ${dayItem.points.toFixed(1)} pts`} className={`aspect-square rounded-lg border transition ${dayItem.active?'border-lime-300/20':'border-white/5'}`} style={{background:dayItem.active?`rgba(180,255,69,${0.16+intensity*0.54})`:'rgba(255,255,255,0.025)'}}><span className="sr-only">{dayItem.date}: {dayItem.points.toFixed(1)} points</span></div>;})}</div>
+      <div className="mt-3 flex items-center justify-between text-[0.65rem] text-slate-500"><span>{dateLabel(data.consistency[0].date)}</span><span>More activity → brighter tile</span><span>{dateLabel(data.consistency[data.consistency.length-1].date)}</span></div>
+    </section></details>
+
     <div className="space-y-6">
       <details open className="dashboard-fold"><summary>Points — last 7 days</summary><section className={panel}><h2 className="text-lg font-black">Points — last 7 days</h2><p role="status" className="mt-2 text-sm text-lime-300">{dateLabel(data.days[day].date)} · {data.days[day].points.toFixed(1)} points</p>
         <svg viewBox="0 0 620 240" role="img" aria-label="Daily approved points over the last seven Singapore dates" className="mt-3 w-full overflow-visible"><defs><linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#b4ff45" stopOpacity=".3"/><stop offset="100%" stopColor="#b4ff45" stopOpacity="0"/></linearGradient></defs>
