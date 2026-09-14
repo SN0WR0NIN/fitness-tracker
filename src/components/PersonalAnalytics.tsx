@@ -4,6 +4,8 @@ import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import type { MetricActivity } from '@/lib/personal-metrics';
 import type { ScoringRules } from '@/lib/scoring';
+import WeekComparisonPanel from '@/components/WeekComparisonPanel';
+import SeasonRecordsPanel from '@/components/SeasonRecordsPanel';
 
 type Props = { activities: MetricActivity[]; today: string; scoringRules?: ScoringRules; weeklyChart?: React.ReactNode };
 
@@ -16,6 +18,6 @@ export default function PersonalAnalytics(props: Props) {
   const [open, setOpen] = useState(false);
   return <details className="dashboard-fold" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary>Performance analytics</summary>
-    {open ? <PersonalAnalyticsContent {...props} /> : null}
+    {open ? <div className="space-y-6 pt-3"><WeekComparisonPanel activities={props.activities}/><SeasonRecordsPanel/><PersonalAnalyticsContent {...props} /></div> : null}
   </details>;
 }
