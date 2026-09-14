@@ -12,6 +12,7 @@ import type { ChallengeSettings } from '@/lib/admin-control';
 import { duplicateReason } from '@/lib/activity-duplicates';
 import { isWithinChallengeWindow, parseActivityDate, singaporeDate } from '@/lib/activity-date';
 import { FeatureError, assertCompetitionWritable } from '@/lib/operating-mode';
+import { assertActivityWeekWritable, FinalizedWeekError } from '@/lib/week-finalization';
 
 const proofSchema = z.string().url().max(2048).refine((url) => ['https:','http:'].includes(new URL(url).protocol), 'Use an HTTP or HTTPS proof link.').nullable();
 export const CorrectionValuesSchema = z.object({
@@ -41,6 +42,11 @@ export function correctionSnapshot(activity: Activity): CorrectionSnapshot {
     occurredAt: activity.occurredAt.toISOString(), companionName: activity.companion };
 }
 
+async function assertCorrectionWeekWritable(tx: Prisma.TransactionClient, occurredAt: Date, weekNumber: number) {
+  try { await assertActivityWeekWritable(tx, occurredAt, weekNumber); }
+  catch (error) { if (error instanceof FinalizedWeekError) throw new FeatureError(error.message, 409); throw error; }
+}
+
 async function settingsInTransaction(tx: Prisma.TransactionClient): Promise<ChallengeSettings> {
   const rows = await tx.$queryRaw<ChallengeSettings[]>`SELECT * FROM "ChallengeSetting" WHERE id='primary' FOR SHARE`;
   if (!rows[0]) throw new FeatureError('Challenge settings unavailable.', 503);
@@ -59,11 +65,7 @@ async function prepareChange(tx: Prisma.TransactionClient, activity: Activity, p
   if (!isWithinChallengeWindow(occurredAt, settings.startDate, settings.endDate)) throw new FeatureError('The corrected date must be inside the challenge period.');
   const friends = await resolveActivityFriends(tx, activity.userId, proposed);
   let companion = friends.companion;
-  if (!friends.companionUserIds.length && !activity.companionUserId && activity.companion && activity.completedWithFriend) {
-    // Retain the existing admin-verified manual companion, as before. Members
-    // cannot manufacture a manual bonus by supplying a free-text name.
-    companion = activity.companion;
-  }
+  if (!friends.companionUserIds.length && !activity.companionUserId && activity.companion && activity.completedWithFriend) companion = activity.companion;
   const category = resolveEffectiveCategory(proposed.category, proposed.pace ?? undefined, settings.scoringRules);
   const distance = category === 'TROOP_GAMES' ? 0 : proposed.distance;
   const proofUrls = proofGalleryForCorrection(activity, proposed.proofUrl);
@@ -101,6 +103,7 @@ export async function createCorrection(userId: string, input: z.infer<typeof Cre
     const rows = await tx.$queryRaw<Activity[]>`SELECT * FROM "Activity" WHERE id=${input.activityId} AND "userId"=${userId} FOR UPDATE`;
     const activity = rows[0];
     if (!activity) throw new FeatureError('Activity not found.',404);
+    await assertCorrectionWeekWritable(tx, activity.occurredAt, activity.weekNumber);
     if (activity.status !== 'APPROVED') throw new FeatureError('Only approved activities need a correction request. Pending activities can be edited directly.',409);
     const existing = await tx.$queryRaw<Array<{ id:string }>>`SELECT id::text FROM app_internal.activity_correction WHERE activity_id=${activity.id} AND status='OPEN'`;
     if (existing.length) throw new FeatureError('This activity already has an open correction request. Track or cancel it in My correction requests.',409);
@@ -110,6 +113,7 @@ export async function createCorrection(userId: string, input: z.infer<typeof Cre
     const unchanged = Object.entries(values).filter(([key]) => !['companionUserId','companionUserIds'].includes(key)).every(([key,value]) => original[key as keyof CorrectionSnapshot] === value) && sameFriendSelection(original, values);
     if (unchanged) throw new FeatureError('Change at least one activity field before sending a correction.');
     const change = await prepareChange(tx,activity,values,await settingsInTransaction(tx));
+    await assertCorrectionWeekWritable(tx, change.occurredAt, change.weekNumber);
     const proposed = correctionSnapshot({ ...activity, ...change });
     const id = randomUUID();
     await tx.$executeRaw`INSERT INTO app_internal.activity_correction(id,activity_id,user_id,reason,original,proposed) VALUES (${id}::uuid,${activity.id},${userId},${input.reason},${JSON.stringify(original)}::jsonb,${JSON.stringify(proposed)}::jsonb)`;
@@ -144,6 +148,7 @@ export async function decideCorrection(adminId: string, input: z.infer<typeof De
     if (request.status !== 'OPEN') throw new FeatureError('This request has already been decided. Reload to see its status.',409);
     const rows = await tx.$queryRaw<Activity[]>`SELECT * FROM "Activity" WHERE id=${request.activity_id} FOR UPDATE`;
     const activity = rows[0];
+    if (input.decision === 'APPROVED' && activity) await assertCorrectionWeekWritable(tx, activity.occurredAt, activity.weekNumber);
     if (input.decision === 'APPROVED' && (!activity || activity.userId !== request.user_id || activity.status !== 'APPROVED' || activity.updatedAt.toISOString() !== request.original.version)) {
       await tx.$executeRaw`UPDATE app_internal.activity_correction SET status='STALE',decision_reason='The activity changed after this request. Submit a new request using the current activity.',reviewed_by_id=${adminId},reviewed_at=now(),updated_at=now() WHERE id=${input.id}::uuid`;
       await audit(tx,adminId,'CORRECTION_STALE',request.activity_id,{correctionId:input.id});
@@ -157,6 +162,7 @@ export async function decideCorrection(adminId: string, input: z.infer<typeof De
       const values = CorrectionValuesSchema.parse({activityDate:raw.activityDate,category:raw.category,distance:raw.distance,pace:raw.pace,duration:raw.duration,companionUserId:raw.companionUserId,companionUserIds:raw.companionUserIds,proofUrl:raw.proofUrl});
       await assertAttachableProof(tx, values.proofUrl, request.user_id, activity.proofUrl);
       const change = await prepareChange(tx,activity,values,await settingsInTransaction(tx));
+      await assertCorrectionWeekWritable(tx, change.occurredAt, change.weekNumber);
       const candidates = await tx.activity.findMany({where:{userId:activity.userId,id:{not:activity.id},status:{not:'REJECTED'}}});
       const matches = candidates.flatMap((candidate) => {const reason=duplicateReason({...activity,...change},candidate);return reason?[{id:candidate.id,reason}]:[];});
       if (matches.length && !input.duplicateOverrideReason) throw new FeatureError('Possible duplicate. Compare the matching activities before approving; an explicit override explanation is required.',409,{matches});
