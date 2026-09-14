@@ -5,6 +5,7 @@ import { ShieldCheck } from 'lucide-react';
 import AdminActivityReview from '@/components/AdminActivityReview';
 import Navbar from '@/components/Navbar';
 import { requireAdmin } from '@/lib/adminGuard';
+import { getChallengeSettings } from '@/lib/admin-control';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,7 @@ type ReviewActivity = {
   companionUserId: string | null;
   companionUserIds: string[];
   proofUrl: string | null;
+  proofUrls: string[];
   stravaActivityId: string | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   occurredAt: Date;
@@ -54,7 +56,7 @@ export default async function AdminActivitiesPage() {
     );
   }
 
-  const [activitiesResult, usersResult] = await Promise.all([
+  const [activitiesResult, usersResult, settings] = await Promise.all([
     prisma.activity.findMany({
       include: {
         pointsLog: { select: { basePoints: true, friendBonus: true, totalPoints: true } },
@@ -69,6 +71,7 @@ export default async function AdminActivitiesPage() {
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
+    getChallengeSettings(),
   ]);
 
   const activities = activitiesResult as ReviewActivity[];
@@ -83,6 +86,7 @@ export default async function AdminActivitiesPage() {
         reviewedAt: activity.reviewedAt?.toISOString() ?? null,
       }))}
       users={users}
+      scoringRules={settings.scoringRules}
     />
   );
 }
