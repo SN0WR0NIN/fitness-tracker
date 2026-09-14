@@ -3,11 +3,12 @@
 import { useId, useMemo, useState } from 'react';
 import { personalMetrics, type MetricActivity } from '@/lib/personal-metrics';
 import { formatPace } from '@/lib/format';
-import type { ScoringRules } from '@/lib/scoring';
+import { DEFAULT_SCORING_RULES, type ScoringRules } from '@/lib/scoring';
+import WeeklyRecapCard from '@/components/WeeklyRecapCard';
 
-type Props = { activities: MetricActivity[]; today: string; scoringRules: ScoringRules; weeklyChart?: React.ReactNode };
+type Props = { activities: MetricActivity[]; today: string; scoringRules?: ScoringRules; weeklyChart?: React.ReactNode };
 
-export default function PersonalAnalyticsContent({activities,today,scoringRules,weeklyChart}: Props) {
+export default function PersonalAnalyticsContent({activities,today,scoringRules=DEFAULT_SCORING_RULES,weeklyChart}: Props) {
   const data=useMemo(()=>personalMetrics(activities,today,scoringRules),[activities,today,scoringRules]);
   const [day,setDay]=useState(6),[category,setCategory]=useState<string|null>(null);
   const gradient=useId();
@@ -47,6 +48,8 @@ export default function PersonalAnalyticsContent({activities,today,scoringRules,
     ['Strongest sport',data.strongestSport?.label??'—'],
   ];
   return <div className="space-y-6 pt-3">
+    <WeeklyRecapCard activities={activities} today={today} />
+
     <details open className="dashboard-fold"><summary>Season snapshot</summary><section className={panel}>
       <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black">Season snapshot</h2><p className="mt-1 text-xs text-slate-400">Approved activity performance only</p></div><div className="text-right"><p className="text-xs text-slate-500">Week {data.currentWeek}</p><p className="text-lg font-black text-lime-300">{data.currentWeekPoints.toFixed(1)} pts</p><p className="text-xs text-slate-400">{weekTrend}</p></div></div>
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">{summaryCards.map(([label,value])=><div key={label} className="rounded-xl border border-white/5 bg-black/10 p-4"><p className="text-[0.68rem] uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-lg font-black text-slate-100">{value}</p></div>)}</div>
