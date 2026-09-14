@@ -1,17 +1,18 @@
 'use client';
 import ScoreExplanation from '@/components/ScoreExplanation';
 import type { ScoreBreakdown } from '@/lib/score-explanation';
+import type { ScoringRules } from '@/lib/scoring';
 import { proofDisplayHref } from '@/lib/proof-reference';
 import FriendMultiSelect from '@/components/FriendMultiSelect';
 import { activityFriendIds } from '@/lib/friend-selection';
-
-
+import { activityReviewFlags } from '@/lib/activity-review-flags';
 import { duplicateReason } from '@/lib/activity-duplicates';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import {
   Activity,
+  AlertTriangle,
   CheckCircle2,
   ExternalLink,
   Eye,
@@ -29,6 +30,7 @@ import { formatDistance, formatDuration, formatPace } from '@/lib/format';
 type ActivityCategory = 'RUN' | 'CYCLE' | 'SWIM' | 'WALK_OR_HIKE' | 'TROOP_GAMES';
 type ActivityStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 type StatusFilter = 'ALL' | ActivityStatus;
+type FlagFilter = 'ALL' | 'FLAGGED' | 'CLEAR';
 
 type ReviewActivity = {
   id: string;
@@ -39,11 +41,14 @@ type ReviewActivity = {
   elevationGain: number | null;
   points: number;
   pointsLog?: ScoreBreakdown | null;
+  basePointsOverride?: number | null;
+  totalPointsOverride?: number | null;
   completedWithFriend: boolean;
   companion: string | null;
   companionUserId: string | null;
   companionUserIds?: string[];
   proofUrl: string | null;
+  proofUrls?: string[];
   stravaActivityId: string | null;
   status: ActivityStatus;
   occurredAt: string;
@@ -74,20 +79,28 @@ const categoryLabels: Record<ActivityCategory, string> = {
   TROOP_GAMES: 'Troop Games',
 };
 
-export default function AdminActivityReview({ initialActivities, users }: { initialActivities: ReviewActivity[]; users: SelectableUser[] }) {
+export default function AdminActivityReview({ initialActivities, users, scoringRules }: { initialActivities: ReviewActivity[]; users: SelectableUser[]; scoringRules: ScoringRules }) {
   const [activities, setActivities] = useState(initialActivities);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('PENDING');
   const [categoryFilter, setCategoryFilter] = useState<ActivityCategory | 'ALL'>('ALL');
+  const [flagFilter, setFlagFilter] = useState<FlagFilter>('ALL');
   const [query, setQuery] = useState('');
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
+  const [bulkMessage, setBulkMessage] = useState('');
   const [refreshRequired, setRefreshRequired] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedProof, setSelectedProof] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkRunning, setBulkRunning] = useState(false);
   const [editForm, setEditForm] = useState({ category: 'RUN' as ActivityCategory, distance: '', pace: '', companionSelect: '', companionUserIds: [] as string[], companionName: '' });
-  const mutationDisabled = actioningId !== null || refreshRequired;
+  const mutationDisabled = actioningId !== null || refreshRequired || bulkRunning;
+
+  const flagsById = useMemo(() => new Map(activities.map((activity) => [activity.id, activityReviewFlags(activity, activities)])), [activities]);
+  const flaggedCount = useMemo(() => activities.filter((activity) => (flagsById.get(activity.id)?.length ?? 0) > 0).length, [activities, flagsById]);
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   // One review can move a daily bonus to a different activity. Reload the
   // complete authorized snapshot, not only the actioned card's status/points.
@@ -96,6 +109,7 @@ export default function AdminActivityReview({ initialActivities, users }: { init
     const data = await response.json().catch(() => null);
     if (!response.ok || !Array.isArray(data)) throw new Error('Latest activity scores could not be loaded.');
     setActivities(data as ReviewActivity[]);
+    setSelectedIds((ids) => ids.filter((id) => (data as ReviewActivity[]).some((activity) => activity.id === id && activity.status === 'PENDING')));
     setRefreshRequired(false);
   };
 
@@ -124,16 +138,71 @@ export default function AdminActivityReview({ initialActivities, users }: { init
     return activities
       .filter((activity) => statusFilter === 'ALL' || activity.status === statusFilter)
       .filter((activity) => categoryFilter === 'ALL' || activity.category === categoryFilter)
+      .filter((activity) => flagFilter === 'ALL' || (flagFilter === 'FLAGGED' ? (flagsById.get(activity.id)?.length ?? 0) > 0 : (flagsById.get(activity.id)?.length ?? 0) === 0))
       .filter((activity) => !normalizedQuery || `${activity.user.name} ${activity.user.email} ${activity.column.name}`.toLowerCase().includes(normalizedQuery))
       .sort((a, b) => {
         if (statusFilter === 'PENDING') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [activities, statusFilter, categoryFilter, query]);
+  }, [activities, statusFilter, categoryFilter, flagFilter, flagsById, query]);
+
+  const selectedPending = selectedIds.filter((id) => activities.some((activity) => activity.id === id && activity.status === 'PENDING'));
+
+  const toggleSelected = (id: string) => setSelectedIds((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
+  const selectVisiblePending = () => setSelectedIds(filteredActivities.filter((activity) => activity.status === 'PENDING').map((activity) => activity.id));
+  const selectClearPending = () => setSelectedIds(filteredActivities.filter((activity) => activity.status === 'PENDING' && (flagsById.get(activity.id)?.length ?? 0) === 0).map((activity) => activity.id));
+
+  const runBulkAction = async (action: 'approve' | 'reject') => {
+    const ids = selectedPending;
+    if (!ids.length) return;
+    let reason = '';
+    const flagged = ids.filter((id) => (flagsById.get(id)?.length ?? 0) > 0);
+    if (action === 'approve') {
+      const warning = flagged.length ? ` ${flagged.length} selected submission(s) have automated review flags.` : '';
+      if (!window.confirm(`Approve ${ids.length} selected pending activities?${warning}\n\nEach activity still passes the existing duplicate and server validation checks.`)) return;
+    } else {
+      reason = window.prompt(`Reject ${ids.length} selected activities with one shared reason:`, 'Evidence or activity details require correction.')?.trim() ?? '';
+      if (reason.length < 3) return;
+    }
+
+    setBulkRunning(true);
+    setActioningId('__bulk__');
+    setActionError('');
+    setBulkMessage('');
+    const failures: string[] = [];
+    for (const id of ids) {
+      const activity = activities.find((item) => item.id === id);
+      try {
+        const response = await fetch(`/api/admin/activities/${id}/${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(action === 'reject' ? { reason } : {}),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) failures.push(`${activity?.user.name ?? id}: ${typeof data.error === 'string' ? data.error : 'Review failed'}`);
+      } catch {
+        failures.push(`${activity?.user.name ?? id}: network error`);
+      }
+    }
+    try {
+      await refreshActivities();
+      setSelectedIds([]);
+      const completed = ids.length - failures.length;
+      setBulkMessage(`${completed} ${action === 'approve' ? 'approved' : 'rejected'}${failures.length ? ` · ${failures.length} skipped for individual review` : ''}.`);
+      if (failures.length) setActionError(failures.slice(0, 4).join(' · '));
+    } catch {
+      setRefreshRequired(true);
+      setActionError('Bulk review actions were submitted, but the refreshed scores could not be loaded. Refresh before taking more actions.');
+    } finally {
+      setActioningId(null);
+      setBulkRunning(false);
+    }
+  };
 
   const runStatusAction = async (activityId: string, action: 'approve' | 'reject' | 'reset', reason?: string, duplicateOverrideReason?: string) => {
     setActioningId(activityId);
     setActionError('');
+    setBulkMessage('');
     let saved = false;
     try {
       const response = await fetch(`/api/admin/activities/${activityId}/${action}`, {
@@ -152,6 +221,7 @@ export default function AdminActivityReview({ initialActivities, users }: { init
       saved = true;
       setRejectingId(null);
       setRejectionReason('');
+      setSelectedIds((ids) => ids.filter((id) => id !== activityId));
       await refreshActivities();
     } catch (error) {
       if (saved) {
@@ -215,7 +285,7 @@ export default function AdminActivityReview({ initialActivities, users }: { init
         <header className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.25),_transparent_45%),rgba(255,255,255,0.04)] p-6 sm:p-8">
           <div className="flex flex-wrap items-end justify-between gap-5">
             <div><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.2em] text-sky-300"><ShieldCheck className="h-4 w-4" />Admin control</p><h1 className="mt-2 text-3xl font-black sm:text-5xl">Activity review</h1><p className="mt-3 max-w-2xl text-slate-400">Check evidence, correct activity details, and keep the competition standings accurate.</p></div>
-            <div className="rounded-2xl border border-yellow-400/20 bg-yellow-400/10 px-5 py-4"><p className="text-xs text-yellow-200">Waiting for review</p><p className="mt-1 text-3xl font-black text-yellow-300">{counts.PENDING}</p></div>
+            <div className="flex gap-3"><div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-5 py-4"><p className="text-xs text-amber-200">Review flags</p><p className="mt-1 text-3xl font-black text-amber-300">{flaggedCount}</p></div><div className="rounded-2xl border border-yellow-400/20 bg-yellow-400/10 px-5 py-4"><p className="text-xs text-yellow-200">Waiting for review</p><p className="mt-1 text-3xl font-black text-yellow-300">{counts.PENDING}</p></div></div>
           </div>
         </header>
 
@@ -227,23 +297,31 @@ export default function AdminActivityReview({ initialActivities, users }: { init
             <div className="flex flex-col gap-3 sm:flex-row">
               <label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search athlete or column" className="w-full rounded-xl border border-white/10 bg-slate-900 py-2.5 pl-9 pr-4 text-sm outline-none placeholder:text-slate-600 focus:border-orange-400 sm:w-64" /></label>
               <select aria-label="Filter by activity type" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as ActivityCategory | 'ALL')} className="rounded-xl border border-white/10 bg-slate-900 px-4 py-2.5 text-sm outline-none focus:border-orange-400">{categories.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}</select>
+              <select aria-label="Filter by review flags" value={flagFilter} onChange={(event) => setFlagFilter(event.target.value as FlagFilter)} className="rounded-xl border border-white/10 bg-slate-900 px-4 py-2.5 text-sm outline-none focus:border-orange-400"><option value="ALL">All review flags</option><option value="FLAGGED">Flagged only</option><option value="CLEAR">No flags</option></select>
             </div>
           </div>
+          <p className="mt-3 text-xs text-slate-500">Automated review flags are advisory only. They never reject an activity or change its points.</p>
         </section>
 
+        <section className="mt-4 rounded-2xl border border-white/10 bg-slate-900/80 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-black text-slate-200">Bulk review</p><p className="mt-1 text-xs text-slate-500">{selectedPending.length} pending selected · server duplicate checks still apply to every approval</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={selectClearPending} disabled={mutationDisabled} className="rounded-lg border border-emerald-400/20 px-3 py-2 text-xs font-bold text-emerald-300 disabled:opacity-40">Select clear pending</button><button type="button" onClick={selectVisiblePending} disabled={mutationDisabled} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 disabled:opacity-40">Select visible pending</button><button type="button" onClick={() => setSelectedIds([])} disabled={!selectedPending.length||mutationDisabled} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-slate-400 disabled:opacity-40">Clear</button><button type="button" onClick={() => runBulkAction('approve')} disabled={!selectedPending.length||mutationDisabled} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-40"><CheckCircle2 className="h-3.5 w-3.5" />Approve selected</button><button type="button" onClick={() => runBulkAction('reject')} disabled={!selectedPending.length||mutationDisabled} className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500 px-3 py-2 text-xs font-black disabled:opacity-40"><XCircle className="h-3.5 w-3.5" />Reject selected</button></div></div>
+        </section>
+
+        {bulkMessage ? <div role="status" className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-200">{bulkMessage}</div> : null}
         {actionError ? <div role="alert" className="mt-5 rounded-xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-200">{actionError}</div> : null}
         {refreshRequired ? <button type="button" onClick={retryRefresh} disabled={actioningId !== null} className="mt-3 min-h-11 rounded-xl bg-sky-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50">{actioningId === '__refresh__' ? 'Refreshing…' : 'Refresh scores'}</button> : null}
 
         <section className="mt-5 space-y-4" aria-busy={actioningId !== null}>
-          {filteredActivities.length ? filteredActivities.map((activity) => (
-            <article key={activity.id} data-activity-id={activity.id} className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+          {filteredActivities.length ? filteredActivities.map((activity) => {
+            const flags=flagsById.get(activity.id)??[];
+            return <article key={activity.id} data-activity-id={activity.id} className={`overflow-hidden rounded-2xl border bg-white/[0.04] ${selectedSet.has(activity.id)?'border-lime-300/40':'border-white/10'}`}>
               <div className="grid lg:grid-cols-[14rem_1fr]">
                 <div className="relative flex min-h-48 items-center justify-center overflow-hidden bg-black/20 lg:min-h-full">
                   {activity.proofUrl ? <button type="button" onClick={() => setSelectedProof(activity.proofUrl)} aria-label={`Enlarge ${activity.user.name}'s proof`} className="group relative h-full min-h-48 w-full"><Image src={proofDisplayHref(activity.proofUrl)!} alt={`${activity.user.name}'s activity proof`} fill unoptimized sizes="(max-width: 1024px) 100vw, 224px" className="object-cover transition duration-500 group-hover:scale-105" /><span className="absolute bottom-3 right-3 rounded-lg bg-black/70 p-2 text-white"><Eye className="h-4 w-4" /></span></button> : activity.stravaActivityId ? <div className="text-center text-orange-300"><ExternalLink className="mx-auto h-8 w-8" /><p className="mt-2 text-xs font-bold">Strava activity</p></div> : <div className="text-center text-slate-600"><Activity className="mx-auto h-8 w-8" /><p className="mt-2 text-xs">No proof attached</p></div>}
                 </div>
                 <div className="p-5 sm:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div><div className="flex flex-wrap items-center gap-2"><Link href={`/participants/${activity.user.id}`} className="text-lg font-black transition hover:text-orange-300">{activity.user.name}</Link><StatusPill status={activity.status} /></div><p className="mt-1 text-sm text-slate-500">{activity.column.name} · {new Date(activity.occurredAt).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+                    <div className="flex min-w-0 items-start gap-3">{activity.status==='PENDING'?<input type="checkbox" aria-label={`Select ${activity.user.name}'s activity for bulk review`} checked={selectedSet.has(activity.id)} onChange={() => toggleSelected(activity.id)} disabled={mutationDisabled} className="mt-1 h-5 w-5 rounded border-white/20 bg-slate-900 accent-lime-300"/>:null}<div><div className="flex flex-wrap items-center gap-2"><Link href={`/participants/${activity.user.id}`} className="text-lg font-black transition hover:text-orange-300">{activity.user.name}</Link><StatusPill status={activity.status} />{flags.length?<span className="inline-flex items-center gap-1 rounded-full bg-amber-400/10 px-2.5 py-1 text-[0.65rem] font-black text-amber-300"><AlertTriangle className="h-3 w-3" />{flags.length} flag{flags.length===1?'':'s'}</span>:null}</div><p className="mt-1 text-sm text-slate-500">{activity.column.name} · {new Date(activity.occurredAt).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', year: 'numeric' })}</p></div></div>
                     <div className="text-right"><p data-testid="activity-points" className="text-3xl font-black text-orange-300">{refreshRequired ? '—' : activity.points.toFixed(1)}</p><p className="text-xs text-slate-500">{refreshRequired ? 'Refresh scores' : 'points'}</p></div>
                   </div>
 
@@ -256,9 +334,11 @@ export default function AdminActivityReview({ initialActivities, users }: { init
                     </div>
                   )}
 
+                  {flags.length ? <div className="mt-4 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] p-3"><div className="flex items-center gap-2 text-sm font-black text-amber-200"><AlertTriangle className="h-4 w-4" />Automated review flags</div><div className="mt-2 space-y-2">{flags.map((flag)=><div key={flag.code} className="rounded-lg bg-black/15 px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><strong className={flag.level==='high'?'text-rose-300':'text-amber-200'}>{flag.label}</strong><span className="uppercase tracking-wide text-slate-600">{flag.level==='high'?'Priority review':'Review'}</span></div><p className="mt-1 text-slate-400">{flag.detail}</p></div>)}</div><p className="mt-2 text-[0.68rem] text-slate-500">Advisory only — verify the evidence before deciding.</p></div> : activity.status==='PENDING' ? <div className="mt-4 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.05] p-3 text-xs text-emerald-300">No automated review flags detected.</div> : null}
+
                   {activities.some((other) => duplicateReason({ ...activity, userId: activity.user.id }, { ...other, userId: other.user.id })) ? <div className="mt-4 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200"><strong>Possible duplicate — compare before approval</strong>{activities.flatMap((other) => { const reason = duplicateReason({ ...activity, userId: activity.user.id }, { ...other, userId: other.user.id }); return reason ? [<p key={other.id} className="mt-2">{reason} · {new Date(other.occurredAt).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })} · {other.distance} · {other.status}<button type="button" className="ml-2 min-h-11 underline" onClick={() => { setStatusFilter('ALL'); setQuery(activity.user.name); setCategoryFilter('ALL'); }}>Compare entries</button></p>] : []; })}</div> : null}
-                  {!refreshRequired ? <ScoreExplanation activity={activity} /> : null}
-                      {activity.rejectionReason ? <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-200"><strong>Rejection reason:</strong> {activity.rejectionReason}</div> : null}
+                  {!refreshRequired ? <ScoreExplanation activity={activity} scoringRules={scoringRules} /> : null}
+                  {activity.rejectionReason ? <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-200"><strong>Rejection reason:</strong> {activity.rejectionReason}</div> : null}
                   <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5">
                     <div className="flex flex-wrap gap-3 text-xs">
                       {activity.stravaActivityId ? <a href={`https://www.strava.com/activities/${activity.stravaActivityId}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-bold text-orange-300 hover:underline"><ExternalLink className="h-3.5 w-3.5" />Open Strava</a> : null}
@@ -273,8 +353,8 @@ export default function AdminActivityReview({ initialActivities, users }: { init
                   </div>
                 </div>
               </div>
-            </article>
-          )) : <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-14 text-center"><Users className="mx-auto h-10 w-10 text-slate-700" /><p className="mt-4 font-bold text-slate-300">No matching activities</p><p className="mt-2 text-sm text-slate-500">Try another status, category, or search term.</p></div>}
+            </article>;
+          }) : <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-14 text-center"><Users className="mx-auto h-10 w-10 text-slate-700" /><p className="mt-4 font-bold text-slate-300">No matching activities</p><p className="mt-2 text-sm text-slate-500">Try another status, category, flag filter, or search term.</p></div>}
         </section>
       </main>
 
