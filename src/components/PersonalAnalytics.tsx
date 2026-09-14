@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { MetricActivity } from '@/lib/personal-metrics';
 import type { ScoringRules } from '@/lib/scoring';
 
-type Props = { activities: MetricActivity[]; today: string; scoringRules: ScoringRules; weeklyChart?: React.ReactNode };
+type Props = { activities: MetricActivity[]; today: string; scoringRules?: ScoringRules; weeklyChart?: React.ReactNode };
 
 const PersonalAnalyticsContent = dynamic(() => import('@/components/PersonalAnalyticsContent'), {
   ssr: false,
