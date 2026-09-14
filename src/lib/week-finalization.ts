@@ -1,0 +1,132 @@
+import { randomUUID } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
+import { getWeekNumber, getWeekStart } from '@/lib/scoring';
+import { getActiveSeason, type ChallengeSeason } from '@/lib/seasons';
+
+export type WeekLockStatus = 'OPEN' | 'FINALIZED';
+export type WeekFinalizationState = {
+  seasonKey: string;
+  weekNumber: number;
+  weekStart: Date;
+  weekEnd: Date;
+  status: WeekLockStatus;
+  resultKey: string | null;
+  finalizedAt: Date | null;
+  finalizedByName: string | null;
+  reopenedAt: Date | null;
+  reopenedByName: string | null;
+  reopenReason: string | null;
+};
+
+export class FinalizedWeekError extends Error {
+  status = 409;
+  constructor(public weekNumber: number) {
+    super(`Week ${weekNumber} is finalized. An administrator must reopen it before scores can change.`);
+  }
+}
+
+export function seasonWeekCount(season: Pick<ChallengeSeason, 'startDate' | 'endDate'>) {
+  return Math.max(1, getWeekNumber(season.endDate, season.startDate));
+}
+
+export function weekWindow(season: Pick<ChallengeSeason, 'startDate' | 'endDate'>, weekNumber: number) {
+  const firstSunday = getWeekStart(season.startDate);
+  const weekStart = new Date(firstSunday.getTime() + (weekNumber - 1) * 7 * 86400000);
+  const naturalEnd = new Date(weekStart.getTime() + 6 * 86400000);
+  const displayStart = new Date(Math.max(weekStart.getTime(), new Date(Date.UTC(season.startDate.getUTCFullYear(), season.startDate.getUTCMonth(), season.startDate.getUTCDate())).getTime()));
+  const seasonEndKey = new Date(Date.UTC(season.endDate.getUTCFullYear(), season.endDate.getUTCMonth(), season.endDate.getUTCDate()));
+  const displayEnd = new Date(Math.min(naturalEnd.getTime(), seasonEndKey.getTime()));
+  return { weekStart, weekEnd: naturalEnd, displayStart, displayEnd };
+}
+
+export async function getWeekFinalizationStates(season = await getActiveSeason()): Promise<WeekFinalizationState[]> {
+  const rows = await prisma.$queryRawUnsafe(`
+    SELECT "seasonKey","weekNumber","weekStart","weekEnd","status","resultKey","finalizedAt","finalizedByName","reopenedAt","reopenedByName","reopenReason"
+    FROM "WeekFinalization" WHERE "seasonKey"=$1 ORDER BY "weekNumber"
+  `, season.seasonKey) as WeekFinalizationState[];
+  const byWeek = new Map(rows.map(row => [row.weekNumber, row]));
+  return Array.from({ length: seasonWeekCount(season) }, (_, offset) => {
+    const weekNumber = offset + 1;
+    const existing = byWeek.get(weekNumber);
+    if (existing) return existing;
+    const window = weekWindow(season, weekNumber);
+    return {
+      seasonKey: season.seasonKey,
+      weekNumber,
+      weekStart: window.weekStart,
+      weekEnd: window.displayEnd,
+      status: 'OPEN' as const,
+      resultKey: null,
+      finalizedAt: null,
+      finalizedByName: null,
+      reopenedAt: null,
+      reopenedByName: null,
+      reopenReason: null,
+    };
+  });
+}
+
+export async function assertActivityWeekWritable(tx: Prisma.TransactionClient, occurredAt: Date, weekNumber?: number) {
+  const rows = await tx.$queryRawUnsafe(`
+    SELECT wf."weekNumber"
+    FROM "WeekFinalization" wf
+    JOIN "ChallengeSeason" s ON s."seasonKey"=wf."seasonKey"
+    WHERE wf."status"='FINALIZED'
+      AND $1::timestamp >= s."startDate" AND $1::timestamp <= s."endDate"
+      AND ($2::integer IS NULL OR wf."weekNumber"=$2::integer)
+    LIMIT 1
+  `, occurredAt, weekNumber ?? null) as Array<{ weekNumber: number }>;
+  if (rows[0]) throw new FinalizedWeekError(rows[0].weekNumber);
+}
+
+export async function isWeekFinalized(weekNumber: number, seasonKey?: string) {
+  const season = seasonKey ? null : await getActiveSeason();
+  const key = seasonKey ?? season!.seasonKey;
+  const rows = await prisma.$queryRawUnsafe(`SELECT "status" FROM "WeekFinalization" WHERE "seasonKey"=$1 AND "weekNumber"=$2 LIMIT 1`, key, weekNumber) as Array<{status:WeekLockStatus}>;
+  return rows[0]?.status === 'FINALIZED';
+}
+
+function singaporeTodayKey(now = new Date()) {
+  return new Date(now.getTime() + 8 * 3600000).toISOString().slice(0, 10);
+}
+
+export async function finalizeWeek(weekNumber: number, actorId: string, note = '') {
+  const season = await getActiveSeason();
+  const totalWeeks = seasonWeekCount(season);
+  if (!Number.isInteger(weekNumber) || weekNumber < 1 || weekNumber > totalWeeks) throw new Error('Choose a valid week.');
+  const window = weekWindow(season, weekNumber);
+  const todayKey = singaporeTodayKey();
+  if (todayKey <= window.displayEnd.toISOString().slice(0, 10)) throw new Error('That week has not ended yet.');
+
+  return prisma.$transaction(async tx => {
+    const pending = await tx.activity.count({ where: { weekNumber, occurredAt: { gte: season.startDate, lte: season.endDate }, status: 'PENDING' } });
+    if (pending > 0) throw new Error(`${pending} pending ${pending === 1 ? 'activity' : 'activities'} must be reviewed before finalising Week ${weekNumber}.`);
+    const actor = await tx.user.findUnique({ where: { id: actorId }, select: { name: true } });
+    const resultRows = await tx.$queryRaw<Array<{ resultKey: string }>>`SELECT app_internal.generate_weekly_result(${weekNumber}::integer,true::boolean) AS "resultKey"`;
+    const resultKey = resultRows[0]?.resultKey ?? null;
+    await tx.$executeRawUnsafe(`
+      INSERT INTO "WeekFinalization" ("id","seasonKey","weekNumber","weekStart","weekEnd","status","resultKey","finalizedAt","finalizedById","finalizedByName","updatedAt")
+      VALUES ($1,$2,$3,$4,$5,'FINALIZED',$6,CURRENT_TIMESTAMP,$7,$8,CURRENT_TIMESTAMP)
+      ON CONFLICT ("seasonKey","weekNumber") DO UPDATE SET
+        "status"='FINALIZED',"resultKey"=EXCLUDED."resultKey","finalizedAt"=CURRENT_TIMESTAMP,
+        "finalizedById"=EXCLUDED."finalizedById","finalizedByName"=EXCLUDED."finalizedByName",
+        "reopenedAt"=NULL,"reopenedById"=NULL,"reopenedByName"=NULL,"reopenReason"=NULL,"updatedAt"=CURRENT_TIMESTAMP
+    `, randomUUID(), season.seasonKey, weekNumber, window.weekStart, window.displayEnd, resultKey, actorId, actor?.name ?? 'Administrator');
+    await tx.$executeRawUnsafe(`INSERT INTO "AdminAudit" ("id","actorId","actorName","action","target","details") VALUES ($1,$2,$3,'Finalized competition week',$4,$5::jsonb)`, randomUUID(), actorId, actor?.name ?? 'Administrator', `Week ${weekNumber}`, JSON.stringify({ seasonKey: season.seasonKey, resultKey, note }));
+    return { weekNumber, seasonKey: season.seasonKey, resultKey };
+  });
+}
+
+export async function reopenWeek(weekNumber: number, actorId: string, reason: string) {
+  const season = await getActiveSeason();
+  if (reason.trim().length < 5) throw new Error('Add a short reason for reopening the week.');
+  return prisma.$transaction(async tx => {
+    const state = await tx.$queryRawUnsafe(`SELECT "status" FROM "WeekFinalization" WHERE "seasonKey"=$1 AND "weekNumber"=$2 FOR UPDATE`, season.seasonKey, weekNumber) as Array<{status:WeekLockStatus}>;
+    if (!state[0] || state[0].status !== 'FINALIZED') throw new Error('That week is not currently finalized.');
+    const actor = await tx.user.findUnique({ where: { id: actorId }, select: { name: true } });
+    await tx.$executeRawUnsafe(`UPDATE "WeekFinalization" SET "status"='OPEN',"reopenedAt"=CURRENT_TIMESTAMP,"reopenedById"=$3,"reopenedByName"=$4,"reopenReason"=$5,"updatedAt"=CURRENT_TIMESTAMP WHERE "seasonKey"=$1 AND "weekNumber"=$2`, season.seasonKey, weekNumber, actorId, actor?.name ?? 'Administrator', reason.trim());
+    await tx.$executeRawUnsafe(`INSERT INTO "AdminAudit" ("id","actorId","actorName","action","target","details") VALUES ($1,$2,$3,'Reopened competition week',$4,$5::jsonb)`, randomUUID(), actorId, actor?.name ?? 'Administrator', `Week ${weekNumber}`, JSON.stringify({ seasonKey: season.seasonKey, reason: reason.trim() }));
+    return { weekNumber, seasonKey: season.seasonKey, status: 'OPEN' as const };
+  });
+}
