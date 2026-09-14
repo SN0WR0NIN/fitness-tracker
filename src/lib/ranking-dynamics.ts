@@ -17,12 +17,37 @@ export type RankingDynamics = {
 // no-op for compatibility with existing call sites without running DDL on reads.
 export async function ensureRankingSnapshotSchema() {}
 
-export async function getRankingDynamics(scope: string, periodKey: string, entities: RankedEntity[]) {
-  const [previousRows, historyRows] = await Promise.all([
-    prisma.$queryRawUnsafe(`SELECT "entityId", "rank", "points", "snapshotDate"
+function singaporeDateKey(date = new Date()) {
+  const local = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+  return `${local.getUTCFullYear()}-${String(local.getUTCMonth() + 1).padStart(2, '0')}-${String(local.getUTCDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Rank movement is measured from one fixed position for the whole challenge
+ * week. Prefer the last captured position before the week starts (the position
+ * carried into the new week). If no earlier snapshot exists, use the first
+ * snapshot captured during that week as the baseline.
+ */
+export async function getRankingDynamics(
+  scope: string,
+  periodKey: string,
+  entities: RankedEntity[],
+  baselineStart: Date,
+) {
+  const baselineDate = baselineStart.toISOString().slice(0, 10);
+  const [baselineRows, historyRows] = await Promise.all([
+    prisma.$queryRawUnsafe(`WITH baseline_date AS (
+        SELECT COALESCE(
+          (SELECT MAX("snapshotDate") FROM "RankingSnapshot"
+            WHERE "scope"=$1 AND "periodKey"=$2 AND "snapshotDate" < $3::date),
+          (SELECT MIN("snapshotDate") FROM "RankingSnapshot"
+            WHERE "scope"=$1 AND "periodKey"=$2 AND "snapshotDate" >= $3::date)
+        ) AS "snapshotDate"
+      )
+      SELECT "entityId", "rank", "points", "snapshotDate"
       FROM "RankingSnapshot"
       WHERE "scope"=$1 AND "periodKey"=$2
-        AND "snapshotDate"=(SELECT MAX("snapshotDate") FROM "RankingSnapshot" WHERE "scope"=$1 AND "periodKey"=$2 AND "snapshotDate" < CURRENT_DATE)`, scope, periodKey) as Promise<SnapshotRow[]>,
+        AND "snapshotDate"=(SELECT "snapshotDate" FROM baseline_date)`, scope, periodKey, baselineDate) as Promise<SnapshotRow[]>,
     prisma.$queryRawUnsafe(`SELECT "entityId", "rank", "points", "snapshotDate"
       FROM "RankingSnapshot"
       WHERE "scope"=$1 AND "periodKey"=$2 AND "snapshotDate" IN (
@@ -30,7 +55,7 @@ export async function getRankingDynamics(scope: string, periodKey: string, entit
       ) ORDER BY "snapshotDate" ASC`, scope, periodKey) as Promise<SnapshotRow[]>,
   ]);
 
-  const previousById = new Map(previousRows.map((row) => [row.entityId, row]));
+  const baselineById = new Map(baselineRows.map((row) => [row.entityId, row]));
   const historyById = new Map<string, RankingDynamics['history']>();
   for (const row of historyRows) {
     const history = historyById.get(row.entityId) ?? [];
@@ -38,10 +63,10 @@ export async function getRankingDynamics(scope: string, periodKey: string, entit
     historyById.set(row.entityId, history);
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = singaporeDateKey();
   return new Map(entities.map((entity, index) => {
     const rank = index + 1;
-    const previous = previousById.get(entity.id);
+    const baseline = baselineById.get(entity.id);
     const gap = index > 0 ? Math.max(0, entities[index - 1].points - entity.points) : 0;
     const history = [...(historyById.get(entity.id) ?? [])];
     if (history.at(-1)?.date === today) history[history.length - 1] = { date: today, rank, points: entity.points };
@@ -49,9 +74,9 @@ export async function getRankingDynamics(scope: string, periodKey: string, entit
 
     return [entity.id, {
       rank,
-      previousRank: previous?.rank ?? null,
-      rankChange: previous ? previous.rank - rank : null,
-      isNew: !previous && entity.points > 0,
+      previousRank: baseline?.rank ?? null,
+      rankChange: baseline ? baseline.rank - rank : null,
+      isNew: !baseline && entity.points > 0,
       pointsToNext: rank === 1 ? 0 : Math.floor(gap * 2) / 2 + 0.5,
       history: history.slice(-7),
     } satisfies RankingDynamics];
@@ -62,9 +87,8 @@ export async function captureRankingSnapshot(scope: string, periodKey: string, e
   if (entities.length === 0) return;
   await prisma.$transaction(entities.map((entity, index) => prisma.$executeRawUnsafe(
     `INSERT INTO "RankingSnapshot" ("id", "scope", "periodKey", "entityId", "rank", "points", "snapshotDate", "capturedAt")
-     VALUES ($1,$2,$3,$4,$5,$6,CURRENT_DATE,CURRENT_TIMESTAMP)
-     ON CONFLICT ("scope", "periodKey", "entityId", "snapshotDate")
-     DO UPDATE SET "rank"=EXCLUDED."rank", "points"=EXCLUDED."points", "capturedAt"=CURRENT_TIMESTAMP`,
+     VALUES ($1,$2,$3,$4,$5,$6,(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Singapore')::date,CURRENT_TIMESTAMP)
+     ON CONFLICT ("scope", "periodKey", "entityId", "snapshotDate") DO NOTHING`,
     randomUUID(), scope, periodKey, entity.id, index + 1, entity.points,
   )));
 }
