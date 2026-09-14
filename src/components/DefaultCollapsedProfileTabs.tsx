@@ -4,8 +4,9 @@ import { useLayoutEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
 const INITIALIZED_ATTRIBUTE = 'data-profile-default-initialized';
+const DEFAULT_OPEN_SUMMARY = 'Profile & season';
 
-function collapseNewProfileFolds(root: ParentNode | Element) {
+function initializeProfileFolds(root: ParentNode | Element) {
   const folds: HTMLDetailsElement[] = [];
 
   if (root instanceof HTMLDetailsElement && root.classList.contains('dashboard-fold')) {
@@ -18,15 +19,17 @@ function collapseNewProfileFolds(root: ParentNode | Element) {
 
   folds.forEach((details) => {
     if (details.hasAttribute(INITIALIZED_ATTRIBUTE)) return;
-    details.open = false;
+    const summary = details.querySelector(':scope > summary')?.textContent?.trim();
+    details.open = summary === DEFAULT_OPEN_SUMMARY;
     details.setAttribute(INITIALIZED_ATTRIBUTE, 'true');
   });
 }
 
 /**
- * The bottom-nav Profile screen is /dashboard. Collapse every dashboard-fold
- * the first time it appears, including dynamically mounted analytics sections,
- * then leave the user's subsequent open/close choices alone.
+ * The bottom-nav Profile screen is /dashboard. Open only Profile & season the
+ * first time each fold appears; every other current or dynamically mounted
+ * dashboard fold starts collapsed. Subsequent user open/close choices are left
+ * untouched.
  */
 export default function DefaultCollapsedProfileTabs() {
   const pathname = usePathname();
@@ -34,12 +37,12 @@ export default function DefaultCollapsedProfileTabs() {
   useLayoutEffect(() => {
     if (pathname !== '/dashboard') return;
 
-    collapseNewProfileFolds(document);
+    initializeProfileFolds(document);
 
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
-          if (node instanceof Element) collapseNewProfileFolds(node);
+          if (node instanceof Element) initializeProfileFolds(node);
         });
       });
     });
