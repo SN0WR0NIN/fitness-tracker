@@ -29,7 +29,7 @@ export default function Navbar() {
   const isAdmin = session?.user?.role === 'ADMIN';
   const closeMenu = () => setMenuOpen(false);
   const toggleTheme = () => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
-  const showMobileDock = !pathname.startsWith('/admin') && !pathname.startsWith('/auth');
+  const showMobileDock = !pathname.startsWith('/auth') && (!pathname.startsWith('/admin') || isAdmin);
 
   return (
     <>
@@ -73,37 +73,43 @@ export default function Navbar() {
       </nav>
       <AppStatusBanner />
       <AnnouncementBanner />
-      {showMobileDock ? <MobileDock pathname={pathname} authenticated={status === 'authenticated'} /> : null}
+      {showMobileDock ? <MobileDock pathname={pathname} authenticated={status === 'authenticated'} isAdmin={isAdmin} /> : null}
     </>
   );
 }
 
-function MobileDock({ pathname, authenticated }: { pathname: string; authenticated: boolean }) {
+function MobileDock({ pathname, authenticated, isAdmin }: { pathname: string; authenticated: boolean; isAdmin: boolean }) {
   const profileHref = authenticated ? '/dashboard' : '/auth/login';
+  const activitiesHref = authenticated ? '/activities/history' : '/auth/login';
+  const finalHref = !authenticated ? '/auth/login' : isAdmin ? '/admin' : '/account';
   const isActive = (href: string) => href === '/' ? pathname === '/' : pathname.startsWith(href);
-  const links = [
+  const leftLinks = [
     { href: '/', label: 'Home', icon: Home },
-    { href: '/leaderboard', label: 'Board', icon: Trophy },
+    { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
+    { href: '/trophies', label: 'Trophy Cabinet', icon: Award },
+  ];
+  const rightLinks = [
     { href: profileHref, activeHref: '/dashboard', label: 'Profile', icon: UserRound },
-    { href: '/rules', label: 'Rules', icon: BookOpen },
+    { href: activitiesHref, activeHref: '/activities/history', label: 'My Activities', icon: ClipboardList },
+    { href: finalHref, activeHref: authenticated ? (isAdmin ? '/admin' : '/account') : '/auth/login', label: isAdmin ? 'Admin Page' : 'Settings', icon: Settings },
   ];
 
   return (
-    <nav aria-label="Mobile primary navigation" className="mobile-dock-safe fixed inset-x-3 z-50 mx-auto max-w-md rounded-2xl border border-white/10 bg-slate-950/95 px-2 pb-2 pt-2 shadow-2xl shadow-black/60 backdrop-blur-xl md:hidden">
-      <div className="grid grid-cols-5 items-end">
-        {links.slice(0, 2).map((item) => <DockLink key={item.label} href={item.href} label={item.label} icon={item.icon} active={isActive(item.activeHref ?? item.href)} />)}
-        <Link href="/activities/new" aria-label="Log a new activity" aria-current={pathname.startsWith('/activities/new') ? 'page' : undefined} className="group -mt-7 flex flex-col items-center gap-1 text-[0.65rem] font-black text-lime-300">
+    <nav aria-label="Mobile primary navigation" className="mobile-dock-safe fixed inset-x-2 z-50 mx-auto max-w-2xl rounded-2xl border border-white/10 bg-slate-950/95 px-1.5 pb-2 pt-2 shadow-2xl shadow-black/60 backdrop-blur-xl md:hidden">
+      <div className="grid grid-cols-7 items-end">
+        {leftLinks.map((item) => <DockLink key={item.label} href={item.href} label={item.label} icon={item.icon} active={isActive(item.href)} />)}
+        <Link href="/activities/new" aria-label="Log a new activity" aria-current={pathname.startsWith('/activities/new') ? 'page' : undefined} className="group -mt-7 flex min-w-0 flex-col items-center gap-1 text-[0.58rem] font-black text-lime-300">
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-lime-300 text-slate-950 shadow-lg shadow-lime-300/25 transition group-active:scale-95"><Plus className="h-7 w-7" /></span>
-          <span>Log</span>
+          <span>LOG</span>
         </Link>
-        {links.slice(2).map((item) => <DockLink key={item.label} href={item.href} label={item.label} icon={item.icon} active={isActive(item.activeHref ?? item.href)} />)}
+        {rightLinks.map((item) => <DockLink key={item.label} href={item.href} label={item.label} icon={item.icon} active={isActive(item.activeHref ?? item.href)} />)}
       </div>
     </nav>
   );
 }
 
 function DockLink({ href, label, icon: Icon, active }: { href: string; label: string; icon: React.ComponentType<{ className?: string }>; active: boolean }) {
-  return <Link href={href} aria-current={active ? 'page' : undefined} className={`flex min-w-0 flex-col items-center gap-1 rounded-xl py-2 text-[0.65rem] font-bold transition ${active ? 'text-lime-300' : 'text-slate-500 hover:text-slate-200'}`}><Icon className="h-5 w-5" /><span className="truncate">{label}</span>{active ? <span className="h-1 w-1 rounded-full bg-lime-300 shadow-[0_0_8px_rgba(163,230,53,0.9)]" /> : <span className="h-1 w-1" />}</Link>;
+  return <Link href={href} aria-current={active ? 'page' : undefined} className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-0.5 py-2 text-center text-[0.52rem] font-bold leading-[0.7rem] transition ${active ? 'text-lime-300' : 'text-slate-500 hover:text-slate-200'}`}><Icon className="h-[1.15rem] w-[1.15rem] shrink-0" /><span className="line-clamp-2 min-h-[1.4rem] w-full break-words">{label}</span>{active ? <span className="h-1 w-1 rounded-full bg-lime-300 shadow-[0_0_8px_rgba(163,230,53,0.9)]" /> : <span className="h-1 w-1" />}</Link>;
 }
 
 function DesktopLinks({ authenticated, isAdmin }: { authenticated: boolean; isAdmin: boolean }) {
