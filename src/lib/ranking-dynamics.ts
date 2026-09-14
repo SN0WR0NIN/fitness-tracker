@@ -22,6 +22,13 @@ function singaporeDateKey(date = new Date()) {
   return `${local.getUTCFullYear()}-${String(local.getUTCMonth() + 1).padStart(2, '0')}-${String(local.getUTCDate()).padStart(2, '0')}`;
 }
 
+function currentSingaporeWeekStart() {
+  const local = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  local.setUTCHours(0, 0, 0, 0);
+  local.setUTCDate(local.getUTCDate() - local.getUTCDay());
+  return local;
+}
+
 /**
  * Rank movement is measured from one fixed position for the whole challenge
  * week. Prefer the last captured position before the week starts (the position
@@ -32,7 +39,7 @@ export async function getRankingDynamics(
   scope: string,
   periodKey: string,
   entities: RankedEntity[],
-  baselineStart: Date,
+  baselineStart: Date = currentSingaporeWeekStart(),
 ) {
   const baselineDate = baselineStart.toISOString().slice(0, 10);
   const [baselineRows, historyRows] = await Promise.all([
