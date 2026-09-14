@@ -1,0 +1,124 @@
+import { randomUUID } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
+import { DEFAULT_SCORING_RULES, type ScoringRules } from '@/lib/scoring';
+
+export type SeasonStatus = 'PLANNED' | 'ACTIVE' | 'ARCHIVED';
+export type ChallengeSeason = {
+  seasonKey: string;
+  challengeName: string;
+  startDate: Date;
+  endDate: Date;
+  weeklyGoal: number;
+  scoringRules: ScoringRules;
+  status: SeasonStatus;
+  createdAt: Date;
+  activatedAt: Date | null;
+  completedAt: Date | null;
+};
+
+type SeasonRow = Omit<ChallengeSeason, 'scoringRules'> & { scoringRules: Partial<ScoringRules> | null };
+
+function normalizeSeason(row: SeasonRow): ChallengeSeason {
+  return { ...row, scoringRules: { ...DEFAULT_SCORING_RULES, ...(row.scoringRules ?? {}) } };
+}
+
+export function seasonKeyFromStart(startDate: Date) {
+  return startDate.toISOString().slice(0, 10);
+}
+
+export async function getSeasons(): Promise<ChallengeSeason[]> {
+  const rows = await prisma.$queryRawUnsafe(`
+    SELECT "seasonKey","challengeName","startDate","endDate","weeklyGoal","scoringRules","status","createdAt","activatedAt","completedAt"
+    FROM "ChallengeSeason"
+    ORDER BY "startDate" DESC
+  `) as SeasonRow[];
+  return rows.map(normalizeSeason);
+}
+
+export async function getActiveSeason(): Promise<ChallengeSeason> {
+  const rows = await prisma.$queryRawUnsafe(`
+    SELECT "seasonKey","challengeName","startDate","endDate","weeklyGoal","scoringRules","status","createdAt","activatedAt","completedAt"
+    FROM "ChallengeSeason" WHERE "status"='ACTIVE' ORDER BY "startDate" DESC LIMIT 1
+  `) as SeasonRow[];
+  if (rows[0]) return normalizeSeason(rows[0]);
+
+  const settings = await prisma.$queryRawUnsafe(`SELECT "challengeName","startDate","endDate","weeklyGoal","scoringRules" FROM "ChallengeSetting" WHERE id='primary' LIMIT 1`) as Array<{challengeName:string;startDate:Date;endDate:Date;weeklyGoal:number;scoringRules:Partial<ScoringRules>}>;
+  if (!settings[0]) throw new Error('Active challenge settings are unavailable.');
+  const seasonKey = seasonKeyFromStart(settings[0].startDate);
+  await prisma.$executeRawUnsafe(`
+    INSERT INTO "ChallengeSeason" ("seasonKey","challengeName","startDate","endDate","weeklyGoal","scoringRules","status","activatedAt")
+    VALUES ($1,$2,$3,$4,$5,$6::jsonb,'ACTIVE',CURRENT_TIMESTAMP)
+    ON CONFLICT ("seasonKey") DO UPDATE SET "status"='ACTIVE'
+  `, seasonKey, settings[0].challengeName, settings[0].startDate, settings[0].endDate, settings[0].weeklyGoal, JSON.stringify(settings[0].scoringRules ?? DEFAULT_SCORING_RULES));
+  return {
+    seasonKey,
+    challengeName: settings[0].challengeName,
+    startDate: settings[0].startDate,
+    endDate: settings[0].endDate,
+    weeklyGoal: settings[0].weeklyGoal,
+    scoringRules: { ...DEFAULT_SCORING_RULES, ...(settings[0].scoringRules ?? {}) },
+    status: 'ACTIVE',
+    createdAt: new Date(), activatedAt: new Date(), completedAt: null,
+  };
+}
+
+export async function getSeasonByKey(seasonKey: string): Promise<ChallengeSeason | null> {
+  const rows = await prisma.$queryRawUnsafe(`
+    SELECT "seasonKey","challengeName","startDate","endDate","weeklyGoal","scoringRules","status","createdAt","activatedAt","completedAt"
+    FROM "ChallengeSeason" WHERE "seasonKey"=$1 LIMIT 1
+  `, seasonKey) as SeasonRow[];
+  return rows[0] ? normalizeSeason(rows[0]) : null;
+}
+
+export function seasonPhase(season: Pick<ChallengeSeason, 'startDate' | 'endDate'>, now = new Date()): 'UPCOMING' | 'LIVE' | 'COMPLETE' {
+  if (now < season.startDate) return 'UPCOMING';
+  if (now > season.endDate) return 'COMPLETE';
+  return 'LIVE';
+}
+
+export async function createPlannedSeason(input: { challengeName: string; startDate: Date; endDate: Date; weeklyGoal: number; scoringRules?: ScoringRules }, actorId: string) {
+  if (!(input.startDate instanceof Date) || Number.isNaN(input.startDate.getTime())) throw new Error('Choose a valid season start date.');
+  if (!(input.endDate instanceof Date) || Number.isNaN(input.endDate.getTime()) || input.endDate <= input.startDate) throw new Error('Season end must be after the start.');
+  if (!Number.isFinite(input.weeklyGoal) || input.weeklyGoal <= 0) throw new Error('Weekly goal must be greater than zero.');
+  const seasonKey = seasonKeyFromStart(input.startDate);
+  const existing = await prisma.$queryRawUnsafe(`SELECT "seasonKey" FROM "ChallengeSeason" WHERE NOT ("endDate" < $1 OR "startDate" > $2) LIMIT 1`, input.startDate, input.endDate) as Array<{seasonKey:string}>;
+  if (existing[0]) throw new Error(`This season overlaps ${existing[0].seasonKey}.`);
+  const active = await getActiveSeason();
+  const rules = input.scoringRules ?? active.scoringRules;
+  const actor = await prisma.user.findUnique({ where: { id: actorId }, select: { name: true } });
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`INSERT INTO "ChallengeSeason" ("seasonKey","challengeName","startDate","endDate","weeklyGoal","scoringRules","status") VALUES ($1,$2,$3,$4,$5,$6::jsonb,'PLANNED')`, seasonKey, input.challengeName.trim(), input.startDate, input.endDate, input.weeklyGoal, JSON.stringify(rules));
+    await tx.$executeRawUnsafe(`INSERT INTO "AdminAudit" ("id","actorId","actorName","action","target","details") VALUES ($1,$2,$3,'Created planned season',$4,$5::jsonb)`, randomUUID(), actorId, actor?.name ?? 'Administrator', seasonKey, JSON.stringify({ challengeName: input.challengeName, startDate: input.startDate.toISOString(), endDate: input.endDate.toISOString(), weeklyGoal: input.weeklyGoal }));
+  });
+  return getSeasonByKey(seasonKey);
+}
+
+async function expectedFinalizedWeeks(tx: Prisma.TransactionClient, season: ChallengeSeason) {
+  const rows = await tx.$queryRawUnsafe(`
+    SELECT COUNT(*)::int AS count FROM "WeekFinalization"
+    WHERE "seasonKey"=$1 AND "status"='FINALIZED'
+  `, season.seasonKey) as Array<{count:number}>;
+  return rows[0]?.count ?? 0;
+}
+
+export async function activatePlannedSeason(seasonKey: string, actorId: string, now = new Date()) {
+  const active = await getActiveSeason();
+  const target = await getSeasonByKey(seasonKey);
+  if (!target) throw new Error('Season not found.');
+  if (target.status !== 'PLANNED') throw new Error('Only a planned season can be activated.');
+  if (now <= active.endDate) throw new Error('The current season has not ended yet.');
+  const actor = await prisma.user.findUnique({ where: { id: actorId }, select: { name: true } });
+
+  return prisma.$transaction(async (tx) => {
+    const completedWeeks = Math.max(1, Math.floor((new Date(active.endDate.toISOString().slice(0,10)+'T00:00:00Z').getTime() - new Date(active.startDate.toISOString().slice(0,10)+'T00:00:00Z').getTime()) / (7*86400000)) + 1);
+    const finalized = await expectedFinalizedWeeks(tx, active);
+    if (finalized < completedWeeks) throw new Error(`Finalise all ${completedWeeks} weeks before archiving this season.`);
+
+    await tx.$executeRawUnsafe(`UPDATE "ChallengeSeason" SET "status"='ARCHIVED',"completedAt"=CURRENT_TIMESTAMP WHERE "seasonKey"=$1`, active.seasonKey);
+    await tx.$executeRawUnsafe(`UPDATE "ChallengeSeason" SET "status"='ACTIVE',"activatedAt"=CURRENT_TIMESTAMP WHERE "seasonKey"=$1`, target.seasonKey);
+    await tx.$executeRawUnsafe(`UPDATE "ChallengeSetting" SET "challengeName"=$1,"startDate"=$2,"endDate"=$3,"weeklyGoal"=$4,"scoringRules"=$5::jsonb,"maintenanceMode"=false,"readOnlyMode"=false,"updatedAt"=CURRENT_TIMESTAMP WHERE id='primary'`, target.challengeName, target.startDate, target.endDate, target.weeklyGoal, JSON.stringify(target.scoringRules));
+    await tx.$executeRawUnsafe(`INSERT INTO "AdminAudit" ("id","actorId","actorName","action","target","details") VALUES ($1,$2,$3,'Activated season',$4,$5::jsonb)`, randomUUID(), actorId, actor?.name ?? 'Administrator', target.seasonKey, JSON.stringify({ archivedSeason: active.seasonKey }));
+    return target;
+  });
+}
