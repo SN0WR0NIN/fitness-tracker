@@ -4,8 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 /**
- * Lists registered users (excluding the caller) for the companion picker on
- * the activity form. Only real accounts here can earn the friend bonus.
+ * Lists participants (excluding the caller) for the activity friend picker.
+ * A column assignment determines participation; admins can compete too.
  */
 export async function GET() {
   try {
@@ -15,7 +15,7 @@ export async function GET() {
     }
 
     const users = await prisma.user.findMany({
-      where: { id: { not: session.user.id }, role: 'MEMBER', columnId: { not: null } },
+      where: { id: { not: session.user.id }, columnId: { not: null } },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     });

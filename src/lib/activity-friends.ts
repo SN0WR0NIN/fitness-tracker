@@ -14,7 +14,9 @@ export async function resolveActivityFriends(db: Pick<Prisma.TransactionClient, 
   if (selection.companionUserIds !== undefined && selection.companionUserId && !ids.includes(selection.companionUserId)) {
     throw new ActivityEditError('Conflicting friend selections. Refresh the form and select your friends again.', 400);
   }
-  const people = ids.length ? await db.user.findMany({ where: { id: { in: ids }, role: 'MEMBER', columnId: { not: null } }, select: { id: true, name: true } }) : [];
+  // Participation follows column assignment, not authorization role. Keep
+  // competing admins eligible without changing their account permissions.
+  const people = ids.length ? await db.user.findMany({ where: { id: { in: ids }, columnId: { not: null } }, select: { id: true, name: true } }) : [];
   if (people.length !== ids.length) throw new ActivityEditError('One or more selected friends are unavailable. Choose registered participants assigned to a column.', 400);
   return {
     companionUserIds: ids,

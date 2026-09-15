@@ -44,9 +44,9 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
   try {
     const accounts = {};
     const hash = await bcrypt.hash(password,10);
-    for (const name of ['member','friend1','friend2','friend3','admin']) {
+    for (const name of ['member','friend1','friend2','friend3','admin','unassignedAdmin']) {
       const id = `${key}_${name}`; ids.push(id);
-      accounts[name] = await db.user.create({ data: { id, name: `Group ${name}`, email: `${id}@example.test`, password: hash, role: name==='admin'?'ADMIN':'MEMBER', columnId: column.id } });
+      accounts[name] = await db.user.create({ data: { id, name: `Group ${name}`, email: `${id}@example.test`, password: hash, role: ['admin','unassignedAdmin'].includes(name)?'ADMIN':'MEMBER', columnId: name==='unassignedAdmin'?null:column.id } });
     }
     const member = await login(browser,baseURL,accounts.member,password); contexts.push(member);
     const admin = await login(browser,baseURL,accounts.admin,password); contexts.push(admin);
@@ -61,6 +61,22 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     expect(one.companionUserIds).toEqual([friendIds[0]]);
     expect(one.points-solo.points).toBeCloseTo(bonus,8);
 
+    // Authorization role must not hide an admin who also participates.
+    const options = await json(await member.request.get('/api/users'));
+    expect(options.map(user=>user.id)).toContain(accounts.admin.id);
+    expect(options.map(user=>user.id)).not.toContain(accounts.member.id);
+    expect(options.map(user=>user.id)).not.toContain(accounts.unassignedAdmin.id);
+    expect(options.every(user=>Object.keys(user).sort().join(',')==='id,name')).toBe(true);
+    const adminOptions = await json(await admin.request.get('/api/users'));
+    expect(adminOptions.map(user=>user.id)).not.toContain(accounts.admin.id);
+    const withAdmin = await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-06',category:'RUN',distance:5,pace:6,companionUserIds:[accounts.admin.id]}}),201);
+    expect(withAdmin.companionUserIds).toEqual([accounts.admin.id]);
+    expect(withAdmin.points).toBeCloseTo(one.points,8);
+    const editedWithAdmin = await json(await member.request.patch(`/api/activities/${withAdmin.id}`,{data:{distance:5.1}}));
+    expect(editedWithAdmin.companionUserIds).toEqual([accounts.admin.id]);
+    const legacyWithAdmin = await json(await admin.request.post('/api/admin/activities/create',{data:{userId:accounts.member.id,activityDate:'2026-09-07',category:'RUN',distance:5,pace:6,companionUserId:accounts.admin.id}}),201);
+    expect(legacyWithAdmin.activity.companionUserIds).toEqual([accounts.admin.id]);
+
     await page.goto('/activities/new');
     // The failure trace showed a hidden Next streaming container (S:0) with
     // a second copy of the form. Interact with the one visible to the user;
@@ -72,6 +88,7 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     await form.getByPlaceholder('6:30').fill('6');
     await form.getByRole('checkbox',{name:'I completed this with friends',exact:true}).check();
     const picker = form.getByRole('group',{name:'Friends',exact:true});
+    await expect(picker.getByRole('checkbox',{name:'Group admin',exact:true})).toBeVisible();
     await picker.getByLabel('Search friends',{exact:true}).fill('Group friend1');
     await picker.getByRole('checkbox',{name:'Group friend1',exact:true}).check();
     await picker.getByLabel('Search friends',{exact:true}).fill('Group friend2');
@@ -96,7 +113,7 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     expect(await db.weeklyScore.count({where:{userId:{in:friendIds}}})).toBe(0);
 
     const beforeInvalid = await db.activity.count({where:{userId:accounts.member.id}});
-    for (const companionUserIds of [[accounts.member.id],['missing-friend'],[accounts.admin.id],Array(101).fill(friendIds[0])]) {
+    for (const companionUserIds of [[accounts.member.id],['missing-friend'],[accounts.unassignedAdmin.id],Array(101).fill(friendIds[0])]) {
       await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-04',category:'RUN',distance:5,pace:6,companionUserIds}}),400);
     }
     expect(await db.activity.count({where:{userId:accounts.member.id}})).toBe(beforeInvalid);
@@ -117,9 +134,9 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     const correctionPicker = form.getByRole('group',{name:'Friends',exact:true});
     await expect(correctionPicker.getByRole('checkbox',{name:'Group friend1',exact:true})).toBeChecked();
     await expect(correctionPicker.getByRole('checkbox',{name:'Group friend2',exact:true})).toBeChecked();
-    await correctionPicker.getByLabel('Search friends',{exact:true}).fill('Group friend3');
-    await correctionPicker.getByRole('checkbox',{name:'Group friend3',exact:true}).check();
-    await form.getByLabel('Reason for correction').fill('A third registered friend also joined this workout.');
+    await correctionPicker.getByLabel('Search friends',{exact:true}).fill('Group admin');
+    await correctionPicker.getByRole('checkbox',{name:'Group admin',exact:true}).check();
+    await form.getByLabel('Reason for correction').fill('A participating admin also joined this workout.');
     const requested = page.waitForResponse(r => new URL(r.url()).pathname==='/api/corrections' && r.request().method()==='POST');
     await form.getByRole('button',{name:'Send correction request',exact:true}).click();
     const correction = await json(await requested,201);
@@ -127,6 +144,7 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     expect((await db.activity.findUnique({where:{id:group.id}})).points).toBe(approvedPoints);
     const decision = await json(await admin.request.post('/api/admin/corrections',{data:{id:correction.id,decision:'APPROVED',reason:'Verified all three friends against the workout evidence.'}}));
     expect(decision.applied.companionUserIds).toHaveLength(3);
+    expect(decision.applied.companionUserIds).toContain(accounts.admin.id);
     expect(decision.applied.points).toBe(approvedPoints);
     await json(await admin.request.post('/api/admin/corrections',{data:{id:correction.id,decision:'APPROVED',reason:'Repeated decision should never apply the points twice.'}}),409);
     group = await db.activity.findUnique({where:{id:group.id}});
@@ -153,6 +171,10 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     await expect(adminPicker.getByRole('checkbox',{name:'Group friend1',exact:true})).toHaveCount(0);
     await adminForm.getByRole('combobox').first().selectOption(accounts.member.id);
     await adminPicker.getByRole('checkbox',{name:'Group friend1',exact:true}).check();
+    await adminPicker.getByRole('checkbox',{name:'Group friend2',exact:true}).uncheck();
+    await adminPicker.getByRole('checkbox',{name:'Group admin',exact:true}).check();
+    await expect(adminForm.getByRole('combobox').first().locator(`option[value="${accounts.admin.id}"]`)).toHaveCount(0);
+    const adminCreatedFriendIds = [accounts.friend1.id,accounts.admin.id].sort();
     await adminForm.getByLabel('Activity date',{exact:true}).fill('2026-09-05');
     await adminForm.getByLabel('Distance (km)',{exact:true}).fill('3');
     await adminForm.getByPlaceholder('6:30 or 6.5').fill('6');
@@ -160,7 +182,7 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     await adminForm.locator('button:not([type])').click();
     const adminCreated = await json(await adminSubmitted,201);
     expect(adminCreated.activity.userId).toBe(accounts.member.id);
-    expect(adminCreated.activity.companionUserIds).toEqual([...friendIds].sort());
+    expect(adminCreated.activity.companionUserIds).toEqual(adminCreatedFriendIds);
     await json(await admin.request.post(`/api/admin/activities/${adminCreated.activity.id}/approve`,{data:{}}));
     await expect(db.user.delete({where:{id:accounts.friend2.id}})).rejects.toThrow();
     expect(await db.user.findUnique({where:{id:accounts.friend2.id}})).not.toBeNull();
@@ -171,6 +193,8 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     const social = await db.$queryRaw`SELECT current_value FROM app_internal.user_achievement WHERE user_id=${accounts.member.id} AND achievement_id='team-player'`;
     expect(social[0].current_value).toBe(approved.filter(a=>a.completedWithFriend&&a.companionUserId).length);
     expect(await db.weeklyScore.count({where:{userId:{in:[...friendIds,accounts.friend3.id,accounts.admin.id]}}})).toBe(0);
+    expect(await db.activity.count({where:{userId:accounts.admin.id}})).toBe(0);
+    expect((await json(await admin.request.get('/api/auth/session'))).user.role).toBe('ADMIN');
 
     const backup = await json(await admin.request.get('/api/admin/export?type=backup'));
     expect(backup.activities.find(a=>a.id===adminCreated.activity.id).companionUserIds).toHaveLength(2);

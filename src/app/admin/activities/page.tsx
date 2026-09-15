@@ -67,7 +67,7 @@ export default async function AdminActivitiesPage() {
       orderBy: { createdAt: 'desc' },
     }),
     prisma.user.findMany({
-      where: { role: 'MEMBER', columnId: { not: null } },
+      where: { columnId: { not: null } },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),

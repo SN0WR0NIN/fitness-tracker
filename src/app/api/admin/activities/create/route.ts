@@ -46,11 +46,8 @@ export async function POST(request: Request) {
     if (data.companionUserId === target.id) {
       return NextResponse.json({ error: 'The participant cannot be their own companion.' }, { status: 400 });
     }
-    if (data.companionUserId) {
-      const companion = await prisma.user.findFirst({ where: { id: data.companionUserId, role: 'MEMBER' }, select: { id: true } });
-      if (!companion) return NextResponse.json({ error: 'Selected companion was not found.' }, { status: 400 });
-    }
-
+    // createActivity uses the shared friend resolver for both legacy single
+    // selections and arrays, including participating admins.
     const created = await createActivity({
       userId: target.id,
       proofActorId: guard.userId,

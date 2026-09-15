@@ -22,12 +22,19 @@ export default async function AdminCreateActivityPage() {
   if (guard.status === 401) redirect('/auth/login');
   if (guard.error) redirect('/dashboard');
 
-  const [settings, usersResult] = await Promise.all([
+  const [settings, usersResult, friendUsers] = await Promise.all([
     getChallengeSettings(),
     prisma.user.findMany({
       where: { role: 'MEMBER', columnId: { not: null } },
       select: { id: true, name: true, username: true, columnId: true, column: { select: { name: true } } },
       orderBy: [{ column: { name: 'asc' } }, { name: 'asc' }],
+    }),
+    // Keep activity-owner permissions unchanged, but include participating
+    // admins as friends. The picker excludes the selected activity owner.
+    prisma.user.findMany({
+      where: { columnId: { not: null } },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
     }),
   ]);
   const users = usersResult as AdminActivityUser[];
@@ -45,6 +52,7 @@ export default async function AdminCreateActivityPage() {
             columnId: user.columnId!,
             columnName: user.column?.name ?? 'Unassigned',
           }))}
+          friendUsers={friendUsers}
           scoringRules={settings.scoringRules}
           challengeStart={settings.startDate.toISOString().slice(0, 10)}
           challengeEnd={settings.endDate.toISOString().slice(0, 10)}
