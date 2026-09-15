@@ -3,8 +3,34 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { createRequire } = require('node:module');
 const ts = require('typescript');
-function moduleFrom(file) { const m = { exports: {} }; const result = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }); new Function('exports','require','module',result.outputText)(m.exports,require,m); return m.exports; }
+const loadedModules = new Map();
+function moduleFrom(file) {
+  const filename = path.resolve(file);
+  if (loadedModules.has(filename)) return loadedModules.get(filename).exports;
+  const m = { exports: {} };
+  loadedModules.set(filename, m);
+  const sourceRequire = createRequire(filename);
+  const localRequire = (id) => {
+    // Resolve imports relative to the source module, not this test script.
+    // Transpile sibling TypeScript too, e.g. score-explanation -> scoring.
+    if (id.startsWith('.')) {
+      const dependency = path.resolve(path.dirname(filename), id);
+      const candidate = dependency.endsWith('.ts') ? dependency : `${dependency}.ts`;
+      if (fs.existsSync(candidate)) return moduleFrom(candidate);
+    }
+    return sourceRequire(id);
+  };
+  try {
+    const result = ts.transpileModule(fs.readFileSync(filename, 'utf8'), { fileName: filename, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
+    new Function('exports','require','module','__filename','__dirname',result.outputText)(m.exports,localRequire,m,filename,path.dirname(filename));
+    return m.exports;
+  } catch (error) {
+    loadedModules.delete(filename);
+    throw error;
+  }
+}
 const { parseProofReference: parse, proofDisplayHref } = moduleFrom('src/lib/proof-reference.ts');
 const { explainScore } = moduleFrom('src/lib/score-explanation.ts');
 const { calculateActivityPoints, hasPositiveBaseScore, roundScoreDown } = moduleFrom('src/lib/scoring.ts');
