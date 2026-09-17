@@ -23,6 +23,7 @@ export const CorrectionValuesSchema = z.object({
   duration: z.number().int().positive().max(100000).nullable(),
   companionUserId: z.string().min(1).nullable(),
   companionUserIds: z.array(z.string().min(1).max(200)).max(100).optional(),
+  completedWithFriend: z.boolean().optional(),
   proofUrl: proofSchema,
 }).strict().refine((value) => value.category === 'TROOP_GAMES' || value.distance > 0, 'Distance must be greater than zero.');
 export const CreateCorrectionSchema = z.object({ activityId: z.string().min(1), reason: z.string().trim().min(5).max(1000), proposed: CorrectionValuesSchema }).strict();
@@ -37,7 +38,7 @@ export type CorrectionRecord = {
 
 export function correctionSnapshot(activity: Activity): CorrectionSnapshot {
   return { activityDate: singaporeDate(activity.occurredAt), category: activity.category, distance: activity.distance,
-    pace: activity.pace, duration: activity.duration, companionUserId: activity.companionUserId, companionUserIds: activityFriendIds(activity), proofUrl: activity.proofUrl,
+    pace: activity.pace, duration: activity.duration, companionUserId: activity.companionUserId, companionUserIds: activityFriendIds(activity), completedWithFriend: activity.completedWithFriend, proofUrl: activity.proofUrl,
     version: activity.updatedAt.toISOString(), points: activity.points, weekNumber: activity.weekNumber,
     occurredAt: activity.occurredAt.toISOString(), companionName: activity.companion };
 }
@@ -64,16 +65,20 @@ async function prepareChange(tx: Prisma.TransactionClient, activity: Activity, p
   const occurredAt = proposed.activityDate === singaporeDate(activity.occurredAt) ? activity.occurredAt : parseActivityDate(proposed.activityDate)!;
   if (!isWithinChallengeWindow(occurredAt, settings.startDate, settings.endDate)) throw new FeatureError('The corrected date must be inside the challenge period.');
   const friends = await resolveActivityFriends(tx, activity.userId, proposed);
-  let companion = friends.companion;
-  if (!friends.companionUserIds.length && !activity.companionUserId && activity.companion && activity.completedWithFriend) companion = activity.companion;
+  const friendSetting = proposed.completedWithFriend;
+  let companion = friendSetting === false ? null : friends.companion;
+  if (friendSetting !== false && !friends.companionUserIds.length && !activity.companionUserId && activity.companion && activity.completedWithFriend) companion = activity.companion;
+  if (friendSetting === true && !companion) throw new FeatureError('Select at least one registered friend for the friend bonus.');
   const category = resolveEffectiveCategory(proposed.category, proposed.pace ?? undefined, settings.scoringRules);
   const distance = category === 'TROOP_GAMES' ? 0 : proposed.distance;
   const proofUrls = proofGalleryForCorrection(activity, proposed.proofUrl);
   const proofUrl = proofUrls[0] ?? null;
+  const companionUserId = companion ? friends.companionUserId : null;
+  const companionUserIds = companion ? friends.companionUserIds : [];
   const siblings = await tx.activity.findMany({ where: { userId: activity.userId, id: { not: activity.id } } });
-  const candidate = { ...activity, category, distance, pace: proposed.pace, occurredAt, proofUrl, proofUrls, completedWithFriend: Boolean(companion) };
+  const candidate = { ...activity, category, distance, pace: proposed.pace, occurredAt, proofUrl, proofUrls, companionUserId, companionUserIds, companion, completedWithFriend: Boolean(companion) };
   const scoring = planDailyActivityScores([...siblings, candidate], settings.scoringRules, settings.startDate).find(item => item.activity.id === activity.id)!.scoring;
-  return { category, distance, pace: proposed.pace, duration: proposed.duration, occurredAt, weekStart: getWeekStart(occurredAt), weekNumber: getWeekNumber(occurredAt,settings.startDate), proofUrl, proofUrls, companionUserId: friends.companionUserId, companionUserIds: friends.companionUserIds, companion, completedWithFriend: Boolean(companion), points: scoring.totalPoints, scoring };
+  return { category, distance, pace: proposed.pace, duration: proposed.duration, occurredAt, weekStart: getWeekStart(occurredAt), weekNumber: getWeekNumber(occurredAt,settings.startDate), proofUrl, proofUrls, companionUserId, companionUserIds, companion, completedWithFriend: Boolean(companion), points: scoring.totalPoints, scoring };
 }
 
 async function audit(tx: Prisma.TransactionClient, actorId: string, action: string, target: string, details: unknown) {
@@ -159,7 +164,7 @@ export async function decideCorrection(adminId: string, input: z.infer<typeof De
     let dirtyWeeks: number[] = [];
     if (input.decision === 'APPROVED' && activity) {
       const raw = request.proposed;
-      const values = CorrectionValuesSchema.parse({activityDate:raw.activityDate,category:raw.category,distance:raw.distance,pace:raw.pace,duration:raw.duration,companionUserId:raw.companionUserId,companionUserIds:raw.companionUserIds,proofUrl:raw.proofUrl});
+      const values = CorrectionValuesSchema.parse({activityDate:raw.activityDate,category:raw.category,distance:raw.distance,pace:raw.pace,duration:raw.duration,companionUserId:raw.companionUserId,companionUserIds:raw.companionUserIds,completedWithFriend:raw.completedWithFriend,proofUrl:raw.proofUrl});
       await assertAttachableProof(tx, values.proofUrl, request.user_id, activity.proofUrl);
       const change = await prepareChange(tx,activity,values,await settingsInTransaction(tx));
       await assertCorrectionWeekWritable(tx, change.occurredAt, change.weekNumber);
