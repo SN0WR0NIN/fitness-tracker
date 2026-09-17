@@ -43,6 +43,10 @@ const ActivitySchema = z.object({
   if (data.category !== 'TROOP_GAMES' && data.distance === undefined) {
     context.addIssue({ code: 'custom', path: ['distance'], message: 'Distance is required for this activity' });
   }
+  const proofs = normalizeProofUrls(data.proofUrls, data.proofUrl);
+  if (proofs.length === 0) {
+    context.addIssue({ code: 'custom', path: ['proofUrls'], message: 'At least one photo proof is required to submit an activity.' });
+  }
   if (data.proofUrls && new Set(data.proofUrls).size !== data.proofUrls.length) {
     context.addIssue({ code: 'custom', path: ['proofUrls'], message: 'The same proof photo cannot be attached twice.' });
   }
