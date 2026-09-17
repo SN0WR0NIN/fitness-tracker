@@ -233,13 +233,16 @@ export default function MyActivitiesHistory({
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
                     {item.status === "APPROVED" ? (
-                      <Link
-                        href={`/activities/${item.id}/correction`}
-                        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-sky-400/20 bg-sky-400/10 px-4 py-2 text-sm font-bold text-sky-200"
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Request correction
-                      </Link>
+                      <>
+                        <Link
+                          href={`/activities/${item.id}/correction`}
+                          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-sky-400/20 bg-sky-400/10 px-4 py-2 text-sm font-bold text-sky-200"
+                        >
+                          <Pencil className="h-4 w-4" />
+                          Edit approved entry
+                        </Link>
+                        <p className="basis-full text-xs text-slate-500">You can change distance, pace, friend status and photo proof. Edits are sent to admins for review before points change.</p>
+                      </>
                     ) : null}
                     {item.status === "PENDING" ? (
                       <Link
