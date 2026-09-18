@@ -412,27 +412,40 @@ export default function AthleteDashboard({
                     </summary>
                     <div className="border-t border-white/5 bg-black/10 px-4 py-4 sm:px-5 sm:py-5">
                       {activity.rejectionReason ? <p className="mb-4 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-200"><strong>Rejection reason:</strong> {activity.rejectionReason}</p> : null}
-                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)]">
-                        <div className="space-y-4">
-                          <ScoreExplanation activity={activity} compact />
-                          {activity.status === 'PENDING' && activity.stravaActivityId ? (
-                            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-400">
-                              {editingCompanionId === activity.id ? (
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <select aria-label="Select activity companion" value={companionSelect} onChange={(event) => setCompanionSelect(event.target.value)} className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1.5 text-xs text-white"><option value="">No friend</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select>
-                                  <button type="button" onClick={() => saveCompanion(activity.id)} disabled={savingCompanion} className="text-xs font-bold text-sky-300 disabled:opacity-50">Save</button>
-                                  <button type="button" onClick={() => setEditingCompanionId(null)} className="text-xs text-slate-500">Cancel</button>
-                                </div>
-                              ) : <button type="button" onClick={() => startEditCompanion(activity)} className="text-xs font-bold text-sky-300">Edit activity friend</button>}
+                      <div className="space-y-4">
+                        <ScoreExplanation activity={activity} compact />
+
+                        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+                          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-wider text-slate-300">Activity proof</p>
+                              <p className="mt-1 text-[0.68rem] text-slate-600">Full submitted image · tap to enlarge</p>
                             </div>
-                          ) : null}
-                          {activity.status === 'APPROVED' ? <ApprovedActivityDateEditor activity={activity} /> : null}
-                          {activity.status === 'PENDING' ? <PendingActivityEditor activity={activity} users={users.filter((user) => user.id !== profile.id)} /> : null}
+                            <span className="rounded-full bg-white/5 px-2.5 py-1 text-[0.62rem] font-bold text-slate-500">Owner / admin</span>
+                          </div>
+                          <div className="p-3 sm:p-4">
+                            <ActivityProof
+                              key={activity.proofUrl || 'no-proof'}
+                              proofUrl={activity.proofUrl}
+                              label={`${categoryLabels[activity.category]} activity screenshot`}
+                              variant="full"
+                            />
+                          </div>
                         </div>
-                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                          <div className="mb-3 flex items-center justify-between gap-3"><p className="text-xs font-black uppercase tracking-wider text-slate-400">Proof</p><span className="text-[0.65rem] font-semibold text-slate-600">Owner / admin</span></div>
-                          <ActivityProof key={activity.proofUrl || 'no-proof'} proofUrl={activity.proofUrl} label={`${categoryLabels[activity.category]} activity screenshot`} compact />
-                        </div>
+
+                        {activity.status === 'PENDING' && activity.stravaActivityId ? (
+                          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-400">
+                            {editingCompanionId === activity.id ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <select aria-label="Select activity companion" value={companionSelect} onChange={(event) => setCompanionSelect(event.target.value)} className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1.5 text-xs text-white"><option value="">No friend</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select>
+                                <button type="button" onClick={() => saveCompanion(activity.id)} disabled={savingCompanion} className="text-xs font-bold text-sky-300 disabled:opacity-50">Save</button>
+                                <button type="button" onClick={() => setEditingCompanionId(null)} className="text-xs text-slate-500">Cancel</button>
+                              </div>
+                            ) : <button type="button" onClick={() => startEditCompanion(activity)} className="text-xs font-bold text-sky-300">Edit activity friend</button>}
+                          </div>
+                        ) : null}
+                        {activity.status === 'APPROVED' ? <ApprovedActivityDateEditor activity={activity} /> : null}
+                        {activity.status === 'PENDING' ? <PendingActivityEditor activity={activity} users={users.filter((user) => user.id !== profile.id)} /> : null}
                       </div>
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
                         <div>{activity.stravaActivityId ? <a href={`https://www.strava.com/activities/${activity.stravaActivityId}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-orange-400/20 bg-orange-400/10 px-3 text-xs font-bold text-orange-200">Open Strava <ExternalLink className="h-3.5 w-3.5" /></a> : null}</div>
