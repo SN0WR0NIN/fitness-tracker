@@ -3,33 +3,47 @@
 import { useLayoutEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
-const INITIALIZED_ATTRIBUTE = 'data-profile-default-initialized';
-const DEFAULT_OPEN_SUMMARY = 'Profile & season';
+const INITIALIZED_ATTRIBUTE = 'data-profile-main-initialized';
 
-function initializeProfileFolds(root: ParentNode | Element) {
-  const folds: HTMLDetailsElement[] = [];
+function expandNestedSubTabs(main: HTMLDetailsElement) {
+  main.querySelectorAll<HTMLDetailsElement>('details.dashboard-fold').forEach((details) => {
+    if (details === main) return;
+    details.classList.add('profile-sub-fold');
+    details.open = true;
+  });
+}
 
-  if (root instanceof HTMLDetailsElement && root.classList.contains('dashboard-fold')) {
-    folds.push(root);
-  }
+function prepareProfileDetails(root: ParentNode | Element) {
+  const detailsNodes: HTMLDetailsElement[] = [];
 
+  if (root instanceof HTMLDetailsElement) detailsNodes.push(root);
   if ('querySelectorAll' in root) {
-    root.querySelectorAll<HTMLDetailsElement>('details.dashboard-fold').forEach((details) => folds.push(details));
+    root.querySelectorAll<HTMLDetailsElement>('details').forEach((details) => detailsNodes.push(details));
   }
 
-  folds.forEach((details) => {
-    if (details.hasAttribute(INITIALIZED_ATTRIBUTE)) return;
-    const summary = details.querySelector(':scope > summary')?.textContent?.trim();
-    details.open = summary === DEFAULT_OPEN_SUMMARY;
-    details.setAttribute(INITIALIZED_ATTRIBUTE, 'true');
+  detailsNodes.forEach((details) => {
+    if (details.classList.contains('profile-main-fold')) {
+      if (!details.hasAttribute(INITIALIZED_ATTRIBUTE)) {
+        details.open = false;
+        details.setAttribute(INITIALIZED_ATTRIBUTE, 'true');
+      }
+      if (details.open) expandNestedSubTabs(details);
+      return;
+    }
+
+    const main = details.closest<HTMLDetailsElement>('details.profile-main-fold');
+    if (main && details.classList.contains('dashboard-fold')) {
+      details.classList.add('profile-sub-fold');
+      if (main.open) details.open = true;
+    }
   });
 }
 
 /**
- * The bottom-nav Profile screen is /dashboard. Open only Profile & season the
- * first time each fold appears; every other current or dynamically mounted
- * dashboard fold starts collapsed. Subsequent user open/close choices are left
- * untouched.
+ * Profile & season is now a fixed page header. The four top-level Profile
+ * sections start collapsed. Opening one expands its dashboard sub-tabs as
+ * they mount, while unrelated details (for example individual activity cards)
+ * keep their own open/closed state.
  */
 export default function DefaultCollapsedProfileTabs() {
   const pathname = usePathname();
@@ -37,18 +51,30 @@ export default function DefaultCollapsedProfileTabs() {
   useLayoutEffect(() => {
     if (pathname !== '/dashboard') return;
 
-    initializeProfileFolds(document);
+    prepareProfileDetails(document);
+
+    const onToggle = (event: Event) => {
+      const details = event.target;
+      if (!(details instanceof HTMLDetailsElement)) return;
+      if (!details.classList.contains('profile-main-fold') || !details.open) return;
+      queueMicrotask(() => expandNestedSubTabs(details));
+    };
+
+    document.addEventListener('toggle', onToggle, true);
 
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
-          if (node instanceof Element) initializeProfileFolds(node);
+          if (node instanceof Element) prepareProfileDetails(node);
         });
       });
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    return () => {
+      document.removeEventListener('toggle', onToggle, true);
+      observer.disconnect();
+    };
   }, [pathname]);
 
   return null;
