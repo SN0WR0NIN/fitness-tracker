@@ -17,7 +17,7 @@ const PersonalAnalyticsContent = dynamic(() => import('@/components/PersonalAnal
 
 export default function PersonalAnalytics(props: Props) {
   const [open, setOpen] = useState(false);
-  return <details className="dashboard-fold" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+  return <details className="dashboard-fold profile-main-fold" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary>Performance analytics</summary>
     {open ? <div className="space-y-6 pt-3"><SeasonHistoryPanel/><WeekComparisonPanel activities={props.activities}/><SeasonRecordsPanel/><PersonalAnalyticsContent {...props} /></div> : null}
   </details>;
