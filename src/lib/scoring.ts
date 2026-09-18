@@ -1,8 +1,8 @@
 /**
  * Scoring algorithm for fitness activities.
  * Rules per the official KG Stay Active Challenge point system:
- * - Run: 1pt/km base + pace bonus (>6min/km: +0.5/km, <6min/km: +1.0/km, <5min/km: +1.5/km).
- *   Runs slower than 9:00/km are not runs — they get auto-recategorized as Walk/Hike.
+ * - Run: 1pt/km base + pace bonus (+1.5/km below 5:00, +1.0/km below 6:00, +0.5/km through 9:00).
+ *   Runs slower than 9:00/km remain runs but receive no pace bonus.
  * - Cycle: 1pt per 3km.
  * - Swim: 1pt per 100m.
  * - Walk/Hike: 1pt/km, but requires a minimum 5km distance to count at all.
@@ -19,7 +19,7 @@ export type ActivityCategory =
   | 'WALK_OR_HIKE'
   | 'TROOP_GAMES';
 
-export const RUN_SLOW_PACE_THRESHOLD_MIN_PER_KM = 9; // runs slower than this are recategorized as a walk
+export const RUN_SLOW_PACE_THRESHOLD_MIN_PER_KM = 9; // runs slower than this receive no pace bonus
 export const WALK_MIN_DISTANCE_KM = 5; // minimum distance for a Walk/Hike entry to count
 
 export type ScoringRules = {
@@ -78,22 +78,19 @@ export function roundScoreDown(value: number): number {
 }
 
 /**
- * A "Run" submitted with a pace slower than the slow-pace threshold isn't a
- * real run per the rules — it gets auto-recategorized as Walk/Hike instead.
- * Returns the effective category to actually score and store.
+ * Preserve the submitted activity category. The slow-run threshold now affects
+ * only the pace bonus; runs slower than the threshold remain RUN activities.
  */
 export function resolveEffectiveCategory(
   category: ActivityCategory,
-  pace?: number,
-  rules: ScoringRules = DEFAULT_SCORING_RULES
+  _pace?: number,
+  _rules: ScoringRules = DEFAULT_SCORING_RULES
 ): ActivityCategory {
-  if (category === 'RUN' && pace !== undefined && pace > rules.runSlowPaceThreshold) {
-    return 'WALK_OR_HIKE';
-  }
   return category;
 }
 
 function runPaceBonusPerKm(pace: number, rules: ScoringRules): number {
+  if (pace > rules.runSlowPaceThreshold) return 0;
   if (pace < rules.runFastPaceThreshold) return rules.runFastBonusPerKm;
   if (pace < rules.runMediumPaceThreshold) return rules.runMediumBonusPerKm;
   return rules.runStandardBonusPerKm;
@@ -133,8 +130,8 @@ export function hasPositiveBaseScore(
 
 /**
  * Calculate points based on activity type and metrics.
- * NOTE: callers should pass the category returned by resolveEffectiveCategory(),
- * not the raw user-selected category, so slow "runs" score as walks.
+ * Callers may pass the category returned by resolveEffectiveCategory(); it now
+ * preserves the submitted category while pace controls the run bonus.
  */
 export function calculateActivityPoints(input: ScoringInput, rules: ScoringRules = DEFAULT_SCORING_RULES): ScoringOutput {
   const basePoints = rawBasePoints(input, rules);
