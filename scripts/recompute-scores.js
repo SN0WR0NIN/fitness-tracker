@@ -13,14 +13,12 @@ const prisma = new PrismaClient();
 const RUN_SLOW_PACE_THRESHOLD = 9;
 const WALK_MIN_DISTANCE_KM = 5;
 
-function resolveEffectiveCategory(category, pace) {
-  if (category === 'RUN' && pace !== null && pace !== undefined && pace > RUN_SLOW_PACE_THRESHOLD) {
-    return 'WALK_OR_HIKE';
-  }
+function resolveEffectiveCategory(category) {
   return category;
 }
 
 function runPaceBonusPerKm(pace) {
+  if (pace > RUN_SLOW_PACE_THRESHOLD) return 0;
   if (pace < 5) return 1.5;
   if (pace < 6) return 1.0;
   return 0.5;
@@ -83,7 +81,7 @@ async function main() {
       data: { category: effectiveCategory, points: newPoints },
     });
   }
-  console.log(`Done. ${recategorized} activities recategorized from RUN to WALK_OR_HIKE.`);
+  console.log(`Done. ${recategorized} activities changed category.`);
 
   // Rebuild WeeklyScore from scratch based on currently-APPROVED activities
   console.log('Rebuilding WeeklyScore from approved activities...');
