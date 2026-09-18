@@ -290,7 +290,7 @@ export default function AthleteDashboard({
     <div className="min-h-screen bg-slate-950 text-white">
       <Navbar />
       <main className="page-enter mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-        <details open className="dashboard-fold"><summary>Profile & season</summary><section className="hero-stage rounded-3xl border border-white/10 bg-slate-950 p-6 shadow-2xl shadow-black/20 sm:p-8">
+        <header className="profile-page-header" aria-label="Profile page header"><span>Profile &amp; season</span></header><section className="hero-stage rounded-3xl border border-white/10 bg-slate-950 p-6 shadow-2xl shadow-black/20 sm:p-8">
           <HeroAtmosphere />
           <div className="hero-reveal mb-5 flex items-start justify-between gap-3">
                 <div className="relative h-20 w-20 shrink-0">
@@ -330,7 +330,7 @@ export default function AthleteDashboard({
             <HeroStat label="Activities" value={approvedCount.toString()} detail={`${pendingCount} pending review`} />
             <HeroStat label="Achievements" value={unlockedCount.toString()} detail={`of ${profile.achievements.length} unlocked`} />
           </div>
-        </section></details>
+        </section>
 
         {activitySubmitted ? (
           <section role="status" className="submission-celebration flex items-start gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-emerald-100">
@@ -361,7 +361,7 @@ export default function AthleteDashboard({
           )}
         </section></details> : null}
 
-        <details open className="dashboard-fold"><summary>Weekly target & momentum</summary><section className="grid grid-cols-2 gap-3">
+        <details className="dashboard-fold profile-main-fold"><summary>Weekly target &amp; momentum</summary><section className="grid grid-cols-2 gap-3">
           <div className="col-span-2 flex items-center gap-5 rounded-2xl border border-orange-400/20 bg-gradient-to-br from-orange-400/10 to-white/[0.04] p-5 sm:p-6">
             <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full p-2" style={{ background: `conic-gradient(#f97316 ${goalProgress * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}>
               <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-slate-950"><span className="text-2xl font-black">{Math.round(goalProgress)}%</span><span className="text-[0.65rem] text-slate-500">complete</span></div>
@@ -375,7 +375,7 @@ export default function AthleteDashboard({
 
         <PersonalAnalytics activities={activities} today={new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })} weeklyChart={<WeeklyProgressChart weeks={engagement.goalHistory} />} />
 
-        <details open className="dashboard-fold"><summary>Achievements</summary><section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
+        <details className="dashboard-fold profile-main-fold"><summary>Achievements</summary><section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <SectionTitle icon={<Award className="h-5 w-5 text-yellow-300" />} title="Achievements" subtitle={`${unlockedCount} unlocked · keep moving for the rest`} />
           {latestUnlockedAchievement ? <div className="mt-5 flex items-start gap-3 rounded-2xl border border-yellow-300/20 bg-gradient-to-r from-yellow-300/10 to-orange-400/5 p-4"><span className="rounded-xl bg-yellow-300 p-2.5 text-slate-950"><PartyPopper className="h-5 w-5" /></span><div><p className="text-xs font-black uppercase tracking-wider text-yellow-300">Latest badge unlocked</p><p className="mt-1 font-black text-yellow-100">{latestUnlockedAchievement.name}</p><p className="mt-1 text-sm text-slate-400">{latestUnlockedAchievement.description}</p></div></div> : null}
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -390,7 +390,7 @@ export default function AthleteDashboard({
           </div>
         </section></details>
 
-        <details open className="dashboard-fold"><summary>My activities</summary><section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+        <details className="dashboard-fold profile-main-fold"><summary>My activities</summary><section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
           <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
             <SectionTitle icon={<Activity className="h-5 w-5 text-emerald-300" />} title="My activities" subtitle="Recent submissions · tap one to view score, proof and actions" />
             <span className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-400">{visibleActivities.length} total</span>
