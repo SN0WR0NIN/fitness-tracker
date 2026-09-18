@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { CheckCircle2, ImagePlus, ShieldCheck, Sparkles, Upload, Users, XCircle } from 'lucide-react';
 import { calculateActivityPoints, resolveEffectiveCategory, type ActivityCategory, type ScoringRules } from '@/lib/scoring';
+import { maskPaceInput, parsePaceInput } from '@/lib/pace-input';
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const categories: Array<{ value: ActivityCategory; label: string; icon: string }> = [
@@ -22,18 +23,6 @@ const categories: Array<{ value: ActivityCategory; label: string; icon: string }
 type UserOption = { id: string; name: string; username: string | null; columnId: string; columnName: string };
 type Outcome = { status: 'PENDING' | 'APPROVED'; activityId: string; message: string; duplicateWarning?: boolean };
 
-function parsePace(value: string): number | undefined {
-  if (!value.trim()) return undefined;
-  if (value.includes(':')) {
-    const [minutesText, secondsText] = value.split(':');
-    const minutes = Number(minutesText);
-    const seconds = Number(secondsText);
-    if (!Number.isFinite(minutes) || !Number.isFinite(seconds) || seconds < 0 || seconds >= 60) return undefined;
-    return minutes + seconds / 60;
-  }
-  const decimal = Number(value);
-  return Number.isFinite(decimal) ? decimal : undefined;
-}
 
 export default function AdminCreateActivityForm({ users, friendUsers = users, scoringRules, challengeStart, challengeEnd, today }: {
   users: UserOption[];
@@ -59,7 +48,7 @@ export default function AdminCreateActivityForm({ users, friendUsers = users, sc
 
   const selectedUser = users.find((user) => user.id === userId) ?? null;
   const distanceNumber = distance ? Number(distance) : undefined;
-  const paceNumber = category === 'RUN' ? parsePace(pace) : undefined;
+  const paceNumber = category === 'RUN' ? parsePaceInput(pace) : undefined;
   const effectiveCategory = resolveEffectiveCategory(category, paceNumber, scoringRules);
   const dailyBonus = useDailyFriendBonus(userId, activityDate, effectiveCategory);
   const points = useMemo(() => calculateActivityPoints({
@@ -73,7 +62,7 @@ export default function AdminCreateActivityForm({ users, friendUsers = users, sc
     if (!userId) return 'Choose the participant receiving this activity.';
     if (!activityDate || activityDate < challengeStart || activityDate > maxDate) return `Choose a date from ${challengeStart} to ${maxDate}.`;
     if (category !== 'TROOP_GAMES' && (!distanceNumber || distanceNumber <= 0)) return 'Enter a distance greater than zero.';
-    if (category === 'RUN' && pace && (!paceNumber || paceNumber <= 0)) return 'Use a pace such as 6:30 or 6.5.';
+    if (category === 'RUN' && pace && (!paceNumber || paceNumber <= 0)) return 'Enter pace as min:sec. Type 545 for 5:45/km.';
     if (companionUserIds.includes(userId)) return 'The participant cannot be their own companion.';
     return '';
   }, [activityDate, category, challengeStart, companionUserIds, distanceNumber, maxDate, pace, paceNumber, userId]);
@@ -174,7 +163,7 @@ export default function AdminCreateActivityForm({ users, friendUsers = users, sc
             <label className="block">Activity type<select value={category} onChange={(event) => { const next = event.target.value as ActivityCategory; setCategory(next); if (next !== 'RUN') setPace(''); if (next === 'TROOP_GAMES') setDistance(''); }} className={field}>{categories.map((item) => <option key={item.value} value={item.value}>{item.icon} {item.label}</option>)}</select></label>
           </div>
 
-          {category !== 'TROOP_GAMES' ? <div className="grid gap-4 sm:grid-cols-2"><label className="block">Distance ({category === 'SWIM' ? 'metres' : 'km'})<input required type="number" min="0.01" step="0.01" value={distance} onChange={(event) => setDistance(event.target.value)} className={field} /></label>{category === 'RUN' ? <label className="block">Pace (min/km)<input value={pace} onChange={(event) => setPace(event.target.value)} placeholder="6:30 or 6.5" className={field} /></label> : <div />}</div> : <p className="rounded-xl border border-white/10 bg-black/10 p-4 text-sm text-slate-400">Troop Games uses the configured fixed points and does not require distance.</p>}
+          {category !== 'TROOP_GAMES' ? <div className="grid gap-4 sm:grid-cols-2"><label className="block">Distance ({category === 'SWIM' ? 'metres' : 'km'})<input required type="number" min="0.01" step="0.01" value={distance} onChange={(event) => setDistance(event.target.value)} className={field} /></label>{category === 'RUN' ? <label className="block">Pace (min/km)<input value={pace} onChange={(event) => setPace(maskPaceInput(event.target.value))} inputMode="numeric" maxLength={5} autoComplete="off" placeholder="5:45" className={field} /></label> : <div />}</div> : <p className="rounded-xl border border-white/10 bg-black/10 p-4 text-sm text-slate-400">Troop Games uses the configured fixed points and does not require distance.</p>}
 
           <FriendMultiSelect users={friendUsers} value={companionUserIds} onChange={setCompanionUserIds} excludeUserId={userId} disabled={submitting || uploading || !userId} />
           {companionUserIds.length ? <p role="status" className="text-sm text-sky-200">{dailyBonus.message}</p> : null}
