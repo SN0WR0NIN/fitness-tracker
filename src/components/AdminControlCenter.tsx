@@ -15,7 +15,7 @@ type Column = { id: string; name: string; isActive: boolean; memberCount: number
 type Analytics = { users: number; activities: number; pending: number; approvedPoints: number; categories: Array<{ category: string; count: number }> };
 const ruleFields: Array<{ key: keyof ScoringRules; label: string; suffix: string }> = [
   { key: 'runBasePerKm', label: 'Run base', suffix: 'pts/km' }, { key: 'runFastBonusPerKm', label: 'Fast run bonus', suffix: 'pts/km' }, { key: 'runMediumBonusPerKm', label: 'Medium run bonus', suffix: 'pts/km' }, { key: 'runStandardBonusPerKm', label: 'Standard run bonus', suffix: 'pts/km' },
-  { key: 'runFastPaceThreshold', label: 'Fast pace below', suffix: 'min/km' }, { key: 'runMediumPaceThreshold', label: 'Medium pace below', suffix: 'min/km' }, { key: 'runSlowPaceThreshold', label: 'Run converts to walk above', suffix: 'min/km' },
+  { key: 'runFastPaceThreshold', label: 'Fast pace below', suffix: 'min/km' }, { key: 'runMediumPaceThreshold', label: 'Medium pace below', suffix: 'min/km' }, { key: 'runSlowPaceThreshold', label: 'No run pace bonus above', suffix: 'min/km' },
   { key: 'cycleKmPerPoint', label: 'Cycling distance per point', suffix: 'km' }, { key: 'swimMetersPerPoint', label: 'Swimming distance per point', suffix: 'm' }, { key: 'walkPointsPerKm', label: 'Walk / hike rate', suffix: 'pts/km' }, { key: 'walkMinimumKm', label: 'Minimum walk / hike', suffix: 'km' }, { key: 'troopGamePoints', label: 'Troop Games session', suffix: 'pts' }, { key: 'friendBonus', label: 'Friend bonus', suffix: 'pts' },
 ];
 const panel = 'rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6';
