@@ -364,11 +364,12 @@ body {
   margin-left: .65rem;
   border-left: 1px solid rgba(56, 189, 248, .14);
   padding-left: .65rem;
+  margin-bottom: .45rem;
 }
 .profile-sub-fold > summary {
-  min-height: 2.75rem;
-  margin-bottom: .45rem;
-  padding: .65rem .85rem;
+  min-height: 2.55rem;
+  margin-bottom: 0;
+  padding: .58rem .8rem;
   border: 1px solid rgba(255,255,255,.075);
   border-radius: .7rem;
   background: rgba(15, 23, 42, .56);
@@ -378,6 +379,7 @@ body {
   box-shadow: none;
 }
 .profile-sub-fold[open] > summary {
+  margin-bottom: .45rem;
   border-color: rgba(56, 189, 248, .18);
   background: rgba(56, 189, 248, .045);
   color: #cbd5e1;
