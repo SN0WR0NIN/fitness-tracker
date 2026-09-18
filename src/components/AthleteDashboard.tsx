@@ -4,7 +4,6 @@ import AnimatedNumber from '@/components/AnimatedNumber';
 import type { ScoreBreakdown } from '@/lib/score-explanation';
 import ActivityProof from '@/components/ActivityProof';
 import PersonalAnalytics from '@/components/PersonalAnalytics';
-import WeeklyProgressChart from '@/components/WeeklyProgressChart';
 import ApprovedActivityDateEditor from '@/components/ApprovedActivityDateEditor';
 
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -373,7 +372,7 @@ export default function AthleteDashboard({
         </section></details>
 
 
-        <PersonalAnalytics activities={activities} today={new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })} weeklyChart={<WeeklyProgressChart weeks={engagement.goalHistory} embedded />} />
+        <PersonalAnalytics activities={activities} today={new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })} name={profile.name} columnName={profile.column?.name} rank={profile.rank} participantCount={profile.participantCount} weeklyGoal={engagement.weeklyGoal} weeklyScores={profile.weeklyScores} goalHistory={engagement.goalHistory} />
 
         <details className="dashboard-fold profile-main-fold"><summary>Achievements</summary><section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <SectionTitle icon={<Award className="h-5 w-5 text-yellow-300" />} title="Achievements" subtitle={`${unlockedCount} unlocked · keep moving for the rest`} />
