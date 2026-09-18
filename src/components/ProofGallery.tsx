@@ -11,7 +11,7 @@ type ProofGalleryProps = {
   compact?: boolean;
   actionVerb?: "Enlarge" | "View";
   className?: string;
-  variant?: "grid" | "cover";
+  variant?: "grid" | "cover" | "full";
 };
 
 export default function ProofGallery({
@@ -66,7 +66,37 @@ export default function ProofGallery({
         ? "max-w-2xl grid-cols-2"
         : "max-w-3xl grid-cols-2 sm:grid-cols-3";
 
-  const thumbnails = variant === "cover" ? (
+  const thumbnails = variant === "full" ? (
+    <div className="space-y-3">
+      {proofs.map((proof,index)=>{
+        const preview=proofDisplayHref(proof)!;
+        return <button
+          key={proof}
+          type="button"
+          onClick={()=>setOpen(index)}
+          className="group block w-full overflow-hidden rounded-2xl border border-white/10 bg-black/20 text-left transition hover:border-orange-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
+          aria-label={`${actionVerb} ${label} ${index+1}`}
+        >
+          {failed.has(index)?(
+            <p className="grid min-h-48 place-items-center p-6 text-center text-sm text-slate-400">Proof unavailable in this session.</p>
+          ):(
+            <img
+              src={preview}
+              alt={`${label} ${index+1}`}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className="block h-auto max-h-[72vh] w-full object-contain bg-slate-950"
+              onError={()=>setFailed(current=>new Set(current).add(index))}
+            />
+          )}
+          <div className="flex items-center justify-between border-t border-white/10 px-4 py-2.5 text-xs font-semibold">
+            <span className="text-orange-300">{index+1} / {proofs.length} · Tap to enlarge</span>
+            <span className="text-slate-600">Full proof</span>
+          </div>
+        </button>;
+      })}
+    </div>
+  ) : variant === "cover" ? (
     <button
       type="button"
       onClick={() => setOpen(0)}
