@@ -51,6 +51,9 @@ assert.equal(calculateActivityPoints({category:'CYCLE',distance:10}).totalPoints
 assert.equal(calculateActivityPoints({category:'CYCLE',distance:10,completedWithFriend:true}).totalPoints,6);
 assert.equal(calculateActivityPoints({category:'SWIM',distance:175}).totalPoints,1.5);
 assert.equal(calculateActivityPoints({category:'RUN',distance:3.1,pace:6}).totalPoints,4.5);
+assert.equal(calculateActivityPoints({category:'RUN',distance:5,pace:9}).totalPoints,7.5);
+assert.equal(calculateActivityPoints({category:'RUN',distance:5,pace:9.01}).basePoints,5);
+assert.equal(calculateActivityPoints({category:'RUN',distance:5,pace:9.01}).totalPoints,5);
 assert.equal(hasPositiveBaseScore({category:'RUN',distance:0.001,pace:6}),true);
 assert.equal(calculateActivityPoints({category:'RUN',distance:0.001,pace:6}).totalPoints,0);
 assert.equal(calculateActivityPoints({category:'RUN',distance:0.001,pace:6,completedWithFriend:true}).friendBonus,3);
