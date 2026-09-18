@@ -12,6 +12,7 @@ import { ArrowLeft, Camera, CheckCircle2, CloudOff, ImagePlus, Info, Save, Spark
 import { singaporeDate, parseActivityDate } from '@/lib/activity-date';
 import Navbar from '@/components/Navbar';
 import { calculateActivityPoints, resolveEffectiveCategory, type ActivityCategory, type ScoringRules } from '@/lib/scoring';
+import { maskPaceInput, normalizePaceInput, parsePaceInput } from '@/lib/pace-input';
 
 type SelectableUser = { id: string; name: string };
 type ActivityDraft = { activityDate: string; category: ActivityCategory; distance: string; pace: string; withFriend: boolean; companionUserIds: string[]; companionUserId?: string; proofUrl: string };
@@ -34,18 +35,6 @@ function scoringDescription(category: ActivityCategory, rules: ScoringRules) {
   return `${rules.troopGamePoints} points per session`;
 }
 
-function parsePace(value: string): number | undefined {
-  if (!value.trim()) return undefined;
-  if (value.includes(':')) {
-    const [minutesText, secondsText] = value.split(':');
-    const minutes = Number(minutesText);
-    const seconds = Number(secondsText);
-    if (!Number.isFinite(minutes) || !Number.isFinite(seconds) || seconds < 0 || seconds >= 60) return undefined;
-    return minutes + seconds / 60;
-  }
-  const decimalPace = Number(value);
-  return Number.isFinite(decimalPace) ? decimalPace : undefined;
-}
 
 export default function NewActivityForm({ userId, scoringRules, maintenanceMode, maintenanceMessage }: { userId: string; scoringRules: ScoringRules; maintenanceMode: boolean; maintenanceMessage: string }) {
   const router = useRouter();
@@ -87,7 +76,7 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
           if (ACTIVITY_CATEGORIES.some((item) => item.value === draft.category)) setCategory(draft.category!);
           setActivityDate(draft.activityDate || singaporeDate());
           setDistance(draft.distance || '');
-          setPace(draft.pace || '');
+          setPace(normalizePaceInput(draft.pace || ''));
           setWithFriend(Boolean(draft.withFriend));
           setCompanionUserIds(Array.isArray(draft.companionUserIds) ? draft.companionUserIds.filter((id) => typeof id === 'string' && id !== userId) : draft.companionUserId ? [draft.companionUserId] : []);
           setProofUrl(draft.proofUrl || '');
@@ -168,7 +157,7 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
   }, [draftKey, draftReady, maintenanceMode, online, queueKey, queued, router]);
 
   const distanceNumber = distance ? Number(distance) : undefined;
-  const paceNumber = parsePace(pace);
+  const paceNumber = parsePaceInput(pace);
   const effectiveCategory = resolveEffectiveCategory(category, paceNumber, scoringRules);
   const dailyBonus = useDailyFriendBonus(userId, activityDate, effectiveCategory);
   const preview = useMemo(() => calculateActivityPoints({
@@ -182,7 +171,7 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
     if (!parseActivityDate(activityDate)) return 'Choose a valid activity date, today or earlier.';
     if (category !== 'TROOP_GAMES' && (!distanceNumber || distanceNumber <= 0)) return 'Enter a distance greater than zero.';
     if (category === 'WALK_OR_HIKE' && distanceNumber && distanceNumber < scoringRules.walkMinimumKm) return `Walks under ${scoringRules.walkMinimumKm}km do not earn points.`;
-    if (category === 'RUN' && pace && (paceNumber === undefined || paceNumber <= 0)) return 'Use a positive pace such as 6:30 or 6.5.';
+    if (category === 'RUN' && pace && (paceNumber === undefined || paceNumber <= 0)) return 'Enter pace as min:sec. Type 545 for 5:45/km.';
     if (withFriend && companionUserIds.length === 0) return 'Select at least one registered friend who joined you.';
     return '';
   }, [activityDate, category, distanceNumber, pace, paceNumber, withFriend, companionUserIds, scoringRules.walkMinimumKm]);
@@ -334,7 +323,7 @@ export default function NewActivityForm({ userId, scoringRules, maintenanceMode,
             <label className="mb-5 block"><span className="text-sm font-semibold text-slate-300">Activity date</span><input type="date" required value={activityDate} max={singaporeDate()} onChange={(event) => setActivityDate(event.target.value)} className="mt-2 w-full min-w-0 rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-orange-400 [color-scheme:dark]" /><span className="mt-2 block text-xs text-slate-500">When you completed the activity (Singapore time). Points count towards that week after approval.</span></label>
             <div className="grid gap-4 sm:grid-cols-2">
               {category !== 'TROOP_GAMES' ? <label className="block"><span className="text-sm font-semibold text-slate-300">Distance ({category === 'SWIM' ? 'metres' : 'km'})</span><input type="number" min="0" step={category === 'SWIM' ? '1' : '0.01'} required value={distance} onChange={(event) => setDistance(event.target.value)} placeholder={category === 'SWIM' ? 'e.g. 1000' : 'e.g. 5.00'} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-orange-400" /></label> : <div className="rounded-xl border border-violet-400/20 bg-violet-400/10 p-4 text-sm text-violet-200 sm:col-span-2"><Info className="mb-2 h-5 w-5" />Troop Games earn {scoringRules.troopGamePoints} points per approved session. No distance is required.</div>}
-              {category === 'RUN' ? <label className="block"><span className="text-sm font-semibold text-slate-300">Average pace (min/km)</span><input type="text" inputMode="decimal" value={pace} onChange={(event) => setPace(event.target.value)} placeholder="e.g. 6:30" className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-orange-400" /><span className="mt-2 block text-xs text-slate-500">You may enter 6:30 or 6.5. Above {scoringRules.runSlowPaceThreshold}:00/km is scored as Walk / Hike.</span></label> : null}
+              {category === 'RUN' ? <label className="block"><span className="text-sm font-semibold text-slate-300">Average pace (min/km)</span><input type="text" inputMode="numeric" maxLength={5} autoComplete="off" value={pace} onChange={(event) => setPace(maskPaceInput(event.target.value))} placeholder="e.g. 5:45" className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-orange-400" /><span className="mt-2 block text-xs text-slate-500">Type only the digits; for example, 545 becomes 5:45. Above {scoringRules.runSlowPaceThreshold}:00/km is scored as Walk / Hike.</span></label> : null}
             </div>
           </FormSection>
 
