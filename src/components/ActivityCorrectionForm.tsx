@@ -8,18 +8,8 @@ import FriendMultiSelect from '@/components/FriendMultiSelect';
 import ActivityProof from '@/components/ActivityProof';
 import { activityFriendIds } from '@/lib/friend-selection';
 import type { CorrectionSnapshot } from '@/lib/activity-corrections';
+import { maskPaceInput, normalizePaceInput, parsePaceInput } from '@/lib/pace-input';
 
-function parsePace(value:string):number|null|undefined {
-  const trimmed=value.trim();
-  if(!trimmed)return null;
-  if(trimmed.includes(':')){
-    const [minutes,seconds]=trimmed.split(':').map(Number);
-    if(!Number.isFinite(minutes)||!Number.isFinite(seconds)||minutes<0||seconds<0||seconds>=60)return undefined;
-    return minutes+seconds/60;
-  }
-  const parsed=Number(trimmed);
-  return Number.isFinite(parsed)&&parsed>0?parsed:undefined;
-}
 
 export default function ActivityCorrectionForm({ activityId, original, users, startDate, endDate, locked, strava }: { activityId:string; original:CorrectionSnapshot; users:Array<{id:string;name:string}>; startDate:string; endDate:string; locked:boolean; strava:boolean }) {
   const router=useRouter();
@@ -27,7 +17,7 @@ export default function ActivityCorrectionForm({ activityId, original, users, st
   const [date,setDate]=useState(original.activityDate);
   const [category,setCategory]=useState(original.category);
   const [distance,setDistance]=useState(String(original.distance));
-  const [pace,setPace]=useState(original.pace === null ? '' : String(original.pace));
+  const [pace,setPace]=useState(normalizePaceInput(original.pace));
   const [duration,setDuration]=useState(original.duration === null ? '' : String(original.duration));
   const [withFriend,setWithFriend]=useState(Boolean(original.completedWithFriend || original.companionName || originalFriends.length));
   const [companion,setCompanion]=useState<string[]>(originalFriends);
@@ -55,8 +45,8 @@ export default function ActivityCorrectionForm({ activityId, original, users, st
 
   async function submit(event:React.FormEvent<HTMLFormElement>) {
     event.preventDefault();setMessage('');
-    const parsedPace=parsePace(pace);
-    if(parsedPace===undefined){setMessage('Enter pace as 6:30 or 6.5 minutes per km.');return;}
+    const parsedPace=pace.trim()?parsePaceInput(pace):null;
+    if(parsedPace===undefined){setMessage('Enter pace as min:sec. Type 545 for 5:45/km.');return;}
     if(withFriend && companion.length===0 && !hasLegacyCompanion){setMessage('Select at least one registered friend to request the friend bonus.');return;}
     if(!proof.trim()){setMessage('Photo proof is required for an approved-entry edit. Upload a proof image before submitting.');return;}
     setBusy(true);
@@ -92,7 +82,7 @@ export default function ActivityCorrectionForm({ activityId, original, users, st
         <label className="text-sm font-bold">Activity date (Singapore)<input required type="date" min={startDate} max={endDate} value={date} onChange={(e)=>setDate(e.target.value)} className={input}/></label>
         <label className="text-sm font-bold">Activity type<select aria-label="Activity type" value={category} onChange={(e)=>setCategory(e.target.value as CorrectionSnapshot['category'])} className={input}><option value="RUN">Run</option><option value="CYCLE">Cycle</option><option value="SWIM">Swim</option><option value="WALK_OR_HIKE">Walk / Hike</option><option value="TROOP_GAMES">Troop Games</option></select></label>
         {category!=='TROOP_GAMES'?<label className="text-sm font-bold">Distance ({category==='SWIM'?'metres':'km'})<input required type="number" min="0.001" max="100000" step="any" value={distance} onChange={(e)=>setDistance(e.target.value)} className={input}/></label>:null}
-        <label className="text-sm font-bold">Pace (min/km)<input inputMode="decimal" value={pace} onChange={(e)=>setPace(e.target.value)} placeholder="6:30" className={input}/><span className="mt-1 block text-xs font-normal text-slate-400">Use either 6:30 or 6.5. Run scoring will be recalculated from the approved value.</span></label>
+        <label className="text-sm font-bold">Pace (min/km)<input inputMode="numeric" maxLength={5} autoComplete="off" value={pace} onChange={(e)=>setPace(maskPaceInput(e.target.value))} placeholder="5:45" className={input}/><span className="mt-1 block text-xs font-normal text-slate-400">Type only the digits; 545 becomes 5:45. Run scoring will be recalculated from the approved value.</span></label>
         <label className="text-sm font-bold">Duration (whole minutes, optional)<input type="number" min="1" max="100000" step="1" value={duration} onChange={(e)=>setDuration(e.target.value)} className={input}/></label>
       </section>
 
