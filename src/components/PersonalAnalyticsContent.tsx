@@ -76,15 +76,6 @@ export default function PersonalAnalyticsContent({activities,today,scoringRules=
 
   if(view==='progress') return <div className="space-y-4">
     <section className={panel}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div><p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-lime-300">Consistency</p><h2 className="mt-1 text-lg font-black">28-day consistency</h2><p className="mt-1 text-xs text-slate-400">One tile per Singapore calendar day</p></div>
-        <div className="text-right text-xs text-slate-400"><span className="font-black text-lime-300">{data.currentStreak}</span> current · <span className="font-black text-sky-300">{data.bestStreak}</span> best</div>
-      </div>
-      <div className="mt-5 grid grid-cols-7 gap-2">{data.consistency.map(dayItem=>{const intensity=Math.min(1,dayItem.points/25);return <div key={dayItem.date} title={`${dateLabel(dayItem.date)} · ${dayItem.activities} activities · ${dayItem.points.toFixed(1)} pts`} className={`aspect-square rounded-lg border transition ${dayItem.active?'border-lime-300/20':'border-white/5'}`} style={{background:dayItem.active?`rgba(180,255,69,${0.16+intensity*0.54})`:'rgba(255,255,255,0.025)'}}><span className="sr-only">{dayItem.date}: {dayItem.points.toFixed(1)} points</span></div>;})}</div>
-      <div className="mt-3 flex items-center justify-between text-[0.65rem] text-slate-500"><span>{dateLabel(data.consistency[0].date)}</span><span>More activity → brighter tile</span><span>{dateLabel(data.consistency[data.consistency.length-1].date)}</span></div>
-    </section>
-
-    <section className={panel}>
       <div><p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-sky-300">Daily trend</p><h2 className="mt-1 text-lg font-black">Points — last 7 days</h2></div>
       <p role="status" className="mt-2 text-sm text-lime-300">{dateLabel(data.days[day].date)} · {data.days[day].points.toFixed(1)} points</p>
       <svg viewBox="0 0 620 240" role="img" aria-label="Daily approved points over the last seven Singapore dates" className="mt-3 w-full overflow-visible">
