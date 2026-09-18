@@ -1,41 +1,15 @@
-'use client';
-
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { signIn } from 'next-auth/react';
+import { SignIn } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs/server';
 import Link from 'next/link';
 import { Activity } from 'lucide-react';
+import { redirect } from 'next/navigation';
+import { clerkPublishableKey } from '@/lib/clerk';
 
-export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    const result = await signIn('credentials', {
-      email,
-      password,
-      redirect: false,
-    });
-
-    setLoading(false);
-
-    if (result?.error) {
-      if (result.error === 'PASSWORD_RESET_REQUIRED') { router.push(`/auth/reset-password?identifier=${encodeURIComponent(email)}`); return; }
-      if (result.error === 'SETUP_REQUIRED') { router.push('/auth/setup'); return; }
-      setError('Invalid credentials, expired temporary password, or attempt limit reached. Try again after 15 minutes or use Forgot password.');
-      return;
-    }
-
-    router.push('/dashboard');
-    router.refresh();
-  };
+export default async function LoginPage() {
+  if (clerkPublishableKey) {
+    const { userId } = await auth();
+    if (userId) redirect('/dashboard');
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center px-4">
@@ -46,64 +20,8 @@ export default function LoginPage() {
             <span className="font-bold text-xl text-gray-900 dark:text-gray-100">KG Stay Active Challenge</span>
           </Link>
         </div>
-
-        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-8">
-          <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">Log In</h1>
-
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Username or email
-              </label>
-              <input
-                type="text"
-                autoComplete="username"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                placeholder="Your username or email"
-              />
-            </div>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-                <Link href="/auth/forgot-password" className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400">Forgot password?</Link>
-              </div>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
-            >
-              {loading ? 'Logging in...' : 'Log In'}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
-            <Link href="/auth/setup" className="mb-3 block text-blue-500">Have first-time temporary credentials? Set up your account</Link>
-            <Link href="/auth/reset-password" className="mb-4 block text-blue-500">Have a password-reset temporary password?</Link>
-            Don&apos;t have an account?{' '}
-            <Link href="/auth/signup" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium">
-              Sign up
-            </Link>
-          </p>
+        <div className="flex justify-center">
+          {clerkPublishableKey ? <SignIn path="/auth/login" routing="path" forceRedirectUrl="/dashboard" /> : <div className="rounded-lg bg-white p-8 text-red-700 shadow-md dark:bg-gray-900 dark:text-red-300">Clerk environment variables are not configured.</div>}
         </div>
       </div>
     </div>

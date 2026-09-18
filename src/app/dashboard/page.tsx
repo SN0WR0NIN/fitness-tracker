@@ -1,9 +1,8 @@
 import type { ScoreBreakdown } from '@/lib/score-explanation';
 import { redirect } from 'next/navigation';
 import { after } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getAppSession } from '@/lib/auth';
 import AthleteDashboard from '@/components/AthleteDashboard';
-import { authOptions } from '@/lib/auth';
 import { getParticipantProfile } from '@/lib/participant-profile';
 import { prisma } from '@/lib/prisma';
 import { getCurrentWeekPoints, getSuggestedWeeklyGoal, getWeeklyGoalIntelligence, getWeeklyStreak } from '@/lib/engagement';
@@ -19,7 +18,7 @@ type DashboardActivity={id:string;category:'RUN'|'CYCLE'|'SWIM'|'WALK_OR_HIKE'|'
 type SelectableUser={id:string;name:string};type ColumnScore={columnId:string;_sum:{totalPoints:number|null}};
 
 export default async function DashboardPage(){
-  const pageStartedAt=Date.now();const session=await timed('perf.dashboard.session',()=>getServerSession(authOptions),{route:'/dashboard'});const userId=session?.user?.id;if(!userId)redirect('/auth/login');
+  const pageStartedAt=Date.now();const session=await timed('perf.dashboard.session',()=>getAppSession(),{route:'/dashboard'});const userId=session?.user?.id;if(!userId)redirect('/auth/login');
   const settings=await timed('perf.dashboard.challenge_settings',()=>getChallengeSettings(),{route:'/dashboard'});const seasonWeekStart=getWeekStart(settings.startDate),seasonWeekEnd=getWeekStart(settings.endDate);
   const dataStartedAt=Date.now();const [profile,userResult,profileSettings,goalRecords,activitiesResult,columnScoresResult,activeColumnIds]=await Promise.all([
     timed('perf.dashboard.participant_profile',()=>getParticipantProfile(userId,{includeActivities:false}),{route:'/dashboard'}),

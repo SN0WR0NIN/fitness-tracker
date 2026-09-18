@@ -66,13 +66,19 @@ A comprehensive fitness activity tracking web application built with Next.js, fe
    STRAVA_CLIENT_SECRET="your_strava_client_secret"
    STRAVA_REDIRECT_URI="http://localhost:3000/api/auth/strava/callback"
    STRAVA_INTEGRATION_ENABLED="false"
+   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_..."
+   CLERK_SECRET_KEY="sk_test_..."
    NEXTAUTH_URL="http://localhost:3000"
-   NEXTAUTH_SECRET="your_secret_key_here"
    AWS_REGION="us-east-1"
    AWS_ACCESS_KEY_ID="your_aws_access_key"
    AWS_SECRET_ACCESS_KEY="your_aws_secret_key"
    AWS_S3_BUCKET_NAME="fitness-tracker-uploads"
    ```
+
+   Clerk provides the shared account used across the KG apps. On Vercel, the Clerk
+   Marketplace integration may expose the equivalent prefixed variables
+   `NEXT_PUBLIC_AUTHENTICATION_CLERK_PUBLISHABLE_KEY` and
+   `AUTHENTICATION_CLERK_SECRET_KEY`; the app supports both names.
 
    Strava is disabled unless `STRAVA_INTEGRATION_ENABLED` is explicitly set to `true`. This keeps the connection controls and OAuth/sync endpoints unavailable while the Strava athlete limit is restricted.
 

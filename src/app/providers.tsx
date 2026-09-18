@@ -1,17 +1,17 @@
 'use client';
 
-import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider } from 'next-themes';
 import PwaManager from '@/components/PwaManager';
 import WebVitalsReporter from '@/components/WebVitalsReporter';
+import { AppSessionProvider } from '@/lib/client-auth';
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+export default function Providers({ children, clerkEnabled }: { children: React.ReactNode; clerkEnabled: boolean }) {
   return (
-    <SessionProvider>
+    <AppSessionProvider enabled={clerkEnabled}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <PwaManager>{children}</PwaManager>
         <WebVitalsReporter />
       </ThemeProvider>
-    </SessionProvider>
+    </AppSessionProvider>
   );
 }

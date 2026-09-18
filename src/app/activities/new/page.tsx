@@ -1,14 +1,13 @@
 import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
+import { getAppSession } from '@/lib/auth';
 import EnhancedActivityForm from '@/components/EnhancedActivityForm';
-import { authOptions } from '@/lib/auth';
 import { getChallengeSettings } from '@/lib/admin-control';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
 export default async function NewActivityPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getAppSession();
   const userId = session?.user?.id;
   if (!userId) redirect('/auth/login');
 

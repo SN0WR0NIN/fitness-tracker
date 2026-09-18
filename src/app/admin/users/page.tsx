@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useAppSession as useSession } from '@/lib/client-auth';
 import Link from 'next/link';
 import { ShieldCheck, Users as UsersIcon, Trash2 } from 'lucide-react';
 import Navbar from '@/components/Navbar';

@@ -1,9 +1,8 @@
 import Link from 'next/link';
 import { notFound,redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
+import { getAppSession } from '@/lib/auth';
 import Navbar from '@/components/Navbar';
 import ActivityCorrectionForm from '@/components/ActivityCorrectionForm';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getChallengeSettings } from '@/lib/admin-control';
 import { correctionSnapshot } from '@/lib/activity-corrections';
@@ -13,7 +12,7 @@ import { isWeekFinalized } from '@/lib/week-finalization';
 
 export const dynamic='force-dynamic';
 export default async function CorrectionPage({params}:{params:Promise<{id:string}>}) {
-  const session=await getServerSession(authOptions);
+  const session=await getAppSession();
   if(!session?.user?.id)redirect('/auth/login');
   const {id}=await params;
   const activity=await prisma.activity.findFirst({where:{id,userId:session.user.id}});

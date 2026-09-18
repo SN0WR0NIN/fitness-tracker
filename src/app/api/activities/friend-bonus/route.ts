@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getAppSession } from '@/lib/auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getChallengeSettings } from '@/lib/admin-control';
 import { parseActivityDate } from '@/lib/activity-date';
@@ -13,7 +12,7 @@ type BonusCandidate = { category: ActivityCategory; distance: number; pace: numb
 const Query = z.object({ activityDate: z.string(), category: z.enum(['RUN','CYCLE','SWIM','WALK_OR_HIKE','TROOP_GAMES']), userId: z.string().min(1).max(200).optional() });
 const headers = { 'Cache-Control': 'private, no-store' };
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await getAppSession();
   if (!session?.user?.id) return NextResponse.json({ error: 'Not authenticated' }, { status: 401, headers });
   const parsed = Query.safeParse(Object.fromEntries(request.nextUrl.searchParams));
   if (!parsed.success) return NextResponse.json({ error: 'Choose a date and sport.' }, { status: 400, headers });

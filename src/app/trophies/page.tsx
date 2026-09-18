@@ -1,17 +1,16 @@
 import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
+import { getAppSession } from '@/lib/auth';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import TrophyCabinet from '@/components/TrophyCabinet';
 import SeasonRecordsPanel from '@/components/SeasonRecordsPanel';
-import { authOptions } from '@/lib/auth';
 import { getParticipantProfile } from '@/lib/participant-profile';
 
 export const dynamic = 'force-dynamic';
 
 export default async function TrophiesPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getAppSession();
   const userId = session?.user?.id;
   if (!userId) redirect('/auth/login');
 

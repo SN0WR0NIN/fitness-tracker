@@ -1,6 +1,10 @@
-import AccountSetup from '@/components/AccountSetup';
-import AccountFeatureLinks from '@/components/AccountFeatureLinks';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { UserProfile } from '@clerk/nextjs';
 import { redirect } from 'next/navigation';
-export default async function AccountPage(){const session=await getServerSession(authOptions);if(!session?.user?.id)redirect('/auth/login');return <><AccountFeatureLinks/><AccountSetup/></>;}
+import AccountFeatureLinks from '@/components/AccountFeatureLinks';
+import { getAppSession } from '@/lib/auth';
+
+export default async function AccountPage() {
+  const session = await getAppSession();
+  if (!session?.user?.id) redirect('/auth/login');
+  return <main className="min-h-screen bg-slate-950 px-4 py-8 text-white"><div className="mx-auto max-w-4xl space-y-6"><AccountFeatureLinks/><UserProfile path="/account" routing="path" /></div></main>;
+}

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAppSession } from '@/lib/auth';
 import { ensureProfileBucketExists, uploadProfileImage } from '@/lib/storage';
 import { requestLog } from '@/lib/telemetry';
 import { verifiedImageMime, type SupportedImageMime } from '@/lib/image-upload';
@@ -11,7 +10,7 @@ const MAX_SIZE_BYTES = 2 * 1024 * 1024;
 export async function POST(request: NextRequest) {
   const log = requestLog(request, '/api/profile/photo');
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getAppSession();
     const userId = session?.user?.id;
     if (!userId) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 

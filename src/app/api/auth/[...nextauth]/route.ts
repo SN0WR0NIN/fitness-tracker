@@ -1,6 +1,5 @@
-import NextAuth from 'next-auth';
-import { authOptions } from '@/lib/auth';
+export function GET() {
+  return Response.json({ error: 'This app now uses Clerk authentication.' }, { status: 410 });
+}
 
-const handler = NextAuth(authOptions);
-
-export { handler as GET, handler as POST };
+export const POST = GET;

@@ -1,2 +1,5 @@
-import AccountSetup from '@/components/AccountSetup';
-export default function SetupPage() { return <AccountSetup firstLogin />; }
+import { redirect } from 'next/navigation';
+
+export default function SetupPage() {
+  redirect('/auth/login');
+}
