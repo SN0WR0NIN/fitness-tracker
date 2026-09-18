@@ -27,6 +27,7 @@ function paceLabel(value: number) {
 
 function runPaceRate(pace: number | null | undefined, rules: ScoringRules) {
   if (pace === null || pace === undefined || !Number.isFinite(pace)) return 0;
+  if (pace > rules.runSlowPaceThreshold) return 0;
   if (pace < rules.runFastPaceThreshold) return rules.runFastBonusPerKm;
   if (pace < rules.runMediumPaceThreshold) return rules.runMediumBonusPerKm;
   return rules.runStandardBonusPerKm;
