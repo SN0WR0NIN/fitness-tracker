@@ -9,6 +9,6 @@ const WeeklyProgressChartContent = dynamic(() => import('@/components/WeeklyProg
   loading: () => <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6"><div className="h-5 w-48 animate-pulse rounded bg-white/10" /><div className="mt-4 h-48 animate-pulse rounded-xl bg-white/5" /></div>,
 });
 
-export default function WeeklyProgressChart({ weeks }: { weeks: Week[] }) {
-  return <WeeklyProgressChartContent weeks={weeks} />;
+export default function WeeklyProgressChart({ weeks, embedded=false }: { weeks: Week[]; embedded?: boolean }) {
+  return <WeeklyProgressChartContent weeks={weeks} embedded={embedded} />;
 }
