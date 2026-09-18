@@ -39,6 +39,7 @@ import HeroAtmosphere from '@/components/HeroAtmosphere';
 import ShareProfileButton from '@/components/ShareProfileButton';
 import StravaIcon from '@/components/StravaIcon';
 import { formatDistance, formatDuration, formatPace } from '@/lib/format';
+import { proofDisplayHref } from '@/lib/proof-reference';
 import { usePwaInstall } from '@/components/PwaManager';
 
 type ActivityCategory = 'RUN' | 'CYCLE' | 'SWIM' | 'WALK_OR_HIKE' | 'TROOP_GAMES';
@@ -402,7 +403,28 @@ export default function AthleteDashboard({
                 return (
                   <details id={`activity-${activity.id}`} data-testid="dashboard-activity" key={activity.id} className="group scroll-mt-24 border-t border-white/5">
                     <summary className="grid cursor-pointer list-none grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-4 marker:content-none sm:px-5">
-                      <span className="rounded-xl bg-white/5 p-2.5 text-slate-300"><Icon className="h-5 w-5" /></span>
+                      <span className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-inner">
+                        {activity.proofUrl ? (
+                          <>
+                            <Image
+                              src={proofDisplayHref(activity.proofUrl)!}
+                              alt={`${categoryLabels[activity.category]} proof thumbnail`}
+                              fill
+                              unoptimized
+                              referrerPolicy="no-referrer"
+                              sizes="56px"
+                              className="object-cover"
+                            />
+                            <span className="absolute bottom-1 right-1 grid h-6 w-6 place-items-center rounded-full border border-white/15 bg-slate-950/80 text-white shadow backdrop-blur">
+                              <Icon className="h-3.5 w-3.5" />
+                            </span>
+                          </>
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center text-slate-300">
+                            <Icon className="h-5 w-5" />
+                          </span>
+                        )}
+                      </span>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2"><p className="font-bold">{categoryLabels[activity.category]}</p><Status status={activity.status} /></div>
                         <p className="mt-1 text-xs text-slate-500">{new Date(activity.occurredAt).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', year: 'numeric' })}{activity.distance ? ` · ${formatDistance(activity.distance)}${activity.category === 'SWIM' ? 'm' : 'km'}` : ''}{activity.duration ? ` · ${formatDuration(activity.duration)}` : ''}{activity.pace ? ` · ${formatPace(activity.pace)}/km` : ''}</p>
