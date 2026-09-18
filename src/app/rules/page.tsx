@@ -40,7 +40,7 @@ export default async function RulesPage() {
           <section>
             <SectionTitle icon={<Sparkles />} title="Scoring at a glance" />
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <RuleCard icon={<Footprints />} tone="text-lime-300 bg-lime-300/10" title="Running" score={`${rules.runBasePerKm} pt / km base`} detail={`Pace bonuses: +${rules.runFastBonusPerKm}/km below ${rules.runFastPaceThreshold}:00, +${rules.runMediumBonusPerKm}/km below ${rules.runMediumPaceThreshold}:00, and +${rules.runStandardBonusPerKm}/km up to ${rules.runSlowPaceThreshold}:00.`} />
+              <RuleCard icon={<Footprints />} tone="text-lime-300 bg-lime-300/10" title="Running" score={`${rules.runBasePerKm} pt / km base`} detail={`Pace bonuses: +${rules.runFastBonusPerKm}/km below ${rules.runFastPaceThreshold}:00, +${rules.runMediumBonusPerKm}/km below ${rules.runMediumPaceThreshold}:00, +${rules.runStandardBonusPerKm}/km through ${rules.runSlowPaceThreshold}:00, and +0/km above ${rules.runSlowPaceThreshold}:00. Slow runs remain Run activities.`} />
               <RuleCard icon={<Bike />} tone="text-cyan-300 bg-cyan-300/10" title="Cycling" score={`1 pt / ${rules.cycleKmPerPoint} km`} detail="Road, mountain, and indoor rides are accepted with clear activity evidence." />
               <RuleCard icon={<Waves />} tone="text-violet-300 bg-violet-300/10" title="Swimming" score={`1 pt / ${rules.swimMetersPerPoint} m`} detail="Pool, open-water, and triathlon swim legs all count." />
               <RuleCard icon={<Footprints />} tone="text-orange-300 bg-orange-300/10" title="Walking / hiking" score={`${rules.walkPointsPerKm} pt / km`} detail={`A minimum distance of ${rules.walkMinimumKm} km is required for points.`} />
