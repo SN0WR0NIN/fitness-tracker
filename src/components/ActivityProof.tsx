@@ -7,11 +7,13 @@ export default function ActivityProof({
   proofUrls,
   label,
   compact = false,
+  variant = "grid",
 }: {
   proofUrl?: string | null;
   proofUrls?: string[] | null;
   label: string;
   compact?: boolean;
+  variant?: "grid" | "cover" | "full";
 }) {
   const proofs = useMemo(() => {
     const values = proofUrls?.length ? proofUrls : proofUrl ? [proofUrl] : [];
@@ -28,6 +30,7 @@ export default function ActivityProof({
       proofs={proofs}
       label={label}
       compact={compact}
+      variant={variant}
       className="lg:col-span-4"
     />
   );
