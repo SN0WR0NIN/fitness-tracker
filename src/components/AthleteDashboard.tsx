@@ -373,7 +373,7 @@ export default function AthleteDashboard({
         </section></details>
 
 
-        <PersonalAnalytics activities={activities} today={new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })} weeklyChart={<WeeklyProgressChart weeks={engagement.goalHistory} />} />
+        <PersonalAnalytics activities={activities} today={new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })} weeklyChart={<WeeklyProgressChart weeks={engagement.goalHistory} embedded />} />
 
         <details className="dashboard-fold profile-main-fold"><summary>Achievements</summary><section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
           <SectionTitle icon={<Award className="h-5 w-5 text-yellow-300" />} title="Achievements" subtitle={`${unlockedCount} unlocked · keep moving for the rest`} />
