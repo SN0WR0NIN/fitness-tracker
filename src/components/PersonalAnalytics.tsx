@@ -9,7 +9,33 @@ import WeekComparisonPanel from '@/components/WeekComparisonPanel';
 import SeasonHistoryPanel from '@/components/SeasonHistoryPanel';
 
 export type AnalyticsView = 'overview' | 'progress' | 'activities' | 'history';
-type GoalHistory = { weekNumber:number; dateRange:string; points:number; target:number; achieved:boolean; current:boolean };\ntype WeeklyScore = { weekNumber:number; totalPoints:number };\ntype Props = {\n  activities: MetricActivity[];\n  today: string;\n  scoringRules?: ScoringRules;\n  name: string;\n  columnName?: string | null;\n  rank?: number | null;\n  participantCount: number;\n  weeklyGoal: number;\n  weeklyScores: WeeklyScore[];\n  goalHistory: GoalHistory[];\n};
+
+type GoalHistory = {
+  weekNumber:number;
+  dateRange:string;
+  points:number;
+  target:number;
+  achieved:boolean;
+  current:boolean;
+};
+
+type WeeklyScore = {
+  weekNumber:number;
+  totalPoints:number;
+};
+
+type Props = {
+  activities: MetricActivity[];
+  today: string;
+  scoringRules?: ScoringRules;
+  name: string;
+  columnName?: string | null;
+  rank?: number | null;
+  participantCount: number;
+  weeklyGoal: number;
+  weeklyScores: WeeklyScore[];
+  goalHistory: GoalHistory[];
+};
 
 const PersonalAnalyticsContent = dynamic(() => import('@/components/PersonalAnalyticsContent'), {
   ssr: false,
