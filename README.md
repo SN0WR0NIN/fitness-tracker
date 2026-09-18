@@ -33,7 +33,7 @@ A comprehensive fitness activity tracking web application built with Next.js, fe
 - **Frontend:** Next.js 16+, React, Tailwind CSS, Lucide Icons
 - **Backend:** Next.js API Routes, Node.js
 - **Database:** PostgreSQL (Prisma ORM)
-- **Authentication:** NextAuth.js (configured)
+- **Authentication:** Clerk shared login
 - **External APIs:** Strava OAuth
 - **File Storage:** AWS S3 (configured)
 - **Validation:** Zod
@@ -42,7 +42,7 @@ A comprehensive fitness activity tracking web application built with Next.js, fe
 
 ### Prerequisites
 
-- Node.js 18+ and npm
+- Node.js 22+ and npm
 - PostgreSQL database
 - Strava API credentials (optional but recommended)
 - AWS S3 bucket (optional for file uploads)
@@ -95,6 +95,41 @@ A comprehensive fitness activity tracking web application built with Next.js, fe
 
 5. **Open the app:**
    Navigate to [http://localhost:3000](http://localhost:3000)
+
+## Clerk E2E configuration
+
+The Stay Active E2E workflow uses a disposable local PostgreSQL database and real
+Clerk development sessions. Add these **GitHub Actions repository secrets** from
+the same dedicated Clerk development instance (enable email and password login;
+do not require username/name fields):
+
+- `E2E_CLERK_PUBLISHABLE_KEY` (`pk_test_...`)
+- `E2E_CLERK_SECRET_KEY` (`sk_test_...`)
+
+Do not reuse the shared production instance or its keys. The workflow maps these
+secrets to the app's standard Clerk environment variables for both build and
+runtime and refuses production keys or non-local databases. Fork PRs do not have
+access to secrets; a trusted maintainer must run them from an approved branch.
+
+Playwright's setup project obtains a Clerk testing token. Each authenticated test
+creates uniquely named, synthetic `+clerk_test` users and deletes only the Clerk
+IDs it created during teardown. Their verified emails link to existing local
+fixtures through the real application code, asserting that IDs and roles survive.
+Forced workflow cancellation may interrupt cleanup; any orphaned development
+users are tagged `privateMetadata.purpose = fitness-tracker-e2e` for review.
+Do not bulk-delete unrelated Clerk users. Browser traces are disabled because
+they can contain live session credentials.
+
+`prisma db push` does not create the raw SQL season tables. CI applies
+`season-week-finalization.sql`, `finalized-week-guard.sql`, then
+`season-week-finalization-security.sql` **after** `scripts/e2e-bootstrap.cjs`
+creates/seeds `ChallengeSetting`. `scripts/check-e2e-season.cjs` checks the active
+season, finalization table, triggers and RLS before the app starts.
+
+For a merge gate, require the complete workflow to pass, including the repeated
+daily-bonus checks, no-retry privacy/recovery check, v7 backup and disposable
+restore drill. A successful build or Vercel preview alone does not verify login
+or data safety. Cross-app shared-login verification remains a separate release check.
 
 ## Scoring Algorithm
 

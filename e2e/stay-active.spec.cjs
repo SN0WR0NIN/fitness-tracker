@@ -1,18 +1,11 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect, signIn } = require('./helpers/clerk.cjs');
 
-const PASSWORD = process.env.E2E_PASSWORD || 'E2E-only-Password-123!';
 const MEMBER = 'member-e2e@example.test';
 const ADMIN = 'admin-e2e@example.test';
 const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlWRAAAAABJRU5ErkJggg==', 'base64');
 
 async function login(context, email) {
-  const page = await context.newPage();
-  await page.goto('/auth/login');
-  await page.getByPlaceholder('Your username or email').fill(email);
-  await page.locator('input[type="password"]').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Log In' }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-  return page;
+  return signIn(context, email);
 }
 
 test('member to admin workflow stays correct and private', async ({ browser, request }) => {

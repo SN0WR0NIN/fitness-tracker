@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect, signIn } = require('./helpers/clerk.cjs');
 const { PrismaClient } = require('@prisma/client');
 const { randomUUID } = require('node:crypto');
 const bcrypt = require('bcryptjs');
@@ -36,11 +36,7 @@ async function withFixture(browser, baseURL, work) {
       ids.push(id);
       const context = await browser.newContext({ baseURL });
       contexts.push(context);
-      const csrf = await json(await context.request.get('/api/auth/csrf'));
-      await json(await context.request.post('/api/auth/callback/credentials', { form: {
-        csrfToken: csrf.csrfToken, email: user.email, password,
-        callbackUrl: `${baseURL}/dashboard`, json: 'true',
-      } }));
+      await signIn(context, user.email);
       expect((await json(await context.request.get('/api/auth/session'))).user.id).toBe(id);
       accounts[role] = { ...user, api: context.request };
     }

@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect, signIn } = require('./helpers/clerk.cjs');
 const { PrismaClient } = require('@prisma/client');
 const { randomUUID } = require('node:crypto');
 const bcrypt = require('bcryptjs');
@@ -21,8 +21,7 @@ test('friend bonus is per athlete, Singapore day and sport across all review wor
       const id = `${key}_${role}`; ids.push(id);
       const user = await db.user.create({ data: { id, name: `Daily ${role}`, email: `${id}@example.test`, password: hash, columnId: key, role: role === 'admin' ? 'ADMIN' : 'MEMBER' } });
       const context = await browser.newContext({ baseURL }); contexts.push(context);
-      const csrf = await json(await context.request.get('/api/auth/csrf'));
-      await json(await context.request.post('/api/auth/callback/credentials', { form: { csrfToken: csrf.csrfToken, email: user.email, password, callbackUrl: `${baseURL}/dashboard`, json: 'true' } }));
+      await signIn(context, user.email);
       expect((await json(await context.request.get('/api/auth/session'))).user.id).toBe(id);
       accounts[role] = { id, api: context.request };
     }

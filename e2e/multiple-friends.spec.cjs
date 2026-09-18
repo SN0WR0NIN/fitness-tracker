@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect, signIn } = require('./helpers/clerk.cjs');
 const { PrismaClient } = require('@prisma/client');
 const { randomUUID } = require('node:crypto');
 const bcrypt = require('bcryptjs');
@@ -17,11 +17,10 @@ async function json(response, status = 200) {
   expect(response.status(), text).toBe(status);
   return JSON.parse(text);
 }
-async function login(browser, baseURL, user, password) {
+async function login(browser, baseURL, user) {
   const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
   context.setDefaultTimeout(10000);
-  const csrf = await json(await context.request.get('/api/auth/csrf'));
-  await json(await context.request.post('/api/auth/callback/credentials', { form: { csrfToken: csrf.csrfToken, email: user.email, password, callbackUrl: `${baseURL}/dashboard`, json: 'true' } }));
+  await signIn(context, user.email);
   expect((await json(await context.request.get('/api/auth/session'))).user.id).toBe(user.id);
   return context;
 }
@@ -48,8 +47,8 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
       const id = `${key}_${name}`; ids.push(id);
       accounts[name] = await db.user.create({ data: { id, name: `Group ${name}`, email: `${id}@example.test`, password: hash, role: ['admin','unassignedAdmin'].includes(name)?'ADMIN':'MEMBER', columnId: name==='unassignedAdmin'?null:column.id } });
     }
-    const member = await login(browser,baseURL,accounts.member,password); contexts.push(member);
-    const admin = await login(browser,baseURL,accounts.admin,password); contexts.push(admin);
+    const member = await login(browser,baseURL,accounts.member); contexts.push(member);
+    const admin = await login(browser,baseURL,accounts.admin); contexts.push(admin);
     const page = await member.newPage();
     const friendIds = [accounts.friend1.id,accounts.friend2.id];
     const [settings] = await db.$queryRaw`SELECT "scoringRules" FROM "ChallengeSetting" WHERE id='primary'`;

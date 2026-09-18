@@ -71,6 +71,20 @@ assert.ok(assertDisposable(env,'--confirm-disposable'));
 for (const bad of [{...env,CI:'false'},{...env,VERCEL:'1'},{...env,DRILL_TARGET_DATABASE_URL:env.DATABASE_URL},{...env,DRILL_TARGET_DATABASE_URL:env.DRILL_TARGET_DATABASE_URL.replace('127.0.0.1','production.example.com')},{...env,DRILL_TARGET_DATABASE_URL:env.DRILL_TARGET_DATABASE_URL+'?host=production.example.com'}]) assert.throws(()=>assertDisposable(bad,'--confirm-disposable'));
 assert.throws(()=>assertDisposable(env,''));
 const { pack, verify } = require('./media-archive.cjs');
+const { assertClerkTestEnvironment, assertDisposableEnvironment } = require('./e2e-environment.cjs');
+const clerkEnv = { ...env, DIRECT_URL: env.DATABASE_URL,
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_synthetic', CLERK_SECRET_KEY: 'sk_test_synthetic' };
+assert.doesNotThrow(() => assertClerkTestEnvironment(clerkEnv));
+for (const bad of [{ ...clerkEnv, CI: 'false' }, { ...clerkEnv, VERCEL: '1' },
+  { ...clerkEnv, E2E_TEST_MODE: '0' }, { ...clerkEnv, CLERK_SECRET_KEY: '' },
+  { ...clerkEnv, CLERK_SECRET_KEY: 'sk_live_synthetic' },
+  { ...clerkEnv, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_live_synthetic' },
+  { ...clerkEnv, E2E_BASE_URL: 'https://production.example.com' },
+  { ...clerkEnv, DATABASE_URL: env.DATABASE_URL.replace('127.0.0.1', 'production.example.com') },
+  { ...clerkEnv, DIRECT_URL: env.DATABASE_URL.replace('fitness_tracker_e2e', 'production') },
+  { ...clerkEnv, DIRECT_URL: env.DATABASE_URL + '?host=production.example.com' },
+]) assert.throws(() => assertClerkTestEnvironment(bad));
+assert.doesNotThrow(() => assertDisposableEnvironment(clerkEnv));
 const directory = fs.mkdtempSync(path.join(os.tmpdir(),'kg-media-unit-'));
 try {
   fs.mkdirSync(path.join(directory,'source/activity-proofs/u'),{recursive:true,mode:0o700});

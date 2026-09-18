@@ -30,6 +30,9 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@clerk/backend": "3.18.1",
+    "@clerk/testing": "2.2.36",
+    "@playwright/test": "1.55.0",
     "@prisma/client": "^5.22.0",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",

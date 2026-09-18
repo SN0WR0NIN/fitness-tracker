@@ -5,6 +5,7 @@ import { Activity } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { clerkPublishableKey } from '@/lib/clerk';
 
+// Clerk uses nested routes for verification and account recovery.
 export default async function LoginPage() {
   if (clerkPublishableKey) {
     const { userId } = await auth();

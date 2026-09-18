@@ -1,19 +1,13 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect, signIn } = require('./helpers/clerk.cjs');
 const { PrismaClient } = require('@prisma/client');
 
-const PASSWORD = process.env.E2E_PASSWORD;
 const ADMIN = 'admin-e2e@example.test';
 const TARGET_USER_ID = 'e2e_reset_member';
 const prisma = new PrismaClient();
 
-if (!PASSWORD) throw new Error('E2E_PASSWORD is required.');
 
 async function adminLogin(page) {
-  await page.goto('/auth/login');
-  await page.getByPlaceholder('Your username or email').fill(ADMIN);
-  await page.locator('input[type="password"]').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Log In' }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
+  await signIn(page, ADMIN);
 }
 
 test.beforeEach(async () => {

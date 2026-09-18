@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect, signIn, signOut } = require('./helpers/clerk.cjs');
 const { PrismaClient } = require('@prisma/client');
 const { randomUUID } = require('node:crypto');
 const bcrypt = require('bcryptjs');
@@ -18,8 +18,7 @@ async function accounts(browser, baseURL) {
   for (const name of ['owner','other','admin']) {
     const user = await db.user.create({data:{id:`${key}_${name}`,name:`Privacy ${name}`,email:`${key}_${name}@example.test`,password:hash,role:name==='admin'?'ADMIN':'MEMBER',columnId:column.id}}); users.push(user.id);
     const context = await browser.newContext({baseURL,viewport:{width:390,height:844}});contexts.push(context);
-    const csrf = await body(await context.request.get('/api/auth/csrf'));
-    await body(await context.request.post('/api/auth/callback/credentials',{form:{csrfToken:csrf.csrfToken,email:user.email,password,callbackUrl:`${baseURL}/dashboard`,json:'true'}}));
+    await signIn(context, user.email);
     expect((await body(await context.request.get('/api/auth/session'))).user.id).toBe(user.id);
     result[name]={...user,context,api:context.request,page:await context.newPage()};
   }
@@ -80,7 +79,8 @@ test('proofs enforce owner/admin sessions, upload ownership, no public disclosur
     await s.db.user.update({where:{id:s.admin.id},data:{role:'MEMBER'}});
     expect((await s.admin.api.get(href(proof))).status()).toBe(404);
     await s.db.user.update({where:{id:s.admin.id},data:{role:'ADMIN'}});
-    await s.db.user.update({where:{id:s.owner.id},data:{sessionVersion:{increment:1}}});
+    // Clerk owns sessions now; signing out must revoke access to private proofs.
+    await signOut(s.owner.page);
     expect((await s.owner.api.get(href(proof))).status()).toBe(401);
     // Simulate legitimate account linking in isolated CI: old uploader loses
     // access once the activity now belongs to a different current account.

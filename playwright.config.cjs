@@ -6,9 +6,14 @@ module.exports = defineConfig({
   expect: { timeout: 10_000 },
   retries: process.env.CI ? 1 : 0,
   workers: 1,
+  projects: [
+    { name: 'clerk-setup', testMatch: /clerk\.setup\.cjs/ },
+    { name: 'e2e', testMatch: /.*\.spec\.cjs/, dependencies: ['clerk-setup'] },
+  ],
   use: {
     baseURL: process.env.E2E_BASE_URL || 'http://127.0.0.1:3000',
-    trace: 'retain-on-failure',
+    // Traces contain Clerk session cookies/tokens; never upload them from a public repo.
+    trace: 'off',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
