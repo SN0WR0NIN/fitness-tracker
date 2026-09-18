@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Download, Share2, Sparkles } from 'lucide-react';
+import { ChevronDown, Download, Share2, Sparkles } from 'lucide-react';
 import { getWeekNumber } from '@/lib/scoring';
 
 const categoryLabels: Record<string,string> = {RUN:'Run',CYCLE:'Cycle',SWIM:'Swim',WALK_OR_HIKE:'Walk / Hike',TROOP_GAMES:'Troop Games'};
@@ -27,12 +27,16 @@ type Props = {
   weeklyScores?: WeekScore[];
   goalHistory?: GoalHistory[];
   embedded?: boolean;
+  compact?: boolean;
 };
 
 function distanceKm(activity:RecapActivity){return activity.category==='SWIM'?activity.distance/1000:activity.category==='TROOP_GAMES'?0:activity.distance;}
 
-export default function WeeklyRecapCard({activities,today,name='My weekly recap',columnName=null,rank=null,participantCount=0,weeklyScores=[],goalHistory=[],embedded=false}:Props){
+export default function WeeklyRecapCard({
+  activities,today,name='My weekly recap',columnName=null,rank=null,participantCount=0,weeklyScores=[],goalHistory=[],embedded=false,compact=false,
+}:Props){
   const [message,setMessage]=useState('');
+  const [expanded,setExpanded]=useState(!compact);
   const recap=useMemo(()=>{
     const reference=today?new Date(`${today}T04:00:00Z`):new Date();
     const currentWeek=getWeekNumber(reference);
@@ -44,7 +48,8 @@ export default function WeeklyRecapCard({activities,today,name='My weekly recap'
     const distance=rows.reduce((sum,item)=>sum+distanceKm(item),0);
     const buddySessions=rows.filter(item=>item.completedWithFriend).length;
     const best=[...rows].sort((a,b)=>b.points-a.points)[0]??null;
-    const categoryTotals=new Map<string,number>();for(const row of rows)categoryTotals.set(row.category,(categoryTotals.get(row.category)||0)+row.points);
+    const categoryTotals=new Map<string,number>();
+    for(const row of rows)categoryTotals.set(row.category,(categoryTotals.get(row.category)||0)+row.points);
     const strongest=[...categoryTotals].sort((a,b)=>b[1]-a[1])[0];
     return {weekNumber,rows,score,goal,distance,buddySessions,best,strongest,dateRange:goal?.dateRange??`Week ${weekNumber}`};
   },[activities,goalHistory,today,weeklyScores]);
@@ -79,15 +84,46 @@ export default function WeeklyRecapCard({activities,today,name='My weekly recap'
   const saveImage=async()=>{try{setMessage('Preparing recap…');const blob=await buildImage();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`kg-week-${recap.weekNumber}-recap.png`;a.click();URL.revokeObjectURL(url);setMessage('Recap image saved.');}catch{setMessage('Could not create the recap image on this device.');}};
   const shareRecap=async()=>{try{setMessage('Preparing recap…');const blob=await buildImage();const file=new File([blob],`kg-week-${recap.weekNumber}-recap.png`,{type:'image/png'});const text=`KG Stay Active · Week ${recap.weekNumber}: ${recap.score.toFixed(1)} pts, ${recap.rows.length} activities, ${recap.distance.toFixed(1)} km.`;if(navigator.share&&navigator.canShare?.({files:[file]})){await navigator.share({title:`KG Week ${recap.weekNumber} recap`,text,files:[file]});setMessage('Recap shared.');return;}if(navigator.share){await navigator.share({title:`KG Week ${recap.weekNumber} recap`,text,url:window.location.origin});setMessage('Recap shared.');return;}await navigator.clipboard.writeText(`${text} ${window.location.origin}`);setMessage('Recap summary copied to clipboard.');}catch(error){if((error as Error)?.name!=='AbortError')setMessage('Sharing was not available on this device.');}};
 
-  const content=<section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
+  const fullCard=<div className="mt-4">
     <div className="overflow-hidden rounded-3xl border border-lime-300/15 bg-[radial-gradient(circle_at_top_right,_rgba(180,255,69,0.16),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(251,146,60,0.12),_transparent_36%),#0f172a] p-6 sm:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-lime-300"><Sparkles className="h-4 w-4" />Week {recap.weekNumber} recap</p><h2 className="mt-3 text-3xl font-black sm:text-4xl">{name}</h2><p className="mt-1 text-sm text-slate-400">{columnName??'Performance recap'} · {recap.dateRange}</p></div><div className="text-right"><p className="text-5xl font-black text-lime-300">{recap.score.toFixed(1)}</p><p className="text-xs font-bold uppercase tracking-wide text-slate-500">weekly points</p></div></div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-lime-300"><Sparkles className="h-4 w-4"/>Week {recap.weekNumber} recap</p><h2 className="mt-3 text-3xl font-black sm:text-4xl">{name}</h2><p className="mt-1 text-sm text-slate-400">{columnName??'Performance recap'} · {recap.dateRange}</p></div>
+        <div className="text-right"><p className="text-5xl font-black text-lime-300">{recap.score.toFixed(1)}</p><p className="text-xs font-bold uppercase tracking-wide text-slate-500">weekly points</p></div>
+      </div>
       <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4"><RecapStat label="Activities" value={recap.rows.length.toString()}/><RecapStat label="Distance" value={`${recap.distance.toFixed(1)} km`}/><RecapStat label="Buddy sessions" value={recap.buddySessions.toString()}/><RecapStat label="Weekly goal" value={recap.goal?`${recap.score.toFixed(1)} / ${recap.goal.target.toFixed(0)}`:'—'}/></div>
       <div className="mt-4 rounded-2xl border border-orange-400/15 bg-orange-400/[0.06] p-4"><p className="text-[0.68rem] font-black uppercase tracking-wide text-orange-300">Top activity</p><p className="mt-1 font-black text-slate-100">{recap.best?`${categoryLabels[recap.best.category]??recap.best.category} · ${recap.best.points.toFixed(1)} pts`:'No approved activity yet'}</p>{recap.strongest?<p className="mt-1 text-xs text-slate-400">Strongest sport: {categoryLabels[recap.strongest[0]]??recap.strongest[0]}</p>:null}</div>
     </div>
-    <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-xs text-slate-500">{message||'Share through your device or save a 1080×1350 PNG.'}</p><div className="flex gap-2"><button type="button" onClick={saveImage} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm font-bold text-slate-300 transition hover:bg-white/5"><Download className="h-4 w-4"/>Save image</button><button type="button" onClick={shareRecap} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-lime-300 px-4 py-2 text-sm font-black text-slate-950 transition hover:bg-lime-200"><Share2 className="h-4 w-4"/>Share recap</button></div></div>
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+      <p role="status" className="text-xs text-slate-500">{message||'Save a 1080×1350 recap image or share it from your device.'}</p>
+      <div className="flex gap-2"><button type="button" onClick={saveImage} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300"><Download className="h-4 w-4"/>Save image</button><button type="button" onClick={shareRecap} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-lime-300 px-3 py-2 text-xs font-black text-slate-950"><Share2 className="h-4 w-4"/>Share recap</button></div>
+    </div>
+  </div>;
+
+  const compactCard=<section className="rounded-2xl border border-lime-300/15 bg-[linear-gradient(100deg,rgba(163,230,53,.07),rgba(255,255,255,.025),rgba(251,146,60,.05))] p-4 sm:p-5">
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div><p className="flex items-center gap-2 text-[0.68rem] font-black uppercase tracking-[0.16em] text-lime-300"><Sparkles className="h-4 w-4"/>Week {recap.weekNumber} recap</p><p className="mt-1 text-xs text-slate-500">{recap.dateRange}</p></div>
+      <div className="text-right"><p className="text-3xl font-black text-lime-300">{recap.score.toFixed(1)}</p><p className="text-[0.62rem] uppercase tracking-wide text-slate-500">points</p></div>
+    </div>
+    <div className="mt-4 grid grid-cols-3 gap-2">
+      <CompactStat label="Activities" value={recap.rows.length.toString()}/>
+      <CompactStat label="Distance" value={`${recap.distance.toFixed(1)} km`}/>
+      <CompactStat label="Target" value={recap.goal?`${Math.round(Math.min(100,recap.score/Math.max(recap.goal.target,1)*100))}%`:'—'}/>
+    </div>
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+      <p role="status" className="min-w-0 flex-1 truncate text-xs text-slate-500">{message||'Compact weekly summary'}</p>
+      <div className="flex gap-2">
+        <button type="button" onClick={()=>setExpanded(value=>!value)} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-white/10 px-3 text-xs font-black text-slate-300">{expanded?'Hide recap':'View recap'}<ChevronDown className={`h-4 w-4 transition ${expanded?'rotate-180':''}`}/></button>
+        <button type="button" onClick={shareRecap} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-lime-300 px-3 text-xs font-black text-slate-950"><Share2 className="h-4 w-4"/>Share</button>
+      </div>
+    </div>
+    {expanded?fullCard:null}
   </section>;
+
+  if(compact)return compactCard;
+
+  const content=<section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">{fullCard}</section>;
   return embedded?content:<details className="dashboard-fold"><summary>Weekly recap card</summary>{content}</details>;
 }
 
 function RecapStat({label,value}:{label:string;value:string}){return <div className="rounded-xl border border-white/5 bg-black/15 p-4"><p className="text-[0.65rem] font-black uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-xl font-black text-white">{value}</p></div>;}
+function CompactStat({label,value}:{label:string;value:string}){return <div className="rounded-xl border border-white/5 bg-black/10 p-3"><p className="text-[0.6rem] font-black uppercase tracking-wide text-slate-600">{label}</p><p className="mt-1 text-sm font-black text-slate-200">{value}</p></div>;}
