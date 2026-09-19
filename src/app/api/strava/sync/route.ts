@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAppSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getValidStravaToken, fetchAndMapStravaActivities, fetchActivityPhoto } from '@/lib/strava';
 import { createActivity } from '@/lib/activities';
@@ -20,7 +19,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Strava integration is temporarily unavailable' }, { status: 503 });
     }
 
-    const session = await getServerSession(authOptions);
+    const session = await getAppSession();
     const userId = session?.user?.id;
     if (!userId) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });

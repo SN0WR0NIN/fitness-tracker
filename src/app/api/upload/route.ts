@@ -1,8 +1,7 @@
 import { localProofFixtures } from '@/lib/proof-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAppSession } from '@/lib/auth';
 import { ensureProofBucketExists, uploadProofImage } from '@/lib/storage';
 import { getChallengeSettings } from '@/lib/admin-control';
 import { requestLog } from '@/lib/telemetry';
@@ -14,7 +13,7 @@ const MAX_SIZE_BYTES = 4 * 1024 * 1024; // 4MB — stays under serverless functi
 export async function POST(request: NextRequest) {
   const log = requestLog(request, '/api/upload');
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getAppSession();
     if (!session?.user?.id) {
       log.success({ status: 401 });
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });

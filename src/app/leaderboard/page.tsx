@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSession } from 'next-auth/react';
+import { useAppSession as useSession } from '@/lib/client-auth';
 import { Activity, Bike, Crown, Footprints, Minus, RefreshCw, Search, TrendingDown, TrendingUp, Trophy, Users, Waves } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import HeroAtmosphere from '@/components/HeroAtmosphere';

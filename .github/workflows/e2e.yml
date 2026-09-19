@@ -27,8 +27,9 @@ jobs:
       CI: "true"
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/fitness_tracker_e2e?schema=public
       DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/fitness_tracker_e2e?schema=public
-      NEXTAUTH_SECRET: e2e-nextauth-secret-only-for-ci
       NEXTAUTH_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.E2E_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.E2E_CLERK_SECRET_KEY }}
       E2E_TEST_MODE: "1"
       E2E_PASSWORD: E2E-only-Password-123!
     steps:
@@ -46,6 +47,10 @@ jobs:
           npx prisma generate
           npx prisma db push --skip-generate --accept-data-loss
           node scripts/e2e-bootstrap.cjs
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/season-week-finalization.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/finalized-week-guard.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/season-week-finalization-security.sql
+          node scripts/check-e2e-season.cjs
           npx prisma db execute --schema prisma/schema.prisma --file prisma/focused-controls.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/achievement-engine.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/multiple-activity-friends.sql
@@ -71,11 +76,18 @@ jobs:
           src/app/api/admin/maintenance/route.ts src/app/api/admin/corrections/route.ts src/app/api/corrections/route.ts
           src/app/admin/page.tsx src/app/admin/duplicates/page.tsx src/app/admin/awards/page.tsx src/app/results/page.tsx src/app/notifications/page.tsx
           src/components/DuplicateReviewCentre.tsx src/components/NotificationBell.tsx src/components/Navbar.tsx src/components/WeeklyAwardsAdminControls.tsx src/components/NotificationPreferencesForm.tsx
+          src/lib/auth.ts src/lib/clerk.ts 'src/app/auth/login/[[...sign-in]]/page.tsx'
+      - name: Validate isolated Clerk test configuration
+        run: node scripts/e2e-environment.cjs
+      - name: Generate ephemeral Clerk encryption key
+        run: |
+          clerk_e2e_encryption_key="$(openssl rand -hex 32)"
+          echo "::add-mask::$clerk_e2e_encryption_key"
+          echo "CLERK_ENCRYPTION_KEY=$clerk_e2e_encryption_key" >> "$GITHUB_ENV"
       - name: Production build
         run: npm run build
       - name: Install Playwright
         run: |
-          npm install --no-save @playwright/test@1.55.0
           npx playwright install --with-deps chromium
       - name: Start application
         run: |

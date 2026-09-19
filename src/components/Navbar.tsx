@@ -4,12 +4,12 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import { useState, useSyncExternalStore } from 'react';
 import { Award, Bell, ClipboardList, UserRound, BookOpen, Home, Medal, Menu, Moon, Plus, Settings, Sun, Trophy, Users, X } from 'lucide-react';
 import AppStatusBanner from '@/components/AppStatusBanner';
 import SiteBrandName from '@/components/SiteBrandName';
+import { useAppSession } from '@/lib/client-auth';
 
 const NotificationBell = dynamic(() => import('@/components/NotificationBell'), {
   loading: () => <span aria-hidden className="block h-9 w-9 shrink-0" />,
@@ -22,7 +22,7 @@ const emptySubscribe = () => () => {};
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { data: session, status } = useSession();
+  const { data: session, status, signOut } = useAppSession();
   const { resolvedTheme, setTheme } = useTheme();
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -42,7 +42,7 @@ export default function Navbar() {
 
           <div className="hidden items-center gap-4 text-sm md:flex">
             <DesktopLinks authenticated={status === 'authenticated'} isAdmin={isAdmin} />
-            {status === 'authenticated' ? <button onClick={() => signOut({ callbackUrl: '/' })} className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Log Out</button> : null}
+            {status === 'authenticated' ? <button onClick={() => void signOut()} className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Log Out</button> : null}
             {status === 'authenticated' && session?.user?.id ? <NotificationBell userId={session.user.id} /> : null}
             <ThemeButton mounted={mounted} resolvedTheme={resolvedTheme} onClick={toggleTheme} />
           </div>
@@ -66,7 +66,7 @@ export default function Navbar() {
               {status === 'authenticated' ? <MobileLink href="/notifications" icon={<Bell />} onClick={closeMenu}>Notifications</MobileLink> : null}
               <MobileLink href="/rules" icon={<BookOpen />} onClick={closeMenu}>Rules</MobileLink>
               {isAdmin ? <MobileLink href="/admin" icon={<Settings />} onClick={closeMenu}>Admin</MobileLink> : null}
-              {status === 'authenticated' ? <button type="button" onClick={() => signOut({ callbackUrl: '/' })} className="mt-2 rounded-xl border border-gray-200 px-4 py-3 text-left text-rose-600 dark:border-gray-800 dark:text-rose-300">Log Out</button> : <MobileLink href="/auth/login" icon={<Users />} onClick={closeMenu}>Login</MobileLink>}
+              {status === 'authenticated' ? <button type="button" onClick={() => void signOut()} className="mt-2 rounded-xl border border-gray-200 px-4 py-3 text-left text-rose-600 dark:border-gray-800 dark:text-rose-300">Log Out</button> : <MobileLink href="/auth/login" icon={<Users />} onClick={closeMenu}>Login</MobileLink>}
             </div>
           </div>
         ) : null}

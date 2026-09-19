@@ -1,66 +1,63 @@
-import { PrismaAdapter } from '@next-auth/prisma-adapter';
-import type { NextAuthOptions } from 'next-auth';
-import CredentialsProvider from 'next-auth/providers/credentials';
-import { verifyCredentials } from '@/lib/account-credentials';
-import { hasIssuedPasswordReset } from '@/lib/password-reset';
+import { auth, currentUser } from '@clerk/nextjs/server';
+import type { Role } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+import { randomBytes } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 
-export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
-  session: {
-    strategy: 'jwt',
-  },
-  pages: {
-    signIn: '/auth/login',
-  },
-  providers: [
-    CredentialsProvider({
-      name: 'Credentials',
-      credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' },
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
-
-        const user = await verifyCredentials(credentials.email, credentials.password);
-        if (!user) return null;
-        if (user.mustChangePassword) {
-          if (await hasIssuedPasswordReset(user.id)) throw new Error('PASSWORD_RESET_REQUIRED');
-          throw new Error('SETUP_REQUIRED');
-        }
-        await prisma.user.update({ where: { id: user.id }, data: { loginAttempts: 0 } });
-
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          sessionVersion: user.sessionVersion,
-        };
-      },
-    }),
-  ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.role = (user as { role?: string }).role;
-        token.sessionVersion = (user as { sessionVersion?: number }).sessionVersion ?? 0;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      const current = typeof token.id === 'string' ? await prisma.user.findUnique({ where: { id: token.id }, select: { sessionVersion: true, mustChangePassword: true, role: true } }) : null;
-      if (!current || current.mustChangePassword || current.sessionVersion !== (token.sessionVersion ?? 0)) return { ...session, user: undefined };
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = current.role;
-      }
-      return session;
-    },
-  },
-  secret: process.env.NEXTAUTH_SECRET,
+export type AppSession = {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: Role;
+  };
 };
+
+async function resolveAppUser(clerkUserId: string) {
+  const linked = await prisma.user.findUnique({
+    where: { clerkUserId },
+    select: { id: true, name: true, email: true, role: true },
+  });
+  if (linked) return linked;
+
+  const identity = await currentUser();
+  const primaryEmail = identity?.emailAddresses.find(
+    (address) => address.id === identity.primaryEmailAddressId,
+  );
+  if (!identity || !primaryEmail || primaryEmail.verification?.status !== 'verified') return null;
+
+  const email = primaryEmail.emailAddress.trim().toLowerCase();
+  const existing = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+    select: { id: true, clerkUserId: true },
+  });
+
+  if (existing?.clerkUserId && existing.clerkUserId !== clerkUserId) return null;
+  if (existing) {
+    return prisma.user.update({
+      where: { id: existing.id },
+      data: { clerkUserId, emailConfirmedAt: new Date() },
+      select: { id: true, name: true, email: true, role: true },
+    });
+  }
+
+  const fallbackName = [identity.firstName, identity.lastName].filter(Boolean).join(' ') || email.split('@')[0];
+  const retiredCredential = await bcrypt.hash(randomBytes(32).toString('hex'), 12);
+  return prisma.user.create({
+    data: {
+      clerkUserId,
+      email,
+      emailConfirmedAt: new Date(),
+      name: fallbackName,
+      password: retiredCredential,
+    },
+    select: { id: true, name: true, email: true, role: true },
+  });
+}
+
+export async function getAppSession(): Promise<AppSession | null> {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) return null;
+  const user = await resolveAppUser(clerkUserId);
+  return user ? { user } : null;
+}

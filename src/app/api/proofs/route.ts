@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAppSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { localProofFixtures, mayReadProof, resolveProofReference } from '@/lib/proof-access';
 import { downloadProofImage } from '@/lib/storage';
@@ -18,7 +17,7 @@ const unavailable = (status: number) => NextResponse.json({ error: status === 40
 export async function GET(request: Request) {
   try {
     if (request.headers.get('sec-fetch-site') === 'cross-site') return unavailable(403);
-    const session = await getServerSession(authOptions); // rechecks session version and current role
+    const session = await getAppSession(); // rechecks session version and current role
     if (!session?.user?.id) return unavailable(401);
     const url = new URL(request.url);
     const value = url.searchParams.get('ref') || '';

@@ -1,7 +1,6 @@
 import { ActivityEditError } from '@/lib/activity-duplicates';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAppSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createActivity } from '@/lib/activities';
 import { z, ZodError } from 'zod';
@@ -55,7 +54,7 @@ const ActivitySchema = z.object({
 export async function POST(request: NextRequest) {
   const log = requestLog(request, '/api/activities');
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getAppSession();
     const sessionUserId = session?.user?.id;
     if (!sessionUserId) {
       log.success({ status: 401 });
@@ -144,7 +143,7 @@ export async function GET(request: NextRequest) {
     const requestedStatus = searchParams.get('status');
     const requestedLimit = Number.parseInt(searchParams.get('limit') || '50', 10);
     const includeAuthorizedProofs = searchParams.get('includeProofs') === 'authorized';
-    const session = includeAuthorizedProofs ? await getServerSession(authOptions) : null;
+    const session = includeAuthorizedProofs ? await getAppSession() : null;
 
     if (requestedStatus && requestedStatus !== 'APPROVED') {
       return NextResponse.json({ error: 'Only approved activities are publicly available.' }, { status: 403 });

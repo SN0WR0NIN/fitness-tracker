@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
+const { assertDisposableEnvironment } = require('./e2e-environment.cjs');
+
+assertDisposableEnvironment();
 
 const prisma = new PrismaClient();
 const password = process.env.E2E_PASSWORD || 'E2E-only-Password-123!';

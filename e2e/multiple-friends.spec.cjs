@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect, signIn } = require('./helpers/clerk.cjs');
 const { PrismaClient } = require('@prisma/client');
 const { randomUUID } = require('node:crypto');
 const bcrypt = require('bcryptjs');
@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6ioAAAAASUVORK5CYII=', 'base64');
 
 function assertDisposable(baseURL) {
   const db = new URL(process.env.DATABASE_URL || 'http://invalid');
@@ -17,11 +18,10 @@ async function json(response, status = 200) {
   expect(response.status(), text).toBe(status);
   return JSON.parse(text);
 }
-async function login(browser, baseURL, user, password) {
+async function login(browser, baseURL, user) {
   const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
   context.setDefaultTimeout(10000);
-  const csrf = await json(await context.request.get('/api/auth/csrf'));
-  await json(await context.request.post('/api/auth/callback/credentials', { form: { csrfToken: csrf.csrfToken, email: user.email, password, callbackUrl: `${baseURL}/dashboard`, json: 'true' } }));
+  await signIn(context, user.email);
   expect((await json(await context.request.get('/api/auth/session'))).user.id).toBe(user.id);
   return context;
 }
@@ -48,16 +48,17 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
       const id = `${key}_${name}`; ids.push(id);
       accounts[name] = await db.user.create({ data: { id, name: `Group ${name}`, email: `${id}@example.test`, password: hash, role: ['admin','unassignedAdmin'].includes(name)?'ADMIN':'MEMBER', columnId: name==='unassignedAdmin'?null:column.id } });
     }
-    const member = await login(browser,baseURL,accounts.member,password); contexts.push(member);
-    const admin = await login(browser,baseURL,accounts.admin,password); contexts.push(admin);
+    const member = await login(browser,baseURL,accounts.member); contexts.push(member);
+    const admin = await login(browser,baseURL,accounts.admin); contexts.push(admin);
     const page = await member.newPage();
     const friendIds = [accounts.friend1.id,accounts.friend2.id];
+    const proofUrls = () => [`https://example.invalid/e2e-proof/${accounts.member.id}/${randomUUID()}.png`];
     const [settings] = await db.$queryRaw`SELECT "scoringRules" FROM "ChallengeSetting" WHERE id='primary'`;
     // The disposable seed stores partial rules; getChallengeSettings merges
     // these with DEFAULT_SCORING_RULES, whose friendBonus is 3.
     const bonus = settings.scoringRules.friendBonus ?? 3;
-    const solo = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-01',category:'RUN',distance:5,pace:6 } }),201);
-    const one = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-02',category:'RUN',distance:5,pace:6,companionUserId:friendIds[0] } }),201);
+    const solo = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-01',category:'RUN',distance:5,pace:6,proofUrls:proofUrls() } }),201);
+    const one = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-02',category:'RUN',distance:5,pace:6,companionUserId:friendIds[0],proofUrls:proofUrls() } }),201);
     expect(one.companionUserIds).toEqual([friendIds[0]]);
     expect(one.points-solo.points).toBeCloseTo(bonus,8);
 
@@ -69,7 +70,7 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     expect(options.every(user=>Object.keys(user).sort().join(',')==='id,name')).toBe(true);
     const adminOptions = await json(await admin.request.get('/api/users'));
     expect(adminOptions.map(user=>user.id)).not.toContain(accounts.admin.id);
-    const withAdmin = await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-06',category:'RUN',distance:5,pace:6,companionUserIds:[accounts.admin.id]}}),201);
+    const withAdmin = await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-06',category:'RUN',distance:5,pace:6,companionUserIds:[accounts.admin.id],proofUrls:proofUrls()}}),201);
     expect(withAdmin.companionUserIds).toEqual([accounts.admin.id]);
     expect(withAdmin.points).toBeCloseTo(one.points,8);
     const editedWithAdmin = await json(await member.request.patch(`/api/activities/${withAdmin.id}`,{data:{distance:5.1}}));
@@ -85,7 +86,9 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     await expect(form).toHaveCount(1);
     await form.getByLabel('Date',{exact:true}).fill('2026-09-03');
     await form.getByPlaceholder('5.00').fill('5');
-    await form.getByPlaceholder('6:30').fill('6');
+    await form.getByLabel('Pace (min/km)',{exact:true}).fill('600');
+    await form.locator('input[type="file"]').first().setInputFiles({name:'group-proof.png',mimeType:'image/png',buffer:PNG});
+    await expect(form.getByAltText('Uploaded proof 1')).toBeVisible();
     await form.getByRole('checkbox',{name:'I completed this with friends',exact:true}).check();
     const picker = form.getByRole('group',{name:'Friends',exact:true});
     await expect(picker.getByRole('checkbox',{name:'Group admin',exact:true})).toBeVisible();
@@ -96,7 +99,9 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     await picker.getByLabel('Search friends',{exact:true}).fill('');
     await expect(picker).toContainText('2 friends selected');
     await expect(picker.getByRole('checkbox',{name:'Group member',exact:true})).toHaveCount(0);
+    await expect.poll(() => page.evaluate((id) => JSON.parse(localStorage.getItem(`kg-activity-draft:v2:${id}`) || '{}').proofUrls?.length || 0, accounts.member.id)).toBe(1);
     await page.reload();
+    await expect(form.getByAltText('Uploaded proof 1')).toBeVisible();
     await expect(picker.getByRole('checkbox',{name:'Group friend1',exact:true})).toBeChecked();
     await expect(picker.getByRole('checkbox',{name:'Group friend2',exact:true})).toBeChecked();
     await picker.getByRole('button',{name:'Remove Group friend1',exact:true}).click();
@@ -114,10 +119,10 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
 
     const beforeInvalid = await db.activity.count({where:{userId:accounts.member.id}});
     for (const companionUserIds of [[accounts.member.id],['missing-friend'],[accounts.unassignedAdmin.id],Array(101).fill(friendIds[0])]) {
-      await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-04',category:'RUN',distance:5,pace:6,companionUserIds}}),400);
+      await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-04',category:'RUN',distance:5,pace:6,companionUserIds,proofUrls:proofUrls()}}),400);
     }
     expect(await db.activity.count({where:{userId:accounts.member.id}})).toBe(beforeInvalid);
-    const deduped = await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-04',category:'RUN',distance:5,pace:6,companionUserIds:[...friendIds,friendIds[0]]}}),201);
+    const deduped = await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-04',category:'RUN',distance:5,pace:6,companionUserIds:[...friendIds,friendIds[0]],proofUrls:proofUrls()}}),201);
     expect(deduped.companionUserIds).toEqual([...friendIds].sort());
     expect(deduped.points).toBeCloseTo(one.points,8);
 
@@ -136,9 +141,10 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     await expect(correctionPicker.getByRole('checkbox',{name:'Group friend2',exact:true})).toBeChecked();
     await correctionPicker.getByLabel('Search friends',{exact:true}).fill('Group admin');
     await correctionPicker.getByRole('checkbox',{name:'Group admin',exact:true}).check();
-    await form.getByLabel('Reason for correction').fill('A participating admin also joined this workout.');
+    await form.getByLabel('Upload replacement proof').setInputFiles({name:'group-correction-proof.png',mimeType:'image/png',buffer:PNG});
+    await form.getByLabel('Reason for edit').fill('A participating admin also joined this workout.');
     const requested = page.waitForResponse(r => new URL(r.url()).pathname==='/api/corrections' && r.request().method()==='POST');
-    await form.getByRole('button',{name:'Send correction request',exact:true}).click();
+    await form.getByRole('button',{name:'Submit edits for review',exact:true}).click();
     const correction = await json(await requested,201);
     expect((await db.activity.findUnique({where:{id:group.id}})).companionUserIds).toHaveLength(2);
     expect((await db.activity.findUnique({where:{id:group.id}})).points).toBe(approvedPoints);
@@ -177,7 +183,7 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     const adminCreatedFriendIds = [accounts.friend1.id,accounts.admin.id].sort();
     await adminForm.getByLabel('Activity date',{exact:true}).fill('2026-09-05');
     await adminForm.getByLabel('Distance (km)',{exact:true}).fill('3');
-    await adminForm.getByPlaceholder('6:30 or 6.5').fill('6');
+    await adminForm.getByLabel('Pace (min/km)',{exact:true}).fill('600');
     const adminSubmitted = adminPage.waitForResponse(r => new URL(r.url()).pathname==='/api/admin/activities/create' && r.request().method()==='POST');
     await adminForm.locator('button:not([type])').click();
     const adminCreated = await json(await adminSubmitted,201);

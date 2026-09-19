@@ -1,9 +1,8 @@
 import Link from 'next/link';
-import { getServerSession } from 'next-auth';
+import { getAppSession } from '@/lib/auth';
 import { CalendarDays, Flame, Medal, ShieldCheck, Trophy, Users } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import SeasonFinaleExperience from '@/components/SeasonFinaleExperience';
-import { authOptions } from '@/lib/auth';
 import { getWeeklyCompetitionResults, type WeeklyCompetitionResult } from '@/lib/competition-results';
 import { getSeasonFinale } from '@/lib/season-finale';
 import { getActiveSeason, seasonPhase } from '@/lib/seasons';
@@ -12,7 +11,7 @@ import { getWeekFinalizationStates } from '@/lib/week-finalization';
 export const dynamic='force-dynamic';
 
 export default async function ResultsPage(){
-  const [results,active,session]=await Promise.all([getWeeklyCompetitionResults(),getActiveSeason(),getServerSession(authOptions)]);
+  const [results,active,session]=await Promise.all([getWeeklyCompetitionResults(),getActiveSeason(),getAppSession()]);
   const phase=seasonPhase(active);
   const locks=await getWeekFinalizationStates(active);
   const finalWeeks=new Set(locks.filter(lock=>lock.status==='FINALIZED').map(lock=>lock.weekNumber));

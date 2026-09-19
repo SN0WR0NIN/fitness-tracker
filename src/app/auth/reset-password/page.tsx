@@ -1,6 +1,5 @@
-import PasswordResetForm from '@/components/PasswordResetForm';
+import { redirect } from 'next/navigation';
 
-export default async function ResetPasswordPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
-  const params = await searchParams;
-  return <PasswordResetForm token={(params.token || '').slice(0, 4096)} />;
+export default function ResetPasswordPage() {
+  redirect('/auth/login');
 }

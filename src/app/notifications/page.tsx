@@ -1,13 +1,12 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
+import { getAppSession } from '@/lib/auth';
 import { Award, Bell, CheckCircle2, Info, XCircle } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import { authOptions } from '@/lib/auth';
 import { getUserNotifications } from '@/lib/notifications';
 export const dynamic='force-dynamic';
 export default async function NotificationsPage(){
-  const session=await getServerSession(authOptions);const userId=session?.user?.id;if(!userId)redirect('/auth/login');
+  const session=await getAppSession();const userId=session?.user?.id;if(!userId)redirect('/auth/login');
   const notifications=await getUserNotifications(userId,50);
   return <div className="min-h-screen bg-slate-950 text-white"><Navbar/><main className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6 lg:py-12"><header className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-8"><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-lime-300"><Bell className="h-4 w-4"/>Your updates</p><h1 className="mt-3 text-3xl font-black sm:text-4xl">Notification Centre</h1><p className="mt-2 text-sm text-slate-400">Achievements, corrections, weekly results, activity decisions and goal reminders.</p><Link href="/account/notifications" className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-white/20 px-4 text-sm font-bold text-sky-200">Notification preferences</Link></header><section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">{notifications.length?notifications.map((notification)=>{
     const Icon=['WEEKLY_AWARD','ACHIEVEMENT'].includes(notification.kind)?Award:notification.type==='success'?CheckCircle2:notification.type==='error'?XCircle:Info;

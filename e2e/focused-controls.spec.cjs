@@ -1,9 +1,10 @@
-const { test: base, expect } = require('@playwright/test');
+const { test: base, expect, signIn } = require('./helpers/clerk.cjs');
 const { PrismaClient } = require('@prisma/client');
 const { randomUUID } = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6ioAAAAASUVORK5CYII=', 'base64');
 
 // Never point these mutation tests at a preview or production database.
 function assertDisposable(baseURL) {
@@ -43,14 +44,14 @@ const test = base.extend({
         const user = await db.user.create({ data: { id, name: `Focused ${name}`, email: `${id}@example.test`, password: hash, role: name === 'admin' ? 'ADMIN' : 'MEMBER', columnId: column.id } });
         const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
         contexts.push(context);
-        const csrf = await json(await context.request.get('/api/auth/csrf'));
-        await json(await context.request.post('/api/auth/callback/credentials', { form: { csrfToken: csrf.csrfToken, email: user.email, password, callbackUrl: `${baseURL}/dashboard`, json: 'true' } }));
+        await signIn(context, user.email);
         const session = await json(await context.request.get('/api/auth/session'));
         expect(session.user.id).toBe(id);
         accounts[name] = { id, context, api: context.request, page: await context.newPage() };
       }
       const create = async (data = {}, approve = true) => {
-        const activity = await json(await accounts.member.api.post('/api/activities', { data: { activityDate: '2026-09-02', category: 'RUN', distance: 5, pace: 6, ...data } }), 201);
+        const proofUrls = [`https://example.invalid/e2e-proof/${accounts.member.id}/${randomUUID()}.png`];
+        const activity = await json(await accounts.member.api.post('/api/activities', { data: { activityDate: '2026-09-02', category: 'RUN', distance: 5, pace: 6, proofUrls, ...data } }), 201);
         return approve ? json(await accounts.admin.api.post(`/api/admin/activities/${activity.id}/approve`, { data: {} })) : activity;
       };
       const proposed = (activity, changes = {}) => ({ activityDate: new Date(new Date(activity.occurredAt).getTime() + 8 * 3600000).toISOString().slice(0, 10), category: activity.category, distance: activity.distance, pace: activity.pace, duration: activity.duration, companionUserId: activity.companionUserId, proofUrl: activity.proofUrl, ...changes });
@@ -96,9 +97,12 @@ test('correction mobile workflow preserves points until reviewed and moves the c
   await s.member.page.getByLabel('Activity date (Singapore)').fill('2026-09-06');
   await s.member.page.getByLabel('Activity type', { exact: true }).selectOption('CYCLE');
   await s.member.page.getByLabel('Distance (km)', { exact: true }).fill('30');
-  await s.member.page.getByLabel('Reason for correction').fill('The imported distance and date were incorrect.');
-  await s.member.page.getByRole('button', { name: 'Send correction request' }).click();
-  await expect(s.member.page.getByRole('link', { name: 'Track my request' })).toBeVisible();
+  await s.member.page.getByLabel('Upload replacement proof').setInputFiles({ name: 'corrected-proof.png', mimeType: 'image/png', buffer: PNG });
+  await s.member.page.getByLabel('Reason for edit').fill('The imported distance and date were incorrect.');
+  const correctionResponse = s.member.page.waitForResponse((response) => response.url().endsWith('/api/corrections') && response.request().method() === 'POST');
+  await s.member.page.getByRole('button', { name: 'Submit edits for review' }).click();
+  await json(await correctionResponse, 201);
+  await expect(s.member.page.getByRole('link', { name: /Track .*edit request/i })).toBeVisible();
   const requests = await json(await s.member.api.get('/api/corrections'));
   const correction = requests.find((r) => r.activityId === activity.id);
   expect(correction.status).toBe('OPEN');
@@ -261,6 +265,7 @@ test('achievement awards are approved-only, idempotent, reversible and silently 
 test('participant admins receive activity achievements and batch repair stays silent', async ({ sandbox: s }) => {
   const activity = await json(await s.admin.api.post('/api/activities', { data: {
     activityDate: '2026-09-02', category: 'RUN', distance: 5, pace: 6,
+    proofUrls: [`https://example.invalid/e2e-proof/${s.admin.id}/${s.key}.png`],
   } }), 201);
   const badge = async (id) => (await s.db.$queryRaw`
     SELECT current_value, unlocked, notified_at

@@ -2,8 +2,7 @@ import { ActivityEditError } from '@/lib/activity-duplicates';
 import { deleteOwnActivity, ActivityDeletionError } from '@/lib/delete-activity';
 import { NextResponse } from 'next/server';
 import { z, ZodError } from 'zod';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAppSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateActivity } from '@/lib/activities';
 import { MAX_ACTIVITY_PROOFS } from '@/lib/proof-access';
@@ -12,7 +11,7 @@ const EditSchema=z.object({category:z.enum(['RUN','CYCLE','SWIM','WALK_OR_HIKE',
   companionUserId: z.string().min(1).nullable().optional(),proofUrl:proof.nullable().optional(),proofUrls:z.array(proof).max(MAX_ACTIVITY_PROOFS).optional()}).strict().refine((value)=>Object.keys(value).length>0,'No changes supplied').refine((value)=>!value.proofUrls||new Set(value.proofUrls).size===value.proofUrls.length,'The same proof photo cannot be attached twice.');
 export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){
   try{
-    const session=await getServerSession(authOptions);if(!session?.user?.id)return NextResponse.json({error:'Not authenticated'},{status:401});
+    const session=await getAppSession();if(!session?.user?.id)return NextResponse.json({error:'Not authenticated'},{status:401});
     const {id}=await params;const body=await request.json();
     if(body&&typeof body==='object'&&'activityDate' in body)return NextResponse.json({error:'Approved activity dates now require admin review. Use Request correction from My activities.'},{status:409});
     const data=EditSchema.parse(body);
@@ -21,6 +20,6 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   }catch(error){if(error instanceof ZodError)return NextResponse.json({error:error.issues[0]?.message ?? 'Invalid details'},{status:400});if(error instanceof ActivityEditError)return NextResponse.json({error:error.message},{status:error.status});console.error('Error editing pending activity:',error);return NextResponse.json({error:'Could not save. Refresh and check whether this submission has been reviewed.'},{status:409});}
 }
 export async function DELETE(_request:Request,{params}:{params:Promise<{id:string}>}){
-  try{const session=await getServerSession(authOptions);if(!session?.user?.id)return NextResponse.json({error:'Not authenticated'},{status:401});const {id}=await params;await deleteOwnActivity(prisma,id,session.user.id);return NextResponse.json({deleted:true});}
+  try{const session=await getAppSession();if(!session?.user?.id)return NextResponse.json({error:'Not authenticated'},{status:401});const {id}=await params;await deleteOwnActivity(prisma,id,session.user.id);return NextResponse.json({deleted:true});}
   catch(error){if(error instanceof ActivityDeletionError)return NextResponse.json({error:error.message},{status:error.status});if(error&&typeof error==='object'&&'code' in error&&error.code==='P2034')return NextResponse.json({error:'This activity changed while deleting. Please try again.'},{status:409});console.error('Error deleting activity:',error);return NextResponse.json({error:'Could not delete activity. Please try again.'},{status:500});}
 }

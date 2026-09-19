@@ -29,10 +29,12 @@ test('PWA manifest, actual service-worker offline fallback, and private-cache ex
     });
     expect(cached).toContain('/offline');
     expect(cached.some((path) => /^\/(api|admin|account|dashboard|auth)(\/|$)/.test(path))).toBe(false);
+    const cachedOffline = await page.evaluate(async () => (await caches.match('/offline'))?.text() ?? '');
+    expect(cachedOffline).toMatch(/offline|connection/i);
     await context.setOffline(true);
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('body')).toContainText(/offline|connection/i);
-    await expect(page.locator('body')).not.toContainText('Focused member');
+    const offlinePage = await context.newPage();
+    await offlinePage.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+    await expect(offlinePage.locator('body')).not.toContainText('Focused member');
   } finally { await context.close(); }
 });
 
@@ -97,9 +99,10 @@ test('service-worker event policy excludes private payloads and rejects external
   const deleted = [];
   let skipped = 0;
   let navigated = '';
+  let networkFails = false;
   const scope = {
     URL, Response, Promise,
-    fetch: async () => new Response('network only'),
+    fetch: async () => { if (networkFails) throw new Error('offline'); return new Response('network only'); },
     caches: { open: async () => ({ addAll: async () => {}, put: async () => {} }), keys: async () => ['kg-stay-active-v2', 'unrelated-app-cache'], delete: async (name) => deleted.push(name), match: async () => new Response('Offline') },
     self: { location: { origin: 'https://example.test' }, addEventListener: (name, listener) => { listeners[name] = listener; }, skipWaiting: () => { skipped++; }, clients: { claim: async () => {}, matchAll: async () => [], openWindow: async (target) => { navigated = target; } } },
   };
@@ -118,6 +121,10 @@ test('service-worker event policy excludes private payloads and rejects external
     listeners.fetch({ request: { method: 'GET', mode: 'cors', url: `https://example.test${path}` }, respondWith: () => { responded = true; } });
     expect(responded, path).toBe(false);
   }
+  networkFails = true;
+  let offlineResponse;
+  listeners.fetch({ request: { method: 'GET', mode: 'navigate', url: 'https://example.test/dashboard' }, respondWith: (promise) => { offlineResponse = promise; } });
+  expect(await (await offlineResponse).text()).toMatch(/offline|connection/i);
   listeners.notificationclick({ notification: { close() {}, data: { url: 'https://external.example/phishing' } }, waitUntil: (promise) => { waiting = promise; } });
   await waiting;
   expect(navigated).toBe('/notifications');

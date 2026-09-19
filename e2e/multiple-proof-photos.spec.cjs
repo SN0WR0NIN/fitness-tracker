@@ -1,4 +1,4 @@
-const { test, expect } = require("@playwright/test");
+const { test, expect, signIn } = require('./helpers/clerk.cjs');
 const { PrismaClient } = require("@prisma/client");
 const { randomUUID } = require("node:crypto");
 const bcrypt = require("bcryptjs");
@@ -23,23 +23,12 @@ async function json(response, status = 200) {
   expect(response.status(), text).toBe(status);
   return JSON.parse(text);
 }
-async function login(browser, baseURL, user, password) {
+async function login(browser, baseURL, user) {
   const context = await browser.newContext({
     baseURL,
     viewport: { width: 390, height: 844 },
   });
-  const csrf = await json(await context.request.get("/api/auth/csrf"));
-  await json(
-    await context.request.post("/api/auth/callback/credentials", {
-      form: {
-        csrfToken: csrf.csrfToken,
-        email: user.email,
-        password,
-        callbackUrl: `${baseURL}/dashboard`,
-        json: "true",
-      },
-    }),
-  );
+  await signIn(context, user.email);
   return context;
 }
 async function upload(context, name) {
@@ -97,11 +86,11 @@ test("participants can attach multiple private proof photos and admins can vet a
         columnId: column.id,
       },
     });
-    const memberContext = await login(browser, baseURL, member, password);
+    const memberContext = await login(browser, baseURL, member);
     contexts.push(memberContext);
-    const strangerContext = await login(browser, baseURL, stranger, password);
+    const strangerContext = await login(browser, baseURL, stranger);
     contexts.push(strangerContext);
-    const adminContext = await login(browser, baseURL, admin, password);
+    const adminContext = await login(browser, baseURL, admin);
     contexts.push(adminContext);
     const first = await upload(memberContext, "first.png"),
       second = await upload(memberContext, "second.png"),

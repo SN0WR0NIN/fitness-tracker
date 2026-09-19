@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect, signIn } = require('./helpers/clerk.cjs');
 const { PrismaClient } = require('@prisma/client');
 const { randomUUID } = require('node:crypto');
 const bcrypt = require('bcryptjs');
@@ -21,8 +21,7 @@ test('friend bonus is per athlete, Singapore day and sport across all review wor
       const id = `${key}_${role}`; ids.push(id);
       const user = await db.user.create({ data: { id, name: `Daily ${role}`, email: `${id}@example.test`, password: hash, columnId: key, role: role === 'admin' ? 'ADMIN' : 'MEMBER' } });
       const context = await browser.newContext({ baseURL }); contexts.push(context);
-      const csrf = await json(await context.request.get('/api/auth/csrf'));
-      await json(await context.request.post('/api/auth/callback/credentials', { form: { csrfToken: csrf.csrfToken, email: user.email, password, callbackUrl: `${baseURL}/dashboard`, json: 'true' } }));
+      await signIn(context, user.email);
       expect((await json(await context.request.get('/api/auth/session'))).user.id).toBe(id);
       accounts[role] = { id, api: context.request };
     }
@@ -31,7 +30,8 @@ test('friend bonus is per athlete, Singapore day and sport across all review wor
     const get = id => db.activity.findUnique({ where: { id } });
     const approve = async a => json(await admin.api.post(`/api/admin/activities/${a.id}/approve`, { data: {} }));
     const create = async (data = {}, approved = true) => {
-      const a = await json(await member.api.post('/api/activities', { data: { activityDate: '2026-09-01', category: 'RUN', distance: 5, pace: 6, companionUserIds: [friend.id, other.id], ...data } }), 201);
+      const proofUrls = [`https://example.invalid/e2e-proof/${member.id}/${randomUUID()}.png`];
+      const a = await json(await member.api.post('/api/activities', { data: { activityDate: '2026-09-01', category: 'RUN', distance: 5, pace: 6, companionUserIds: [friend.id, other.id], proofUrls, ...data } }), 201);
       return approved ? approve(a) : a;
     };
     const run1 = await create(); const run2 = await create({ distance: 8 });
@@ -72,7 +72,8 @@ test('friend bonus is per athlete, Singapore day and sport across all review wor
       await approve(a); expect(await bonus(a.id)).toBe(3);
     }
     const slow = await create({ pace: 10, distance: 9 });
-    expect(slow.category).toBe('WALK_OR_HIKE'); expect(await bonus(slow.id)).toBe(0);
+    // A slow run remains a run; pace only changes its scoring bonus.
+    expect(slow.category).toBe('RUN'); expect(await bonus(slow.id)).toBe(0);
 
     const source = await get(cycle.id); const sourcePoints = source.points;
     const correction = await json(await member.api.post('/api/corrections', { data: {

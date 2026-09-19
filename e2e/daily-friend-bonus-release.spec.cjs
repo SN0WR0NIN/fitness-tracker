@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect, signIn } = require('./helpers/clerk.cjs');
 const { PrismaClient } = require('@prisma/client');
 const { randomUUID } = require('node:crypto');
 const bcrypt = require('bcryptjs');
@@ -33,17 +33,16 @@ async function withFixture(browser, baseURL, work) {
       ids.push(id);
       const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
       contexts.push(context);
-      const csrf = await json(await context.request.get('/api/auth/csrf'));
-      await json(await context.request.post('/api/auth/callback/credentials', { form: {
-        csrfToken: csrf.csrfToken, email: user.email, password, callbackUrl: `${baseURL}/dashboard`, json: 'true',
-      } }));
+      await signIn(context, user.email);
       expect((await json(await context.request.get('/api/auth/session'))).user.id).toBe(id);
       accounts[role] = { ...user, context, api: context.request };
     }
+    let proofSequence = 0;
     const create = async (data = {}, approve = true) => {
+      const proofUrl = `https://example.invalid/e2e-proof/${accounts.member.id}/${key}-${++proofSequence}.png`;
       const activity = await json(await accounts.member.api.post('/api/activities', { data: {
         activityDate: '2026-09-02', category: 'RUN', distance: 5, pace: 6,
-        companionUserIds: [accounts.friend.id], ...data,
+        companionUserIds: [accounts.friend.id], ...data, proofUrl,
       } }), 201);
       return approve ? json(await accounts.admin.api.post(`/api/admin/activities/${activity.id}/approve`, { data: {} })) : activity;
     };

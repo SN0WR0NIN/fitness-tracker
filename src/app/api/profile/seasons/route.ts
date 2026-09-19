@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAppSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getWeekStart } from '@/lib/scoring';
 import { getSeasons } from '@/lib/seasons';
@@ -13,7 +12,7 @@ type UserWeek={weekNumber:number;totalPoints:number};
 type ActivitySummary={activities:number;distance:number;buddies:number};
 
 export async function GET(){
-  const session=await getServerSession(authOptions);const userId=session?.user?.id;if(!userId)return NextResponse.json({error:'Not authenticated'},{status:401});
+  const session=await getAppSession();const userId=session?.user?.id;if(!userId)return NextResponse.json({error:'Not authenticated'},{status:401});
   try{
     const seasons=await getSeasons();
     const summaries=[];
