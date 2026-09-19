@@ -50,7 +50,7 @@ const test = base.extend({
         accounts[name] = { id, context, api: context.request, page: await context.newPage() };
       }
       const create = async (data = {}, approve = true) => {
-        const proofUrls = [`https://example.invalid/e2e-proof/${accounts.member.id}/${key}.png`];
+        const proofUrls = [`https://example.invalid/e2e-proof/${accounts.member.id}/${randomUUID()}.png`];
         const activity = await json(await accounts.member.api.post('/api/activities', { data: { activityDate: '2026-09-02', category: 'RUN', distance: 5, pace: 6, proofUrls, ...data } }), 201);
         return approve ? json(await accounts.admin.api.post(`/api/admin/activities/${activity.id}/approve`, { data: {} })) : activity;
       };
@@ -99,8 +99,10 @@ test('correction mobile workflow preserves points until reviewed and moves the c
   await s.member.page.getByLabel('Distance (km)', { exact: true }).fill('30');
   await s.member.page.getByLabel('Upload replacement proof').setInputFiles({ name: 'corrected-proof.png', mimeType: 'image/png', buffer: PNG });
   await s.member.page.getByLabel('Reason for edit').fill('The imported distance and date were incorrect.');
+  const correctionResponse = s.member.page.waitForResponse((response) => response.url().endsWith('/api/corrections') && response.request().method() === 'POST');
   await s.member.page.getByRole('button', { name: 'Submit edits for review' }).click();
-  await expect(s.member.page.getByRole('link', { name: 'Track edit request' })).toBeVisible();
+  await json(await correctionResponse, 201);
+  await expect(s.member.page.getByRole('link', { name: /Track .*edit request/i })).toBeVisible();
   const requests = await json(await s.member.api.get('/api/corrections'));
   const correction = requests.find((r) => r.activityId === activity.id);
   expect(correction.status).toBe('OPEN');
