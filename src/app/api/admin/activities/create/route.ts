@@ -7,6 +7,7 @@ import { createActivity, approveActivity } from '@/lib/activities';
 import { DuplicateApprovalError } from '@/lib/activity-duplicates';
 import { challengeDateRangeLabel, isWithinChallengeWindow, parseActivityDate } from '@/lib/activity-date';
 import { prisma } from '@/lib/prisma';
+import { RunSegmentsSchema } from '@/lib/run-segment-schema';
 
 const AdminActivitySchema = z.object({
   userId: z.string().min(1),
@@ -14,13 +15,17 @@ const AdminActivitySchema = z.object({
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']),
   distance: z.number().positive('Distance must be greater than zero').max(100000, 'Distance is too large').optional(),
   pace: z.number().positive('Pace must be greater than zero').max(60, 'Pace is too large').optional(),
+  runSegments: RunSegmentsSchema.optional(),
   companionUserIds: z.array(z.string().min(1).max(200)).max(100).optional(),
   companionUserId: z.string().min(1).optional(),
   proofUrl: z.preprocess((value) => value === '' ? undefined : value, z.string().url().optional()),
   approvalMode: z.enum(['PENDING', 'APPROVED']).default('PENDING'),
 }).superRefine((data, context) => {
-  if (data.category !== 'TROOP_GAMES' && data.distance === undefined) {
+  if (data.category !== 'TROOP_GAMES' && data.distance === undefined && !(data.category === 'RUN' && data.runSegments)) {
     context.addIssue({ code: 'custom', path: ['distance'], message: 'Distance is required for this activity.' });
+  }
+  if (data.runSegments && data.category !== 'RUN') {
+    context.addIssue({ code: 'custom', path: ['runSegments'], message: 'Interval segments are available only for Run activities.' });
   }
 });
 
@@ -55,6 +60,7 @@ export async function POST(request: Request) {
       category: data.category,
       distance: data.distance,
       pace: data.pace,
+      runSegments: data.runSegments,
       companionUserId: data.companionUserId,
       companionUserIds: data.companionUserIds,
       proofUrl: data.proofUrl,

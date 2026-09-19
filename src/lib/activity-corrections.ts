@@ -5,9 +5,9 @@ import { reconcileParticipantScores } from '@/lib/scoring-ledger';
 import { planDailyActivityScores } from '@/lib/daily-friend-bonus';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import type { Activity, Prisma } from '@prisma/client';
+import { Prisma, type Activity } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { DEFAULT_SCORING_RULES, resolveEffectiveCategory, getWeekStart, getWeekNumber } from '@/lib/scoring';
+import { DEFAULT_SCORING_RULES, normalizeRunSegments, resolveEffectiveCategory, getWeekStart, getWeekNumber } from '@/lib/scoring';
 import type { ChallengeSettings } from '@/lib/admin-control';
 import { duplicateReason } from '@/lib/activity-duplicates';
 import { isWithinChallengeWindow, parseActivityDate, singaporeDate } from '@/lib/activity-date';
@@ -71,14 +71,16 @@ async function prepareChange(tx: Prisma.TransactionClient, activity: Activity, p
   if (friendSetting === true && !companion) throw new FeatureError('Select at least one registered friend for the friend bonus.');
   const category = resolveEffectiveCategory(proposed.category, proposed.pace ?? undefined, settings.scoringRules);
   const distance = category === 'TROOP_GAMES' ? 0 : proposed.distance;
+  const metricsChanged = proposed.category !== activity.category || distance !== activity.distance || proposed.pace !== activity.pace;
+  const runSegments = category === 'RUN' && !metricsChanged ? normalizeRunSegments(activity.runSegments) : [];
   const proofUrls = proofGalleryForCorrection(activity, proposed.proofUrl);
   const proofUrl = proofUrls[0] ?? null;
   const companionUserId = companion ? friends.companionUserId : null;
   const companionUserIds = companion ? friends.companionUserIds : [];
   const siblings = await tx.activity.findMany({ where: { userId: activity.userId, id: { not: activity.id } } });
-  const candidate = { ...activity, category, distance, pace: proposed.pace, occurredAt, proofUrl, proofUrls, companionUserId, companionUserIds, companion, completedWithFriend: Boolean(companion) };
+  const candidate = { ...activity, category, distance, pace: proposed.pace, runSegments, occurredAt, proofUrl, proofUrls, companionUserId, companionUserIds, companion, completedWithFriend: Boolean(companion) };
   const scoring = planDailyActivityScores([...siblings, candidate], settings.scoringRules, settings.startDate).find(item => item.activity.id === activity.id)!.scoring;
-  return { category, distance, pace: proposed.pace, duration: proposed.duration, occurredAt, weekStart: getWeekStart(occurredAt), weekNumber: getWeekNumber(occurredAt,settings.startDate), proofUrl, proofUrls, companionUserId, companionUserIds, companion, completedWithFriend: Boolean(companion), points: scoring.totalPoints, scoring };
+  return { category, distance, pace: proposed.pace, runSegments: runSegments as Prisma.JsonArray, duration: proposed.duration, occurredAt, weekStart: getWeekStart(occurredAt), weekNumber: getWeekNumber(occurredAt,settings.startDate), proofUrl, proofUrls, companionUserId, companionUserIds, companion, completedWithFriend: Boolean(companion), points: scoring.totalPoints, scoring };
 }
 
 async function audit(tx: Prisma.TransactionClient, actorId: string, action: string, target: string, details: unknown) {
@@ -171,8 +173,8 @@ export async function decideCorrection(adminId: string, input: z.infer<typeof De
       const candidates = await tx.activity.findMany({where:{userId:activity.userId,id:{not:activity.id},status:{not:'REJECTED'}}});
       const matches = candidates.flatMap((candidate) => {const reason=duplicateReason({...activity,...change},candidate);return reason?[{id:candidate.id,reason}]:[];});
       if (matches.length && !input.duplicateOverrideReason) throw new FeatureError('Possible duplicate. Compare the matching activities before approving; an explicit override explanation is required.',409,{matches});
-      const {scoring,...data} = change;
-      const updated = await tx.activity.update({where:{id:activity.id},data:{...data,reviewedById:adminId,reviewedAt:new Date()}});
+      const {scoring,runSegments,...data} = change;
+      const updated = await tx.activity.update({where:{id:activity.id},data:{...data,runSegments:runSegments.length?runSegments:Prisma.DbNull,reviewedById:adminId,reviewedAt:new Date()}});
       await tx.pointsLog.updateMany({where:{activityId:activity.id},data:scoring});
       await reconcileParticipantScores(tx, activity.userId);
       applied=correctionSnapshot(await tx.activity.findUniqueOrThrow({where:{id:activity.id}}));

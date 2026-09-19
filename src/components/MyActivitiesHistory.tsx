@@ -21,6 +21,7 @@ import ScoreExplanation from "@/components/ScoreExplanation";
 import { proofDisplayHref } from "@/lib/proof-reference";
 import { formatDistance, formatDuration, formatPace } from "@/lib/format";
 import type { ScoreBreakdown } from "@/lib/score-explanation";
+import { normalizeRunSegments } from "@/lib/scoring";
 
 type Category = "RUN" | "CYCLE" | "SWIM" | "WALK_OR_HIKE" | "TROOP_GAMES";
 type Status = "PENDING" | "APPROVED" | "REJECTED";
@@ -29,6 +30,7 @@ type Item = {
   category: Category;
   distance: number;
   pace: number | null;
+  runSegments?: unknown;
   duration: number | null;
   points: number;
   pointsLog?: ScoreBreakdown | null;
@@ -149,6 +151,7 @@ export default function MyActivitiesHistory({
             const Icon = icons[item.category];
             const proofs = proofsFor(item);
             const proof = proofDisplayHref(proofs[0]);
+            const intervalSegments = normalizeRunSegments(item.runSegments);
             return (
               <details
                 key={item.id}
@@ -181,6 +184,7 @@ export default function MyActivitiesHistory({
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-black">{labels[item.category]}</p>
+                      {intervalSegments.length ? <span className="rounded-full border border-orange-300/20 bg-orange-300/10 px-2 py-1 text-[0.65rem] font-black text-orange-200">Interval</span> : null}
                       <StatusPill status={item.status} />
                       {proofs.length ? (
                         <span className="inline-flex items-center gap-1 rounded-full border border-sky-400/15 bg-sky-400/[0.08] px-2 py-1 text-[0.65rem] font-black text-sky-200">
@@ -202,7 +206,7 @@ export default function MyActivitiesHistory({
                       {item.duration
                         ? ` · ${formatDuration(item.duration)}`
                         : ""}
-                      {item.pace ? ` · ${formatPace(item.pace)}/km` : ""}
+                      {intervalSegments.length ? ` · ${intervalSegments.length} pace groups` : item.pace ? ` · ${formatPace(item.pace)}/km` : ""}
                     </p>
                     <p className="mt-1 truncate text-xs text-slate-600">
                       {item.completedWithFriend
