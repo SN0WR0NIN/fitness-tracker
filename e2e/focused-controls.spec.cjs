@@ -50,7 +50,8 @@ const test = base.extend({
         accounts[name] = { id, context, api: context.request, page: await context.newPage() };
       }
       const create = async (data = {}, approve = true) => {
-        const activity = await json(await accounts.member.api.post('/api/activities', { data: { activityDate: '2026-09-02', category: 'RUN', distance: 5, pace: 6, ...data } }), 201);
+        const proofUrls = [`https://example.invalid/e2e-proof/${accounts.member.id}/${key}.png`];
+        const activity = await json(await accounts.member.api.post('/api/activities', { data: { activityDate: '2026-09-02', category: 'RUN', distance: 5, pace: 6, proofUrls, ...data } }), 201);
         return approve ? json(await accounts.admin.api.post(`/api/admin/activities/${activity.id}/approve`, { data: {} })) : activity;
       };
       const proposed = (activity, changes = {}) => ({ activityDate: new Date(new Date(activity.occurredAt).getTime() + 8 * 3600000).toISOString().slice(0, 10), category: activity.category, distance: activity.distance, pace: activity.pace, duration: activity.duration, companionUserId: activity.companionUserId, proofUrl: activity.proofUrl, ...changes });
@@ -262,6 +263,7 @@ test('achievement awards are approved-only, idempotent, reversible and silently 
 test('participant admins receive activity achievements and batch repair stays silent', async ({ sandbox: s }) => {
   const activity = await json(await s.admin.api.post('/api/activities', { data: {
     activityDate: '2026-09-02', category: 'RUN', distance: 5, pace: 6,
+    proofUrls: [`https://example.invalid/e2e-proof/${s.admin.id}/${s.key}.png`],
   } }), 201);
   const badge = async (id) => (await s.db.$queryRaw`
     SELECT current_value, unlocked, notified_at
