@@ -29,10 +29,13 @@ test('PWA manifest, actual service-worker offline fallback, and private-cache ex
     });
     expect(cached).toContain('/offline');
     expect(cached.some((path) => /^\/(api|admin|account|dashboard|auth)(\/|$)/.test(path))).toBe(false);
+    const cachedOffline = await page.evaluate(async () => (await caches.match('/offline'))?.text() ?? '');
+    expect(cachedOffline).toMatch(/offline|connection/i);
     await context.setOffline(true);
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('body')).toContainText(/offline|connection/i);
-    await expect(page.locator('body')).not.toContainText('Focused member');
+    const offlinePage = await context.newPage();
+    await offlinePage.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+    await expect(offlinePage.locator('body')).toContainText(/offline|connection/i);
+    await expect(offlinePage.locator('body')).not.toContainText('Focused member');
   } finally { await context.close(); }
 });
 
