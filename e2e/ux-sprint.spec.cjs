@@ -24,7 +24,9 @@ test('member gets quick logging, focused activity history and richer profile', a
   const activity = await create.json();
   const adminContext = await browser.newContext();
   const adminPage = await login(adminContext, ADMIN);
-  const approve = await adminPage.request.post(`/api/admin/activities/${activity.id}/approve`, { data: {} });
+  const approve = await adminPage.request.post(`/api/admin/activities/${activity.id}/approve`, {
+    data: { duplicateOverrideReason: 'Synthetic UX fixture is intentionally independent from earlier browser tests.' },
+  });
   expect(approve.status(), await approve.text()).toBe(200);
 
   await page.goto('/activities/new');
@@ -36,7 +38,7 @@ test('member gets quick logging, focused activity history and richer profile', a
   await expect(page.getByRole('heading', { name: 'My activities' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Approved/ })).toBeVisible();
   const approved = page.locator('details').filter({ hasText: 'APPROVED' }).first();
-  await approved.locator('summary').click();
+  await approved.locator(':scope > summary').click();
   await expect(approved.getByText('Edit approved entry', { exact: true })).toBeVisible();
 
   await page.goto('/participants/e2e_member');
