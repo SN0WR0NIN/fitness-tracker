@@ -31,6 +31,10 @@ const quote = key => {
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) throw new Error('Invalid backup field name.');
   return `"${key}"`;
 };
+function isSyntheticFixtureEmail(email) {
+  return typeof email === 'string' && (email.endsWith('@example.test')
+    || /^[^@]+\+clerk_test@example\.com$/.test(email));
+}
 let phase = 'destination-precheck';
 async function restore(input, confirmation) {
   const target = assertDisposable(process.env, confirmation);
@@ -38,7 +42,7 @@ async function restore(input, confirmation) {
   const validation = spawnSync(process.execPath, [path.join(__dirname, 'validate-operational-backup.cjs'), input], { encoding: 'utf8' });
   if (validation.status !== 0) throw new Error('Backup validator rejected the fixture.');
   const backup = JSON.parse(fs.readFileSync(input, 'utf8'));
-  if (backup.version !== 7 || !backup.users.every(u => u.email?.endsWith('@example.test'))) throw new Error('Only synthetic version-7 example.test fixtures are accepted by this drill.');
+  if (backup.version !== 7 || !backup.users.every(u => isSyntheticFixtureEmail(u.email))) throw new Error('Only synthetic version-7 E2E fixtures are accepted by this drill.');
   const { PrismaClient } = require('@prisma/client');
   const db = new PrismaClient({ datasources: { db: { url: target } } });
   try {
@@ -98,5 +102,5 @@ async function restore(input, confirmation) {
     console.log(JSON.stringify({ ...result, postCommitVerified: true }));
   } finally { await db.$disconnect(); }
 }
-module.exports = { assertDisposable };
+module.exports = { assertDisposable, isSyntheticFixtureEmail };
 if (require.main === module) restore(process.argv[2], process.argv[3]).catch(() => { console.error(`Restore drill failed or refused at ${phase}. Destination must be inspected; do not automatically retry or erase it.`); process.exitCode = 1; });
