@@ -111,6 +111,13 @@ secrets to the app's standard Clerk environment variables for both build and
 runtime and refuses production keys or non-local databases. Fork PRs do not have
 access to secrets; a trusted maintainer must run them from an approved branch.
 
+CI generates a fresh 32-byte `CLERK_ENCRYPTION_KEY` for each job, masks it in
+logs, and shares it with subsequent build and runtime steps through `GITHUB_ENV`.
+Clerk requires this key because the middleware explicitly supplies `secretKey`
+(including support for Vercel Marketplace's prefixed key). No third repository
+secret is needed. This ephemeral key is only for CI; deployed environments using
+this middleware must configure their own stable `CLERK_ENCRYPTION_KEY`.
+
 Playwright's setup project obtains a Clerk testing token. Each authenticated test
 creates uniquely named, synthetic `+clerk_test` users and deletes only the Clerk
 IDs it created during teardown. Their verified emails link to existing local
