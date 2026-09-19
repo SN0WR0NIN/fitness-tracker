@@ -19,6 +19,13 @@ export type ActivityCategory =
   | 'WALK_OR_HIKE'
   | 'TROOP_GAMES';
 
+export type RunSegmentKind = 'WORK' | 'RECOVERY';
+export type RunSegment = {
+  kind: RunSegmentKind;
+  distance: number;
+  pace: number;
+};
+
 export const RUN_SLOW_PACE_THRESHOLD_MIN_PER_KM = 9; // runs slower than this receive no pace bonus
 export const WALK_MIN_DISTANCE_KM = 5; // minimum distance for a Walk/Hike entry to count
 
@@ -58,6 +65,7 @@ interface ScoringInput {
   category: ActivityCategory;
   distance?: number; // km for run/cycle/hike, meters for swim
   pace?: number; // min/km
+  runSegments?: readonly RunSegment[];
   completedWithFriend?: boolean;
 }
 
@@ -89,17 +97,54 @@ export function resolveEffectiveCategory(
   return category;
 }
 
-function runPaceBonusPerKm(pace: number, rules: ScoringRules): number {
+export function runPaceBonusPerKm(pace: number, rules: ScoringRules = DEFAULT_SCORING_RULES): number {
   if (pace > rules.runSlowPaceThreshold) return 0;
   if (pace < rules.runFastPaceThreshold) return rules.runFastBonusPerKm;
   if (pace < rules.runMediumPaceThreshold) return rules.runMediumBonusPerKm;
   return rules.runStandardBonusPerKm;
 }
 
+/**
+ * Treat interval data from the database or request boundary as untrusted. Only
+ * complete, finite segments are accepted; callers decide whether an empty
+ * result means "steady run" or invalid interval input.
+ */
+export function normalizeRunSegments(value: unknown): RunSegment[] {
+  if (!Array.isArray(value) || value.length > 20) return [];
+  const normalized: RunSegment[] = [];
+  for (const segment of value) {
+    if (!segment || typeof segment !== 'object') return [];
+    const candidate = segment as Record<string, unknown>;
+    const kind = candidate.kind;
+    const distance = candidate.distance;
+    const pace = candidate.pace;
+    if ((kind !== 'WORK' && kind !== 'RECOVERY')
+      || typeof distance !== 'number' || !Number.isFinite(distance) || distance <= 0
+      || typeof pace !== 'number' || !Number.isFinite(pace) || pace <= 0 || pace > 60) return [];
+    normalized.push({ kind, distance, pace });
+  }
+  return normalized;
+}
+
+export function summarizeRunSegments(segments: readonly RunSegment[]) {
+  const distance = segments.reduce((total, segment) => total + segment.distance, 0);
+  const pace = distance > 0
+    ? segments.reduce((total, segment) => total + segment.distance * segment.pace, 0) / distance
+    : undefined;
+  return { distance, pace };
+}
+
+export function runSegmentPoints(segment: RunSegment, rules: ScoringRules = DEFAULT_SCORING_RULES): number {
+  return segment.distance * (rules.runBasePerKm + runPaceBonusPerKm(segment.pace, rules));
+}
+
 /** Raw activity value before display rounding, friend bonus, or final half-point flooring. */
-function rawBasePoints(input: Pick<ScoringInput, 'category' | 'distance' | 'pace'>, rules: ScoringRules): number {
+function rawBasePoints(input: Pick<ScoringInput, 'category' | 'distance' | 'pace' | 'runSegments'>, rules: ScoringRules): number {
   switch (input.category) {
     case 'RUN':
+      if (input.runSegments?.length) {
+        return input.runSegments.reduce((total, segment) => total + runSegmentPoints(segment, rules), 0);
+      }
       if (input.distance) {
         const bonusPerKm = input.pace !== undefined ? runPaceBonusPerKm(input.pace, rules) : 0;
         return input.distance * (rules.runBasePerKm + bonusPerKm);
@@ -122,7 +167,7 @@ function rawBasePoints(input: Pick<ScoringInput, 'category' | 'distance' | 'pace
  * floors below 0.5 points, while sub-minimum Walk/Hike entries remain ineligible.
  */
 export function hasPositiveBaseScore(
-  input: Pick<ScoringInput, 'category' | 'distance' | 'pace'>,
+  input: Pick<ScoringInput, 'category' | 'distance' | 'pace' | 'runSegments'>,
   rules: ScoringRules = DEFAULT_SCORING_RULES
 ): boolean {
   return rawBasePoints(input, rules) > 0;

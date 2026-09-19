@@ -6,6 +6,7 @@ import { updateActivity } from "@/lib/activities";
 import { prisma } from "@/lib/prisma";
 import { recordAdminAudit } from "@/lib/admin-control";
 import { MAX_ACTIVITY_PROOFS } from "@/lib/proof-access";
+import { RunSegmentsSchema } from "@/lib/run-segment-schema";
 
 const halfPoint = z
   .number()
@@ -33,6 +34,7 @@ const EditActivitySchema = z
       .max(60)
       .nullable()
       .optional(),
+    runSegments: RunSegmentsSchema.nullable().optional(),
     companionUserIds: z.array(z.string().min(1).max(200)).max(100).optional(),
     companionUserId: z.string().nullable().optional(),
     companionName: z.string().nullable().optional(),

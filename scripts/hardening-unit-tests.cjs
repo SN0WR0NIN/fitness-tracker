@@ -33,7 +33,7 @@ function moduleFrom(file) {
 }
 const { parseProofReference: parse, proofDisplayHref } = moduleFrom('src/lib/proof-reference.ts');
 const { explainScore } = moduleFrom('src/lib/score-explanation.ts');
-const { calculateActivityPoints, hasPositiveBaseScore, roundScoreDown } = moduleFrom('src/lib/scoring.ts');
+const { calculateActivityPoints, hasPositiveBaseScore, normalizeRunSegments, roundScoreDown, summarizeRunSegments } = moduleFrom('src/lib/scoring.ts');
 const origin = 'https://fixture.supabase.co';
 const valid = `${origin}/storage/v1/object/public/activity-proofs/owner/image.png`;
 assert.equal(parse(valid,origin).path, 'owner/image.png');
@@ -54,6 +54,12 @@ assert.equal(calculateActivityPoints({category:'RUN',distance:3.1,pace:6}).total
 assert.equal(calculateActivityPoints({category:'RUN',distance:5,pace:9}).totalPoints,7.5);
 assert.equal(calculateActivityPoints({category:'RUN',distance:5,pace:9.01}).basePoints,5);
 assert.equal(calculateActivityPoints({category:'RUN',distance:5,pace:9.01}).totalPoints,5);
+const intervalSegments=[{kind:'WORK',distance:4,pace:4+20/60},{kind:'RECOVERY',distance:2,pace:8}];
+assert.deepEqual(normalizeRunSegments(intervalSegments),intervalSegments);
+const intervalMetrics=summarizeRunSegments(intervalSegments);assert.equal(intervalMetrics.distance,6);assert.ok(Math.abs(intervalMetrics.pace-(5+5/9))<1e-9);
+assert.deepEqual(calculateActivityPoints({category:'RUN',distance:6,pace:5.56,runSegments:intervalSegments}),{basePoints:13,friendBonus:0,totalPoints:13});
+assert.equal(calculateActivityPoints({category:'RUN',runSegments:[{kind:'WORK',distance:0.3,pace:4.5},{kind:'RECOVERY',distance:0.3,pace:8}]}).totalPoints,1);
+assert.equal(calculateActivityPoints({category:'RUN',runSegments:intervalSegments,completedWithFriend:true}).totalPoints,16);
 assert.equal(hasPositiveBaseScore({category:'RUN',distance:0.001,pace:6}),true);
 assert.equal(calculateActivityPoints({category:'RUN',distance:0.001,pace:6}).totalPoints,0);
 assert.equal(calculateActivityPoints({category:'RUN',distance:0.001,pace:6,completedWithFriend:true}).friendBonus,3);
@@ -65,6 +71,10 @@ assert.match(explainScore({...base,status:'PENDING'}).status,/not included/);
 assert.match(explainScore({...base,status:'REJECTED',points:0.5,pointsLog:{basePoints:0,friendBonus:0,totalPoints:0.5}}).message,/No friend bonus/);
 assert.match(explainScore({...base,points:7.5,pointsLog:{basePoints:7.5,friendBonus:0,totalPoints:7.5}}).message,/No friend bonus allocated/);
 assert.equal(explainScore({...base,points:9}).breakdown,null);
+const intervalExplanation=explainScore({category:'RUN',status:'APPROVED',distance:6,pace:5.56,runSegments:intervalSegments,points:13,completedWithFriend:false,pointsLog:{basePoints:13,friendBonus:0,totalPoints:13}});
+assert.match(intervalExplanation.calculation.join(' '),/Work 1: 4\.00 km/);
+assert.match(intervalExplanation.calculation.join(' '),/Recovery 2: 2\.00 km/);
+assert.match(intervalExplanation.calculation.join(' '),/combined before final rounding/);
 const { assertDisposable } = require('./restore-operational-drill.cjs');
 const env = { CI:'true',E2E_TEST_MODE:'1',DRILL_TARGET_DATABASE_URL:'postgresql://postgres:postgres@127.0.0.1:5432/fitness_tracker_restore_drill',DATABASE_URL:'postgresql://postgres:postgres@127.0.0.1:5432/fitness_tracker_e2e' };
 assert.ok(assertDisposable(env,'--confirm-disposable'));
