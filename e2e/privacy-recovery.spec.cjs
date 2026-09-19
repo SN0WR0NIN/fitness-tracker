@@ -56,6 +56,8 @@ test('proofs enforce owner/admin sessions, upload ownership, no public disclosur
     expect(await publicFeed.text()).not.toContain(proof);
     const profile=await request.get(`/participants/${s.owner.id}`);expect(profile.ok()).toBe(true);expect(await profile.text()).not.toContain(proof);
     await s.owner.page.goto('/dashboard');
+    const activities=s.owner.page.locator('details.profile-main-fold').filter({has:s.owner.page.getByText('My activities',{exact:true})});
+    await activities.locator(':scope > summary').click();
     const dashboardActivity = s.owner.page.getByTestId('dashboard-activity').first();
     await expect(dashboardActivity).toBeVisible();
     await dashboardActivity.locator('summary').click();
