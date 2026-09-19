@@ -65,11 +65,13 @@ assert.match(explainScore({...base,status:'PENDING'}).status,/not included/);
 assert.match(explainScore({...base,status:'REJECTED',points:0.5,pointsLog:{basePoints:0,friendBonus:0,totalPoints:0.5}}).message,/No friend bonus/);
 assert.match(explainScore({...base,points:7.5,pointsLog:{basePoints:7.5,friendBonus:0,totalPoints:7.5}}).message,/No friend bonus allocated/);
 assert.equal(explainScore({...base,points:9}).breakdown,null);
-const { assertDisposable } = require('./restore-operational-drill.cjs');
+const { assertDisposable, isSyntheticFixtureEmail } = require('./restore-operational-drill.cjs');
 const env = { CI:'true',E2E_TEST_MODE:'1',DRILL_TARGET_DATABASE_URL:'postgresql://postgres:postgres@127.0.0.1:5432/fitness_tracker_restore_drill',DATABASE_URL:'postgresql://postgres:postgres@127.0.0.1:5432/fitness_tracker_e2e' };
 assert.ok(assertDisposable(env,'--confirm-disposable'));
 for (const bad of [{...env,CI:'false'},{...env,VERCEL:'1'},{...env,DRILL_TARGET_DATABASE_URL:env.DATABASE_URL},{...env,DRILL_TARGET_DATABASE_URL:env.DRILL_TARGET_DATABASE_URL.replace('127.0.0.1','production.example.com')},{...env,DRILL_TARGET_DATABASE_URL:env.DRILL_TARGET_DATABASE_URL+'?host=production.example.com'}]) assert.throws(()=>assertDisposable(bad,'--confirm-disposable'));
 assert.throws(()=>assertDisposable(env,''));
+for (const email of ['member-e2e@example.test','fitness-id+clerk_test@example.com']) assert.equal(isSyntheticFixtureEmail(email),true);
+for (const email of ['member@example.com','clerk_test@example.com','fitness-id+clerk_test@example.com.evil.test','']) assert.equal(isSyntheticFixtureEmail(email),false);
 const { pack, verify } = require('./media-archive.cjs');
 const { assertClerkTestEnvironment, assertDisposableEnvironment } = require('./e2e-environment.cjs');
 const clerkEnv = { ...env, DIRECT_URL: env.DATABASE_URL,
