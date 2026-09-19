@@ -21,7 +21,7 @@ test('member gets quick logging, focused activity history and richer profile', a
   await expect(page.getByRole('button', { name: /Approved/ })).toBeVisible();
   const approved = page.locator('details').filter({ hasText: 'APPROVED' }).first();
   await approved.locator('summary').click();
-  await expect(approved.getByText('Request correction', { exact: true })).toBeVisible();
+  await expect(approved.getByText('Edit approved entry', { exact: true })).toBeVisible();
 
   await page.goto('/participants/e2e_member');
   await expect(page.locator('main p:visible').filter({ hasText: /^Top sport$/ }).first()).toBeVisible();
