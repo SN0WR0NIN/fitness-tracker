@@ -70,7 +70,7 @@ test('member to admin workflow stays correct and private', async ({ browser, req
   const adminContext = await browser.newContext();
   const adminPage = await login(adminContext, ADMIN);
   await adminPage.goto('/admin');
-  await expect(adminPage.getByRole('heading', { name: 'Automated safety net' }).first()).toBeVisible();
+  await expect(adminPage.getByRole('heading', { name: 'Run the challenge from one place' })).toBeVisible();
   await expect(adminPage.getByText('Score reconciliation').first()).toBeVisible();
   await expect(adminPage.getByText('Weekly awards').first()).toBeVisible();
 
