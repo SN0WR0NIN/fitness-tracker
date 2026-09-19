@@ -86,7 +86,7 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     await expect(form).toHaveCount(1);
     await form.getByLabel('Date',{exact:true}).fill('2026-09-03');
     await form.getByPlaceholder('5.00').fill('5');
-    await form.getByLabel('Pace (min/km)',{exact:true}).fill('6');
+    await form.getByLabel('Pace (min/km)',{exact:true}).fill('600');
     await form.locator('input[type="file"]').first().setInputFiles({name:'group-proof.png',mimeType:'image/png',buffer:PNG});
     await expect(form.getByAltText('Uploaded proof 1')).toBeVisible();
     await form.getByRole('checkbox',{name:'I completed this with friends',exact:true}).check();
