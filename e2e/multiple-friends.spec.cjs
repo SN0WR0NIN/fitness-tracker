@@ -7,6 +7,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6ioAAAAASUVORK5CYII=', 'base64');
+
 function assertDisposable(baseURL) {
   const db = new URL(process.env.DATABASE_URL || 'http://invalid');
   const app = new URL(baseURL);
@@ -55,8 +57,10 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     // The disposable seed stores partial rules; getChallengeSettings merges
     // these with DEFAULT_SCORING_RULES, whose friendBonus is 3.
     const bonus = settings.scoringRules.friendBonus ?? 3;
-    const solo = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-01',category:'RUN',distance:5,pace:6 } }),201);
-    const one = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-02',category:'RUN',distance:5,pace:6,companionUserId:friendIds[0] } }),201);
+    let proofSequence = 0;
+    const proof = () => `https://example.invalid/e2e-proof/${accounts.member.id}/${key}-${++proofSequence}.png`;
+    const solo = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-01',category:'RUN',distance:5,pace:6,proofUrl:proof() } }),201);
+    const one = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-02',category:'RUN',distance:5,pace:6,companionUserId:friendIds[0],proofUrl:proof() } }),201);
     expect(one.companionUserIds).toEqual([friendIds[0]]);
     expect(one.points-solo.points).toBeCloseTo(bonus,8);
 
@@ -68,7 +72,7 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     expect(options.every(user=>Object.keys(user).sort().join(',')==='id,name')).toBe(true);
     const adminOptions = await json(await admin.request.get('/api/users'));
     expect(adminOptions.map(user=>user.id)).not.toContain(accounts.admin.id);
-    const withAdmin = await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-06',category:'RUN',distance:5,pace:6,companionUserIds:[accounts.admin.id]}}),201);
+    const withAdmin = await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-06',category:'RUN',distance:5,pace:6,companionUserIds:[accounts.admin.id],proofUrl:proof()}}),201);
     expect(withAdmin.companionUserIds).toEqual([accounts.admin.id]);
     expect(withAdmin.points).toBeCloseTo(one.points,8);
     const editedWithAdmin = await json(await member.request.patch(`/api/activities/${withAdmin.id}`,{data:{distance:5.1}}));
@@ -85,6 +89,8 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     await form.getByLabel('Date',{exact:true}).fill('2026-09-03');
     await form.getByPlaceholder('5.00').fill('5');
     await form.getByPlaceholder('6:30').fill('6');
+    await form.locator('input[type="file"]').first().setInputFiles({ name: 'group-proof.png', mimeType: 'image/png', buffer: PNG });
+    await expect(form.getByAltText('Uploaded proof 1')).toBeVisible();
     await form.getByRole('checkbox',{name:'I completed this with friends',exact:true}).check();
     const picker = form.getByRole('group',{name:'Friends',exact:true});
     await expect(picker.getByRole('checkbox',{name:'Group admin',exact:true})).toBeVisible();
@@ -116,7 +122,7 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
       await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-04',category:'RUN',distance:5,pace:6,companionUserIds}}),400);
     }
     expect(await db.activity.count({where:{userId:accounts.member.id}})).toBe(beforeInvalid);
-    const deduped = await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-04',category:'RUN',distance:5,pace:6,companionUserIds:[...friendIds,friendIds[0]]}}),201);
+    const deduped = await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-04',category:'RUN',distance:5,pace:6,companionUserIds:[...friendIds,friendIds[0]],proofUrl:proof()}}),201);
     expect(deduped.companionUserIds).toEqual([...friendIds].sort());
     expect(deduped.points).toBeCloseTo(one.points,8);
 

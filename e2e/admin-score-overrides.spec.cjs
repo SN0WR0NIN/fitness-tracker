@@ -68,6 +68,8 @@ test("admins can vet proof, distance and pace and persist or clear score overrid
     contexts.push(memberContext);
     const adminContext = await login(browser, baseURL, admin);
     contexts.push(adminContext);
+    const proofUrl = `https://example.invalid/e2e-proof/${member.id}/${key}-1.png`;
+    const secondProof = `https://example.invalid/e2e-proof/${member.id}/${key}-2.png`;
     const activity = await json(
       await memberContext.request.post("/api/activities", {
         data: {
@@ -75,16 +77,11 @@ test("admins can vet proof, distance and pace and persist or clear score overrid
           category: "RUN",
           distance: 5,
           pace: 6,
+          proofUrls: [proofUrl, secondProof],
         },
       }),
       201,
     );
-    const proofUrl = `https://example.invalid/e2e-proof/${member.id}/${key}-1.png`;
-    const secondProof = `https://example.invalid/e2e-proof/${member.id}/${key}-2.png`;
-    await db.activity.update({
-      where: { id: activity.id },
-      data: { proofUrl, proofUrls: [proofUrl, secondProof] },
-    });
     await json(
       await adminContext.request.post(
         `/api/admin/activities/${activity.id}/approve`,

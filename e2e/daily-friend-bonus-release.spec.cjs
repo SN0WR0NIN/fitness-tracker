@@ -37,10 +37,12 @@ async function withFixture(browser, baseURL, work) {
       expect((await json(await context.request.get('/api/auth/session'))).user.id).toBe(id);
       accounts[role] = { ...user, context, api: context.request };
     }
+    let proofSequence = 0;
     const create = async (data = {}, approve = true) => {
+      const proofUrl = `https://example.invalid/e2e-proof/${accounts.member.id}/${key}-${++proofSequence}.png`;
       const activity = await json(await accounts.member.api.post('/api/activities', { data: {
         activityDate: '2026-09-02', category: 'RUN', distance: 5, pace: 6,
-        companionUserIds: [accounts.friend.id], ...data,
+        companionUserIds: [accounts.friend.id], ...data, proofUrl,
       } }), 201);
       return approve ? json(await accounts.admin.api.post(`/api/admin/activities/${activity.id}/approve`, { data: {} })) : activity;
     };

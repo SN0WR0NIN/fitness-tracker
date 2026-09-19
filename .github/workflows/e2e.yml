@@ -79,11 +79,6 @@ jobs:
           src/lib/auth.ts src/lib/clerk.ts 'src/app/auth/login/[[...sign-in]]/page.tsx'
       - name: Validate isolated Clerk test configuration
         run: node scripts/e2e-environment.cjs
-      - name: Generate ephemeral Clerk encryption key
-        run: |
-          clerk_e2e_encryption_key="$(openssl rand -hex 32)"
-          echo "::add-mask::$clerk_e2e_encryption_key"
-          echo "CLERK_ENCRYPTION_KEY=$clerk_e2e_encryption_key" >> "$GITHUB_ENV"
       - name: Production build
         run: npm run build
       - name: Install Playwright

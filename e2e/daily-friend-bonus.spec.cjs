@@ -29,8 +29,10 @@ test('friend bonus is per athlete, Singapore day and sport across all review wor
     const bonus = async id => (await db.pointsLog.findUnique({ where: { activityId: id } })).friendBonus;
     const get = id => db.activity.findUnique({ where: { id } });
     const approve = async a => json(await admin.api.post(`/api/admin/activities/${a.id}/approve`, { data: {} }));
+    let proofSequence = 0;
     const create = async (data = {}, approved = true) => {
-      const a = await json(await member.api.post('/api/activities', { data: { activityDate: '2026-09-01', category: 'RUN', distance: 5, pace: 6, companionUserIds: [friend.id, other.id], ...data } }), 201);
+      const proofUrl = `https://example.invalid/e2e-proof/${member.id}/${key}-${++proofSequence}.png`;
+      const a = await json(await member.api.post('/api/activities', { data: { activityDate: '2026-09-01', category: 'RUN', distance: 5, pace: 6, companionUserIds: [friend.id, other.id], ...data, proofUrl } }), 201);
       return approved ? approve(a) : a;
     };
     const run1 = await create(); const run2 = await create({ distance: 8 });

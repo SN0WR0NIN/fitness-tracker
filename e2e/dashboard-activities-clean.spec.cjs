@@ -14,9 +14,10 @@ test('dashboard activities stay compact until the athlete opens one', async ({ p
     data: { category: 'RUN', distance: 3, pace: 6, activityDate: '2026-09-02', proofUrl },
   });
   expect(created.status(), await created.text()).toBe(201);
+  const activity = await created.json();
 
   await page.goto('/dashboard');
-  const card = page.getByTestId('dashboard-activity').first();
+  const card = page.locator(`#activity-${activity.id}`);
   await expect(card).toBeVisible();
   await expect(card).not.toHaveAttribute('open', '');
   await expect(card.getByTestId('score-explanation')).not.toBeVisible();
