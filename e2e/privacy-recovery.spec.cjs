@@ -60,7 +60,7 @@ test('proofs enforce owner/admin sessions, upload ownership, no public disclosur
     await activities.locator(':scope > summary').click();
     const dashboardActivity = s.owner.page.getByTestId('dashboard-activity').first();
     await expect(dashboardActivity).toBeVisible();
-    await dashboardActivity.locator('summary').click();
+    await dashboardActivity.locator(':scope > summary').click();
     await expect(s.owner.page.getByTestId('score-explanation').filter({hasText:'Included in standings'}).first()).toBeVisible();
     // Hydration normalizes Next/Image src to an absolute URL; inspect the
     // parsed same-origin endpoint instead of requiring relative DOM text.
