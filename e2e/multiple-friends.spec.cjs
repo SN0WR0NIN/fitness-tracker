@@ -52,12 +52,13 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     const admin = await login(browser,baseURL,accounts.admin); contexts.push(admin);
     const page = await member.newPage();
     const friendIds = [accounts.friend1.id,accounts.friend2.id];
+    const proofUrls = [`https://example.invalid/e2e-proof/${accounts.member.id}/${key}.png`];
     const [settings] = await db.$queryRaw`SELECT "scoringRules" FROM "ChallengeSetting" WHERE id='primary'`;
     // The disposable seed stores partial rules; getChallengeSettings merges
     // these with DEFAULT_SCORING_RULES, whose friendBonus is 3.
     const bonus = settings.scoringRules.friendBonus ?? 3;
-    const solo = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-01',category:'RUN',distance:5,pace:6 } }),201);
-    const one = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-02',category:'RUN',distance:5,pace:6,companionUserId:friendIds[0] } }),201);
+    const solo = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-01',category:'RUN',distance:5,pace:6,proofUrls } }),201);
+    const one = await json(await member.request.post('/api/activities', { data: { activityDate:'2026-09-02',category:'RUN',distance:5,pace:6,companionUserId:friendIds[0],proofUrls } }),201);
     expect(one.companionUserIds).toEqual([friendIds[0]]);
     expect(one.points-solo.points).toBeCloseTo(bonus,8);
 
@@ -69,7 +70,7 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     expect(options.every(user=>Object.keys(user).sort().join(',')==='id,name')).toBe(true);
     const adminOptions = await json(await admin.request.get('/api/users'));
     expect(adminOptions.map(user=>user.id)).not.toContain(accounts.admin.id);
-    const withAdmin = await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-06',category:'RUN',distance:5,pace:6,companionUserIds:[accounts.admin.id]}}),201);
+    const withAdmin = await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-06',category:'RUN',distance:5,pace:6,companionUserIds:[accounts.admin.id],proofUrls}}),201);
     expect(withAdmin.companionUserIds).toEqual([accounts.admin.id]);
     expect(withAdmin.points).toBeCloseTo(one.points,8);
     const editedWithAdmin = await json(await member.request.patch(`/api/activities/${withAdmin.id}`,{data:{distance:5.1}}));
@@ -86,6 +87,8 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     await form.getByLabel('Date',{exact:true}).fill('2026-09-03');
     await form.getByPlaceholder('5.00').fill('5');
     await form.getByLabel('Pace (min/km)',{exact:true}).fill('6');
+    await form.locator('input[type="file"]').first().setInputFiles({name:'group-proof.png',mimeType:'image/png',buffer:PNG});
+    await expect(form.getByAltText('Uploaded proof 1')).toBeVisible();
     await form.getByRole('checkbox',{name:'I completed this with friends',exact:true}).check();
     const picker = form.getByRole('group',{name:'Friends',exact:true});
     await expect(picker.getByRole('checkbox',{name:'Group admin',exact:true})).toBeVisible();
@@ -114,10 +117,10 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
 
     const beforeInvalid = await db.activity.count({where:{userId:accounts.member.id}});
     for (const companionUserIds of [[accounts.member.id],['missing-friend'],[accounts.unassignedAdmin.id],Array(101).fill(friendIds[0])]) {
-      await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-04',category:'RUN',distance:5,pace:6,companionUserIds}}),400);
+      await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-04',category:'RUN',distance:5,pace:6,companionUserIds,proofUrls}}),400);
     }
     expect(await db.activity.count({where:{userId:accounts.member.id}})).toBe(beforeInvalid);
-    const deduped = await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-04',category:'RUN',distance:5,pace:6,companionUserIds:[...friendIds,friendIds[0]]}}),201);
+    const deduped = await json(await member.request.post('/api/activities',{data:{activityDate:'2026-09-04',category:'RUN',distance:5,pace:6,companionUserIds:[...friendIds,friendIds[0]],proofUrls}}),201);
     expect(deduped.companionUserIds).toEqual([...friendIds].sort());
     expect(deduped.points).toBeCloseTo(one.points,8);
 
