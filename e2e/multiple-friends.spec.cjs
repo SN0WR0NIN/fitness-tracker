@@ -183,7 +183,7 @@ test('multiple friends persist across member/admin forms, corrections, scoring a
     const adminCreatedFriendIds = [accounts.friend1.id,accounts.admin.id].sort();
     await adminForm.getByLabel('Activity date',{exact:true}).fill('2026-09-05');
     await adminForm.getByLabel('Distance (km)',{exact:true}).fill('3');
-    await adminForm.getByPlaceholder('6:30 or 6.5').fill('6');
+    await adminForm.getByLabel('Pace (min/km)',{exact:true}).fill('600');
     const adminSubmitted = adminPage.waitForResponse(r => new URL(r.url()).pathname==='/api/admin/activities/create' && r.request().method()==='POST');
     await adminForm.locator('button:not([type])').click();
     const adminCreated = await json(await adminSubmitted,201);
