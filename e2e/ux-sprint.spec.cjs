@@ -2,6 +2,7 @@ const { test, expect, signIn } = require('./helpers/clerk.cjs');
 
 const MEMBER = 'member-e2e@example.test';
 const ADMIN = 'admin-e2e@example.test';
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6ioAAAAASUVORK5CYII=', 'base64');
 
 async function login(context, email) {
   return signIn(context, email);
@@ -10,6 +11,21 @@ async function login(context, email) {
 test('member gets quick logging, focused activity history and richer profile', async ({ browser }) => {
   const context = await browser.newContext();
   const page = await login(context, MEMBER);
+
+  const upload = await page.request.post('/api/upload', {
+    multipart: { file: { name: 'ux-proof.png', mimeType: 'image/png', buffer: PNG } },
+  });
+  expect(upload.status(), await upload.text()).toBe(200);
+  const proofUrl = (await upload.json()).url;
+  const create = await page.request.post('/api/activities', {
+    data: { activityDate: '2026-09-08', category: 'RUN', distance: 4.321, pace: 6, proofUrl },
+  });
+  expect(create.status(), await create.text()).toBe(201);
+  const activity = await create.json();
+  const adminContext = await browser.newContext();
+  const adminPage = await login(adminContext, ADMIN);
+  const approve = await adminPage.request.post(`/api/admin/activities/${activity.id}/approve`, { data: {} });
+  expect(approve.status(), await approve.text()).toBe(200);
 
   await page.goto('/activities/new');
   await expect(page.getByRole('heading', { name: 'Log an activity' })).toBeVisible();
@@ -29,6 +45,7 @@ test('member gets quick logging, focused activity history and richer profile', a
   await expect(page.locator('main p:visible').filter({ hasText: /^Active weeks$/ }).first()).toBeVisible();
   await expect(page.getByText('Recent activities', { exact: true }).first()).toBeVisible();
 
+  await adminContext.close();
   await context.close();
 });
 
