@@ -119,7 +119,7 @@ test('v7 export retains ledger/history, rejects corrupt backups, and writes a sy
     const runSegments=[{kind:'WORK',distance:4,pace:4.5},{kind:'RECOVERY',distance:2,pace:9}];
     const a=await s.create(s.owner,await s.upload(s.owner),{distance:6,pace:6,runSegments,companionUserIds:[s.other.id]});
     await body(await s.admin.api.post(`/api/admin/activities/${a.id}/approve`,{data:{}}));
-    const cycle=await s.create(s.owner,await s.upload(s.owner),{category:'CYCLE',distance:20,pace:null,activityDate:'2026-09-03'});
+    const cycle=await s.create(s.owner,await s.upload(s.owner),{category:'CYCLE',distance:20,pace:undefined,activityDate:'2026-09-03'});
     // The deployed ledger is exercised only against this disposable CI database.
     await body(await s.admin.api.post('/api/admin/control',{data:{action:'scores.recalculate',payload:{confirmation:'RECALCULATE'}}}));
     expect((await request.get('/api/admin/export?type=backup')).status()).toBe(401);
