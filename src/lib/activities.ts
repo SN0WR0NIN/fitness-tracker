@@ -1,15 +1,17 @@
+import { correctionRunMetrics } from '@/lib/correction-run-metrics';
 import { assertAttachableProofs, normalizeProofUrls } from './proof-access';
-import type { Activity, Prisma } from '@prisma/client';
+import { Prisma, type Activity } from '@prisma/client';
 import { resolveActivityFriends } from './activity-friends';
 import { activityFriendIds } from './friend-selection';
 import { duplicateReason, DuplicateApprovalError, ActivityEditError } from './activity-duplicates';
-import { calculateActivityPoints, resolveEffectiveCategory, getWeekStart, getWeekNumber, type ActivityCategory, type ScoringRules } from './scoring';
+import { calculateActivityPoints, CURRENT_CYCLE_SCORING_VERSION, roundActivityScoreDown, resolveEffectiveCategory, getWeekStart, getWeekNumber, normalizeRunSegments, summarizeRunSegments, type ActivityCategory, type RunSegment, type ScoringRules } from './scoring';
 import { scoringTransaction, ledgerSettings, reconcileParticipantScores } from './scoring-ledger';
 import { assertCompetitionWritable } from './operating-mode';
 import { assertActivityWeekWritable } from './week-finalization';
 
 interface CreateActivityInput {
   userId: string; columnId: string; proofActorId?: string; category: ActivityCategory; distance?: number; pace?: number;
+  runSegments?: RunSegment[];
   companionUserId?: string; companionUserIds?: string[]; proofUrl?: string; proofUrls?: string[]; stravaActivityId?: string;
   occurredAt?: Date; mapPolyline?: string; elevationGain?: number; duration?: number;
 }
@@ -20,17 +22,23 @@ export async function createActivity(input: CreateActivityInput) {
     const proofUrls = normalizeProofUrls(input.proofUrls, input.proofUrl);
     await assertAttachableProofs(tx, proofUrls, input.proofActorId ?? input.userId);
     const settings = await ledgerSettings(tx);
-    const category = resolveEffectiveCategory(input.category, input.pace, settings.rules);
+    const runSegments = input.category === 'RUN' ? normalizeRunSegments(input.runSegments) : [];
+    const runMetrics = runSegments.length ? summarizeRunSegments(runSegments) : null;
+    const distance = runMetrics?.distance ?? input.distance;
+    const pace = runMetrics?.pace ?? input.pace;
+    const category = resolveEffectiveCategory(input.category, pace, settings.rules);
     const friends = await resolveActivityFriends(tx, input.userId, input);
     const occurredAt = input.occurredAt ?? new Date();
     const weekNumber = getWeekNumber(occurredAt, settings.startDate);
     await assertActivityWeekWritable(tx, occurredAt, weekNumber);
     const created = await tx.activity.create({ data: {
       userId: input.userId, columnId: input.columnId, category,
-      distance: category === 'TROOP_GAMES' ? (input.distance ?? 0) : input.distance!, pace: input.pace,
+      cycleScoringVersion: CURRENT_CYCLE_SCORING_VERSION,
+      distance: category === 'TROOP_GAMES' ? (distance ?? 0) : distance!, pace,
+      ...(runSegments.length ? { runSegments: runSegments as Prisma.InputJsonValue } : {}),
       ...friends, proofUrls, proofUrl: proofUrls[0] ?? input.proofUrl, stravaActivityId: input.stravaActivityId,
       mapPolyline: input.mapPolyline, elevationGain: input.elevationGain, duration: input.duration,
-      points: calculateActivityPoints({ category, distance: input.distance, pace: input.pace }, settings.rules).totalPoints,
+      points: calculateActivityPoints({ category, distance, pace, runSegments }, settings.rules).totalPoints,
       status: 'PENDING', occurredAt, weekStart: getWeekStart(occurredAt), weekNumber,
     } });
     await reconcileParticipantScores(tx, input.userId, settings);
@@ -83,6 +91,7 @@ export async function resetActivityToPending(activityId: string) {
 
 interface UpdateActivityInput {
   category?: ActivityCategory; distance?: number; pace?: number | null; proofUrl?: string | null; proofUrls?: string[];
+  runSegments?: RunSegment[] | null;
   companionUserId?: string | null; companionUserIds?: string[]; companionName?: string | null;
   basePointsOverride?: number | null; totalPointsOverride?: number | null;
 }
@@ -102,7 +111,7 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
     }
     if (ownerId) await assertCompetitionWritable(tx, true);
     const proofChange = input.proofUrls !== undefined || input.proofUrl !== undefined;
-    if (ownerId && activity.stravaActivityId && (input.category !== undefined || input.distance !== undefined || input.pace !== undefined || proofChange)) {
+    if (ownerId && activity.stravaActivityId && (input.category !== undefined || input.distance !== undefined || input.pace !== undefined || input.runSegments !== undefined || proofChange)) {
       throw new ActivityEditError('Strava workout details must be corrected in Strava. You can update friends here.', 400);
     }
     let nextProofUrls = normalizeProofUrls(activity.proofUrls, activity.proofUrl);
@@ -112,8 +121,25 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
       await assertAttachableProofs(tx, nextProofUrls, ownerId, normalizeProofUrls(activity.proofUrls, activity.proofUrl));
     }
     const settings = await ledgerSettings(tx);
-    const pace = input.pace === undefined ? activity.pace : input.pace;
-    const category = resolveEffectiveCategory(input.category ?? activity.category, pace ?? undefined, settings.rules);
+    const requestedCategory = input.category ?? activity.category;
+    if (input.totalPointsOverride != null && Math.abs(input.totalPointsOverride - roundActivityScoreDown(input.totalPointsOverride, requestedCategory, activity.cycleScoringVersion)) > 1e-9) {
+      throw new ActivityEditError('Total points must use the scoring increment for this activity.', 400);
+    }
+    const storedRunSegments = normalizeRunSegments(activity.runSegments);
+    const metricsChanged = input.category !== undefined && input.category !== activity.category
+      || input.distance !== undefined && input.distance !== activity.distance
+      || input.pace !== undefined && input.pace !== activity.pace;
+    let metrics: ReturnType<typeof correctionRunMetrics>;
+    try {
+      metrics = correctionRunMetrics(activity, {
+        category: requestedCategory, distance: input.distance ?? activity.distance,
+        pace: input.pace === undefined ? activity.pace : input.pace, runSegments: input.runSegments,
+      });
+    } catch (error) { throw new ActivityEditError(error instanceof Error ? error.message : 'Invalid interval details.', 400); }
+    const { runSegments } = metrics;
+    const distance = requestedCategory === 'TROOP_GAMES' ? 0 : metrics.distance;
+    const pace = requestedCategory === 'RUN' ? metrics.pace : null;
+    const category = resolveEffectiveCategory(requestedCategory, pace ?? undefined, settings.rules);
     let friends = { companionUserIds: activityFriendIds(activity), companionUserId: activity.companionUserId,
       companion: activity.companion, completedWithFriend: activity.completedWithFriend };
     if (input.companionUserIds !== undefined || input.companionUserId !== undefined) {
@@ -123,8 +149,9 @@ export async function updateActivity(activityId: string, input: UpdateActivityIn
       friends = { companionUserIds: [], companionUserId: null, companion, completedWithFriend: Boolean(companion) };
     }
     await tx.activity.update({ where: { id: activityId }, data: {
-      category, distance: category === 'TROOP_GAMES' ? 0 : input.distance ?? activity.distance,
+      category, distance,
       pace,
+      ...(input.runSegments !== undefined || metricsChanged || storedRunSegments.length ? { runSegments: runSegments.length ? runSegments as Prisma.InputJsonValue : Prisma.DbNull } : {}),
       ...(proofChange ? { proofUrls: nextProofUrls, proofUrl: nextProofUrls[0] ?? null } : {}),
       ...friends,
       basePointsOverride: input.basePointsOverride,

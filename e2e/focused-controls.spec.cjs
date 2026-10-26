@@ -125,12 +125,12 @@ test('correction mobile workflow preserves points until reviewed and moves the c
   expect(result.status).toBe('APPROVED');
   expect(result.dirtyWeeks).toContain(1);
   const corrected = await s.db.activity.findUnique({ where: { id: activity.id } });
-  expect(corrected).toMatchObject({ category: 'CYCLE', distance: 30, points: 10, weekNumber: 2, status: 'APPROVED', reviewedById: s.admin.id });
+  expect(corrected).toMatchObject({ category: 'CYCLE', distance: 30, points: 13, weekNumber: 2, status: 'APPROVED', reviewedById: s.admin.id });
   await reconcile(s.db, s.member.id);
   const total = await s.db.weeklyScore.aggregate({ where: { userId: s.member.id }, _sum: { totalPoints: true } });
-  expect(total._sum.totalPoints).toBe(10);
+  expect(total._sum.totalPoints).toBe(13);
   const leaderboard = await json(await s.member.api.get('/api/leaderboard?type=individual'));
-  expect(leaderboard.leaderboard.find((r) => r.userId === s.member.id).totalPoints).toBe(10);
+  expect(leaderboard.leaderboard.find((r) => r.userId === s.member.id).totalPoints).toBe(13);
   expect((await s.decide(correction.id)).status()).toBe(409);
 });
 

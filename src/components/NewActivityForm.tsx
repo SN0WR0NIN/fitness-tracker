@@ -29,7 +29,7 @@ const ACTIVITY_CATEGORIES: Array<{ value: ActivityCategory; label: string; icon:
 
 function scoringDescription(category: ActivityCategory, rules: ScoringRules) {
   if (category === 'RUN') return `${rules.runBasePerKm} point/km plus pace bonus`;
-  if (category === 'CYCLE') return `1 point for every ${rules.cycleKmPerPoint}km`;
+  if (category === 'CYCLE') return '1 point per 3km + 3 per complete 20km in this session; no speed bonus';
   if (category === 'SWIM') return `1 point for every ${rules.swimMetersPerPoint}m`;
   if (category === 'WALK_OR_HIKE') return `${rules.walkPointsPerKm} point/km · minimum ${rules.walkMinimumKm}km`;
   return `${rules.troopGamePoints} points per session`;

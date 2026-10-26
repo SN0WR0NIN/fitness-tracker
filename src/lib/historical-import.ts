@@ -26,7 +26,7 @@ export const hash = (value: unknown) => createHash('sha256').update(JSON.stringi
 export const placeholderId = (key: string) => `historical_${hash(key).slice(0, 32)}`;
 export function prepareRow(row: ImportRow, rules: ScoringRules, startDate: Date) {
   const category = resolveEffectiveCategory(row.category, row.pace, rules);
-  const points = calculateActivityPoints({ category, distance: row.distance, pace: row.pace, completedWithFriend: Boolean(row.companion) }, rules).totalPoints;
+  const points = calculateActivityPoints({ cycleScoringVersion: 1, category, distance: row.distance, pace: row.pace, completedWithFriend: Boolean(row.companion) }, rules).totalPoints;
   const occurredAt = new Date(row.occurredAt);
   // Stable across file ordering and repeated uploads. Never use a row number as identity.
   const id = `historical_${hash([participantKey(row), occurredAt.toISOString(), row.category, row.distance, row.pace ?? null, row.proofUrl ?? null]).slice(0, 40)}`;

@@ -15,13 +15,14 @@ async function main() {
       const activityId = fixture.activities?.[0]?.id;
       if (!activityId || !(await tx.activity.findUnique({ where: { id: activityId } }))) throw new Error('Fixture activity unavailable for backup check');
       const owner = await tx.activity.findUniqueOrThrow({ where: { id: activityId }, select: { userId: true } });
+      const runSegments = [{ kind: 'WORK', distance: 4, pace: 4.5 }, { kind: 'RECOVERY', distance: 2, pace: 9 }];
       const proofs = [
         `https://example.invalid/e2e-proof/${owner.userId}/backup-a.png`,
         `https://example.invalid/e2e-proof/${owner.userId}/backup-b.png`,
       ];
-      await tx.activity.update({ where: { id: activityId }, data: { basePointsOverride: 1.25, totalPointsOverride: 1.5, proofUrl: proofs[0], proofUrls: proofs } });
+      await tx.activity.update({ where: { id: activityId }, data: { category: 'RUN', distance: 6, pace: 6, runSegments, cycleScoringVersion: 2, basePointsOverride: 1.25, totalPointsOverride: 1.5, proofUrl: proofs[0], proofUrls: proofs } });
       await tx.$executeRaw`INSERT INTO app_internal.operational_backup(id,format,version,payload,checksum_sha256,counts) VALUES (${id}::uuid,'kg-stay-active-operational-backup',6,${JSON.stringify({...fixture,version:6})}::jsonb,'pending','{}'::jsonb)`;
-      const expected = JSON.stringify([{ id: activityId, basePointsOverride: 1.25, totalPointsOverride: 1.5, proofUrl: proofs[0], proofUrls: proofs }]);
+      const expected = JSON.stringify([{ id: activityId, runSegments, cycleScoringVersion: 2, basePointsOverride: 1.25, totalPointsOverride: 1.5, proofUrl: proofs[0], proofUrls: proofs }]);
       const rows = await tx.$queryRaw`SELECT version,
         checksum_sha256=encode(sha256(convert_to(payload::text,'UTF8')),'hex') AS checksum,
         (payload->'pointsLogs')=coalesce((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) FROM "PointsLog" p),'[]'::jsonb) AS logs,
@@ -47,6 +48,6 @@ async function main() {
     });
   } catch (e) { if (e !== done) throw e; }
   if (!valid || (await db.$queryRaw`SELECT id FROM app_internal.operational_backup WHERE id=${id}::uuid`).length) throw new Error('Snapshot rollback verification failed');
-  console.log('Scheduled v7 enrichment, PointsLog equality, score overrides, multiple proofs, SHA-256 and rollback verified in CI.');
+  console.log('Scheduled v7 enrichment, PointsLog equality, score overrides, multiple proofs, interval segments, SHA-256 and rollback verified in CI.');
 }
 main().catch(e => { console.error(e.message); process.exitCode = 1; }).finally(() => db.$disconnect());
