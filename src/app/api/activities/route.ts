@@ -11,6 +11,7 @@ import { requestLog } from '@/lib/telemetry';
 import { challengeDateRangeLabel, isWithinChallengeWindow, parseActivityDate } from '@/lib/activity-date';
 import { MAX_ACTIVITY_PROOFS, normalizeProofUrls } from '@/lib/proof-access';
 import { RunSegmentsSchema } from '@/lib/run-segment-schema';
+import { hasRequiredIntervalProofs, INTERVAL_PROOF_REQUIREMENT_MESSAGE } from '@/lib/activity-proof-requirements';
 
 const proofUrl = z.string().url().max(2048);
 type ActivityFeedRow = {
@@ -19,6 +20,7 @@ type ActivityFeedRow = {
   distance: number;
   pace: number | null;
   runSegments: Prisma.JsonValue | null;
+  cycleScoringVersion: number;
   duration: number | null;
   points: number;
   completedWithFriend: boolean;
@@ -50,7 +52,9 @@ const ActivitySchema = z.object({
     context.addIssue({ code: 'custom', path: ['runSegments'], message: 'Interval segments are available only for Run activities.' });
   }
   const proofs = normalizeProofUrls(data.proofUrls, data.proofUrl);
-  if (proofs.length === 0) {
+  if (!hasRequiredIntervalProofs(data.runSegments, proofs)) {
+    context.addIssue({ code: 'custom', path: ['proofUrls'], message: INTERVAL_PROOF_REQUIREMENT_MESSAGE });
+  } else if (proofs.length === 0) {
     context.addIssue({ code: 'custom', path: ['proofUrls'], message: 'At least one photo proof is required to submit an activity.' });
   }
   if (data.proofUrls && new Set(data.proofUrls).size !== data.proofUrls.length) {
@@ -177,6 +181,7 @@ export async function GET(request: NextRequest) {
         distance: true,
         pace: true,
         runSegments: true,
+        cycleScoringVersion: true,
         duration: true,
         points: true,
         completedWithFriend: true,

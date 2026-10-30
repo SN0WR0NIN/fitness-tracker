@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { normalizeRunSegments } from '@/lib/scoring';
 import ActivityProof from '@/components/ActivityProof';
 import type { CorrectionRecord,CorrectionSnapshot } from '@/lib/activity-corrections';
 export type CorrectionDisplay=Omit<CorrectionRecord,'createdAt'|'reviewedAt'> & {createdAt:string;reviewedAt:string|null};
@@ -42,5 +43,5 @@ function CorrectionCard({item,admin,locked}:{item:CorrectionDisplay;admin:boolea
 }
 function Snapshot({title,value}:{title:string;value:CorrectionSnapshot}) {
   const fields=[['Date (Singapore)',value.activityDate],['Type',value.category.replaceAll('_',' ')],['Distance',`${value.distance} ${value.category==='SWIM'?'m':'km'}`],['Pace',value.pace===null?'Not supplied':`${value.pace} min/km`],['Duration',value.duration===null?'Not supplied':`${value.duration} minutes`],['Companion',value.companionName || 'None'],['Week',String(value.weekNumber)],['Points',value.points.toFixed(1)]];
-  return <section className="min-w-0 rounded-xl border border-white/10 bg-black/10 p-4"><h3 className="mb-4 text-sm font-black text-lime-200">{title}</h3><dl className="space-y-2">{fields.map(([label,text])=><div key={label} className="flex justify-between gap-3 text-sm"><dt className="shrink-0 text-slate-400">{label}</dt><dd className="break-words text-right">{text}</dd></div>)}</dl><div className="mt-4"><ActivityProof proofUrl={value.proofUrl} label={`${title} proof`}/></div></section>;
+  return <section className="min-w-0 rounded-xl border border-white/10 bg-black/10 p-4"><h3 className="mb-4 text-sm font-black text-lime-200">{title}</h3><dl className="space-y-2">{fields.map(([label,text])=><div key={label} className="flex justify-between gap-3 text-sm"><dt className="shrink-0 text-slate-400">{label}</dt><dd className="break-words text-right">{text}</dd></div>)}</dl>{normalizeRunSegments(value.runSegments).length?<ol className="mt-4 space-y-2 text-sm" aria-label={`${title} interval segments`}>{normalizeRunSegments(value.runSegments).map((segment,index)=><li key={index}>{segment.kind==='WORK'?'Work':'Recovery'}: {segment.distance} km at {segment.pace.toFixed(2)} min/km</li>)}</ol>:null}<div className="mt-4"><ActivityProof proofUrl={value.proofUrl} label={`${title} proof`}/></div></section>;
 }

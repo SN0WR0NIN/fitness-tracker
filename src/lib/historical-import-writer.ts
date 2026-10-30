@@ -32,7 +32,7 @@ export async function writeHistoricalImport(tx: Prisma.TransactionClient, rows: 
     score[categoryField[row.category]] += row.points;
     scores.set(key, score);
     return {
-      id: row.id, userId, columnId, category: row.category, distance: row.distance,
+      id: row.id, userId, columnId, category: row.category, distance: row.distance, cycleScoringVersion: 1,
       pace: row.pace, companion: row.companion, completedWithFriend: Boolean(row.companion),
       proofUrl: row.proofUrl, points: row.points, occurredAt: row.occurredAt,
       weekStart: row.weekStart, weekNumber: row.weekNumber, status: 'APPROVED' as const,

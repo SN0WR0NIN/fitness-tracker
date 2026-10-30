@@ -26,6 +26,7 @@ type ScoreActivity = {
   proofUrls: string[];
   basePointsOverride: number | null;
   totalPointsOverride: number | null;
+  cycleScoringVersion?: number;
   reviewNote: string;
   pointsLog: {
     basePoints: number;
@@ -134,10 +135,10 @@ export default function AdminScoreOverrides({
       edit.totalEnabled &&
       (!Number.isFinite(total) ||
         total < 0 ||
-        Math.abs(total * 2 - Math.round(total * 2)) > 1e-9)
+        Math.abs(total * (activity.category === "CYCLE" && activity.cycleScoringVersion === 2 ? 10 : 2) - Math.round(total * (activity.category === "CYCLE" && activity.cycleScoringVersion === 2 ? 10 : 2))) > 1e-9)
     )
       return setError(
-        "Total points must be zero or greater and use 0.5-point increments.",
+        "Total points must be nonnegative and use 0.1 increments for new cycling entries, otherwise 0.5.",
       );
     setSavingId(activity.id);
     setSavedId(null);
@@ -256,7 +257,7 @@ export default function AdminScoreOverrides({
           All attached proof photos, distance and pace are shown together for
           vetting. Base override replaces the calculated base points.
           Friend-bonus allocation stays automatic. A Total override, when
-          enabled, becomes the exact final saved total and must use 0.5-point
+          enabled, becomes the exact final saved total and must use 0.1-point increments for new cycling entries, otherwise 0.5-point
           increments.
         </p>
         <p className="mt-2 text-xs font-bold text-slate-400">
@@ -464,7 +465,7 @@ export default function AdminScoreOverrides({
                           aria-label="Points Total override"
                           type="number"
                           min="0"
-                          step="0.5"
+                          step={activity.category === "CYCLE" && activity.cycleScoringVersion === 2 ? "0.1" : "0.5"}
                           disabled={!edit.totalEnabled}
                           value={edit.total}
                           onChange={(event) =>

@@ -60,6 +60,7 @@ model Activity {
   category        ActivityCategory
   distance        Float      // in km for run/cycle/hike, meters for swim
   pace            Float?     // in min/km
+  cycleScoringVersion Int @default(1) // 1 legacy; 2 new-entry distance milestones, never inferred from workout date
   runSegments     Json?      // interval-run work/recovery distance and pace groups
   duration        Int?       // in minutes
   completedWithFriend Boolean @default(false)

@@ -41,11 +41,11 @@ export default async function RulesPage() {
             <SectionTitle icon={<Sparkles />} title="Scoring at a glance" />
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <RuleCard icon={<Footprints />} tone="text-lime-300 bg-lime-300/10" title="Running" score={`${rules.runBasePerKm} pt / km base`} detail={`Pace bonuses: +${rules.runFastBonusPerKm}/km below ${rules.runFastPaceThreshold}:00, +${rules.runMediumBonusPerKm}/km below ${rules.runMediumPaceThreshold}:00, +${rules.runStandardBonusPerKm}/km through ${rules.runSlowPaceThreshold}:00, and +0/km above ${rules.runSlowPaceThreshold}:00. For interval runs, work and recovery distance are each scored using their own pace band, then combined before final rounding.`} />
-              <RuleCard icon={<Bike />} tone="text-cyan-300 bg-cyan-300/10" title="Cycling" score={`1 pt / ${rules.cycleKmPerPoint} km`} detail="Road, mountain, and indoor rides are accepted with clear activity evidence." />
+              <RuleCard icon={<Bike />} tone="text-cyan-300 bg-cyan-300/10" title="Cycling" score="1 pt / 3 km + milestones" detail="New entries also earn +3 points for every complete 20 km in one session, repeating without a cap. No speed bonus. Examples: 15 km = 5.0, 20 km = 9.6, 40 km = 19.3, 60 km = 29.0, 80 km = 38.6 points before any eligible friend bonus. Existing entries keep the previous scoring rule." />
               <RuleCard icon={<Waves />} tone="text-violet-300 bg-violet-300/10" title="Swimming" score={`1 pt / ${rules.swimMetersPerPoint} m`} detail="Pool, open-water, and triathlon swim legs all count." />
               <RuleCard icon={<Footprints />} tone="text-orange-300 bg-orange-300/10" title="Walking / hiking" score={`${rules.walkPointsPerKm} pt / km`} detail={`A minimum distance of ${rules.walkMinimumKm} km is required for points.`} />
             </div>
-            <p className="mt-4 rounded-xl border border-lime-300/20 bg-lime-300/[0.06] px-4 py-3 text-sm text-slate-300"><strong className="text-lime-300">Rounding rule:</strong> after eligible bonuses are added, the saved score always rounds down to the lower 0.5-point increment. For example, 7.99 becomes 7.5, 7.50 stays 7.5, and 7.49 becomes 7.0.</p>
+            <p className="mt-4 rounded-xl border border-lime-300/20 bg-lime-300/[0.06] px-4 py-3 text-sm text-slate-300"><strong className="text-lime-300">Rounding rule:</strong> after eligible bonuses are added, new cycling entries round down to one decimal place (0.1 points). Other sports and existing cycling entries round down to the lower 0.5-point increment. For example, 7.99 becomes 7.5, 7.50 stays 7.5, and 7.49 becomes 7.0.</p>
           </section>
 
           <section>

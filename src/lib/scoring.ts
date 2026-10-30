@@ -3,13 +3,13 @@
  * Rules per the official KG Stay Active Challenge point system:
  * - Run: 1pt/km base + pace bonus (+1.5/km below 5:00, +1.0/km below 6:00, +0.5/km through 9:00).
  *   Runs slower than 9:00/km remain runs but receive no pace bonus.
- * - Cycle: 1pt per 3km.
+ * - New cycling entries: 1pt per 3km + 3pt per complete 20km in one session; no speed bonus.
  * - Swim: 1pt per 100m.
  * - Walk/Hike: 1pt/km, but requires a minimum 5km distance to count at all.
  * - Troop Games: 5 points flat.
  * - Friend bonus: +3 per participant / Singapore day / eligible sport; maximum 12 across four sports.
  *   No extra bonus for Troop Games, repeated same-sport entries, or extra friends.
- * - Final totals are always rounded DOWN to the lower 0.5-point increment.
+ * - New cycling totals floor to 0.1 points; legacy cycling and other sports floor to 0.5.
  */
 
 export type ActivityCategory = 
@@ -66,6 +66,7 @@ interface ScoringInput {
   distance?: number; // km for run/cycle/hike, meters for swim
   pace?: number; // min/km
   runSegments?: readonly RunSegment[];
+  cycleScoringVersion?: number; // omitted for new-entry previews; persisted records default to legacy 1
   completedWithFriend?: boolean;
 }
 
@@ -83,6 +84,13 @@ interface ScoringOutput {
 export function roundScoreDown(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
   return Math.floor((value + 1e-9) * 2) / 2;
+}
+
+export const CURRENT_CYCLE_SCORING_VERSION = 2;
+export function roundActivityScoreDown(value: number, category: string, cycleScoringVersion = CURRENT_CYCLE_SCORING_VERSION): number {
+  if (category !== 'CYCLE' || cycleScoringVersion !== 2) return roundScoreDown(value);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.floor((value + 1e-9) * 10) / 10;
 }
 
 /**
@@ -139,7 +147,7 @@ export function runSegmentPoints(segment: RunSegment, rules: ScoringRules = DEFA
 }
 
 /** Raw activity value before display rounding, friend bonus, or final half-point flooring. */
-function rawBasePoints(input: Pick<ScoringInput, 'category' | 'distance' | 'pace' | 'runSegments'>, rules: ScoringRules): number {
+function rawBasePoints(input: Pick<ScoringInput, 'category' | 'distance' | 'pace' | 'runSegments' | 'cycleScoringVersion'>, rules: ScoringRules): number {
   switch (input.category) {
     case 'RUN':
       if (input.runSegments?.length) {
@@ -151,7 +159,8 @@ function rawBasePoints(input: Pick<ScoringInput, 'category' | 'distance' | 'pace
       }
       return 0;
     case 'CYCLE':
-      return input.distance ? input.distance / rules.cycleKmPerPoint : 0;
+      return input.distance ? input.distance / ((input.cycleScoringVersion ?? CURRENT_CYCLE_SCORING_VERSION) === 2 ? 3 : rules.cycleKmPerPoint)
+        + ((input.cycleScoringVersion ?? CURRENT_CYCLE_SCORING_VERSION) === 2 ? 3 * Math.floor(input.distance / 20) : 0) : 0;
     case 'SWIM':
       return input.distance ? input.distance / rules.swimMetersPerPoint : 0;
     case 'WALK_OR_HIKE':
@@ -167,7 +176,7 @@ function rawBasePoints(input: Pick<ScoringInput, 'category' | 'distance' | 'pace
  * floors below 0.5 points, while sub-minimum Walk/Hike entries remain ineligible.
  */
 export function hasPositiveBaseScore(
-  input: Pick<ScoringInput, 'category' | 'distance' | 'pace' | 'runSegments'>,
+  input: Pick<ScoringInput, 'category' | 'distance' | 'pace' | 'runSegments' | 'cycleScoringVersion'>,
   rules: ScoringRules = DEFAULT_SCORING_RULES
 ): boolean {
   return rawBasePoints(input, rules) > 0;
@@ -184,7 +193,7 @@ export function calculateActivityPoints(input: ScoringInput, rules: ScoringRules
   // Daily allocation is enforced by planDailyActivityScores in the server ledger.
   // The standalone calculation represents a maximum eligible estimate only.
   const friendBonus = input.completedWithFriend && input.category !== 'TROOP_GAMES' && basePoints > 0 ? rules.friendBonus : 0;
-  const totalPoints = roundScoreDown(basePoints + friendBonus);
+  const totalPoints = roundActivityScoreDown(basePoints + friendBonus, input.category, input.cycleScoringVersion);
 
   return {
     basePoints: Math.round(basePoints * 100) / 100,

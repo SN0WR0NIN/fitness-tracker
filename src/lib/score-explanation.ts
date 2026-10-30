@@ -6,6 +6,7 @@ export type ExplainedActivity = {
   category: string; status: 'APPROVED' | 'PENDING' | 'REJECTED'; points: number;
   distance?: number | null; pace?: number | null;
   runSegments?: unknown;
+  cycleScoringVersion?: number;
   completedWithFriend: boolean; pointsLog?: ScoreBreakdown | null;
   basePointsOverride?: number | null; totalPointsOverride?: number | null;
 };
@@ -86,7 +87,12 @@ function calculationLines(
       lines.push(`Pace: no pace bonus recorded = ${breakdown.pacePoints.toFixed(1)} pts.`);
     }
   } else if (activity.category === 'CYCLE') {
-    lines.push(`Distance: ${distance.toFixed(2)} km ÷ ${rate(rules.cycleKmPerPoint)} km/pt = ${breakdown.distancePoints.toFixed(1)} pts.`);
+    if (activity.cycleScoringVersion === 2) {
+      lines.push(`Distance: ${distance.toFixed(2)} km ÷ 3 km/pt.`);
+      lines.push(`Session distance bonus: ${Math.floor(distance / 20)} complete 20 km blocks × 3 = ${3 * Math.floor(distance / 20)} pts. No speed bonus.`);
+    } else {
+      lines.push(`Legacy cycling: ${distance.toFixed(2)} km ÷ ${rate(rules.cycleKmPerPoint)} km/pt = ${breakdown.distancePoints.toFixed(1)} pts; no distance milestone bonus.`);
+    }
   } else if (activity.category === 'SWIM') {
     lines.push(`Distance: ${distance.toFixed(0)} m ÷ ${rate(rules.swimMetersPerPoint)} m/pt = ${breakdown.distancePoints.toFixed(1)} pts.`);
   } else if (activity.category === 'WALK_OR_HIKE') {
@@ -96,7 +102,7 @@ function calculationLines(
   }
 
   if (activity.category !== 'TROOP_GAMES') lines.push(`Friend bonus: +${breakdown.friendBonus.toFixed(1)} pts.`);
-  lines.push(`Final total: ${breakdown.totalPoints.toFixed(1)} pts after rounding down to the lower 0.5-point increment.`);
+  lines.push(`Final total: ${breakdown.totalPoints.toFixed(1)} pts after rounding down to the lower ${activity.category === 'CYCLE' && activity.cycleScoringVersion === 2 ? '0.1' : '0.5'}-point increment.`);
   return lines;
 }
 

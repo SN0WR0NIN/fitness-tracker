@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
-
 const PASSWORD = process.env.E2E_PASSWORD || 'E2E-only-Password-123!';
+
 const MEMBER = 'member-e2e@example.test';
 const ADMIN = 'admin-e2e@example.test';
 const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlWRAAAAABJRU5ErkJggg==', 'base64');
@@ -31,7 +31,10 @@ test('member to admin workflow stays correct and private', async ({ browser, req
 
   await memberPage.goto('/results');
   await expect(memberPage.getByRole('heading', { name: 'Weekly Results & Awards' })).toBeVisible();
-  await expect(memberPage.getByText('Week 1 awards')).toBeVisible();
+  const weekOne = memberPage.locator('details').filter({ hasText: 'Week 1' }).first();
+  await expect(weekOne.locator('summary')).toContainText('Week 1');
+  await weekOne.locator('summary').click();
+  await expect(weekOne.getByRole('heading', { name: 'Awards' })).toBeVisible();
   await expect(memberPage.getByText('E2E Member').first()).toBeVisible();
 
   const fakeImage = await memberPage.request.post('/api/upload', {
@@ -74,7 +77,7 @@ test('member to admin workflow stays correct and private', async ({ browser, req
   const adminContext = await browser.newContext();
   const adminPage = await login(adminContext, ADMIN);
   await adminPage.goto('/admin');
-  await expect(adminPage.getByRole('heading', { name: 'Automated safety net' }).first()).toBeVisible();
+  await expect(adminPage.getByRole('heading', { name: 'Run the challenge from one place' })).toBeVisible();
   await expect(adminPage.getByText('Score reconciliation').first()).toBeVisible();
   await expect(adminPage.getByText('Weekly awards').first()).toBeVisible();
 
