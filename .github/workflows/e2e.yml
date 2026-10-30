@@ -43,6 +43,10 @@ jobs:
         run: npm ci
       - name: Hardening unit and archive checks
         run: npm run test:hardening
+      - name: Rehearse feature SQL against populated synthetic legacy schema
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: node scripts/check-populated-legacy-upgrade.cjs
       - name: Prepare ephemeral database
         run: |
           npx prisma generate
