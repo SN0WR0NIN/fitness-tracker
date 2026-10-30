@@ -18,7 +18,7 @@ export default async function NewActivityPage() {
       where: { userId },
       orderBy: { occurredAt: 'desc' },
       take: 30,
-      select: { category: true, distance: true, pace: true, occurredAt: true, status: true },
+      select: { category: true, distance: true, pace: true, runSegments: true, occurredAt: true, status: true },
     }),
   ]);
   const last = recentActivities.find((activity: (typeof recentActivities)[number]) => activity.status !== 'REJECTED') ?? null;
@@ -29,6 +29,6 @@ export default async function NewActivityPage() {
     maintenanceMode={settings.maintenanceMode}
     maintenanceMessage={settings.maintenanceMessage}
     recentActivities={recentActivities.map((activity: (typeof recentActivities)[number]) => ({ ...activity, occurredAt: activity.occurredAt.toISOString() }))}
-    lastActivity={last ? { category: last.category, distance: last.distance, pace: last.pace } : null}
+    lastActivity={last ? { category: last.category, distance: last.distance, pace: last.pace, runSegments: last.runSegments } : null}
   />;
 }

@@ -15,7 +15,7 @@ import { performanceLog, timed } from '@/lib/telemetry';
 
 export const dynamic='force-dynamic';
 type DashboardUser={stravaAthleteId:string|null;email:string;};
-type DashboardActivity={id:string;category:'RUN'|'CYCLE'|'SWIM'|'WALK_OR_HIKE'|'TROOP_GAMES';distance:number;pace:number|null;duration:number|null;points:number;basePointsOverride:number|null;totalPointsOverride:number|null;pointsLog:ScoreBreakdown|null;completedWithFriend:boolean;companion:string|null;companionUserId:string|null;companionUserIds:string[];status:'PENDING'|'APPROVED'|'REJECTED';rejectionReason:string|null;proofUrl:string|null;proofUrls:string[];occurredAt:Date;stravaActivityId:string|null;};
+type DashboardActivity={id:string;category:'RUN'|'CYCLE'|'SWIM'|'WALK_OR_HIKE'|'TROOP_GAMES';distance:number;pace:number|null;runSegments?:unknown;cycleScoringVersion:number;duration:number|null;points:number;basePointsOverride:number|null;totalPointsOverride:number|null;pointsLog:ScoreBreakdown|null;completedWithFriend:boolean;companion:string|null;companionUserId:string|null;companionUserIds:string[];status:'PENDING'|'APPROVED'|'REJECTED';rejectionReason:string|null;proofUrl:string|null;proofUrls:string[];occurredAt:Date;stravaActivityId:string|null;};
 type SelectableUser={id:string;name:string};type ColumnScore={columnId:string;_sum:{totalPoints:number|null}};
 
 export default async function DashboardPage(){
@@ -25,7 +25,7 @@ export default async function DashboardPage(){
     timed('perf.dashboard.participant_profile',()=>getParticipantProfile(userId,{includeActivities:false}),{route:'/dashboard'}),
     timed('perf.dashboard.user',()=>prisma.user.findUnique({where:{id:userId},select:{stravaAthleteId:true,email:true}}),{route:'/dashboard'}),
     timed('perf.dashboard.profile_settings',()=>getUserProfileSettings(userId),{route:'/dashboard'}),timed('perf.dashboard.goal_records',()=>getWeeklyGoalRecords(userId),{route:'/dashboard'}),
-    timed('perf.dashboard.activities',()=>prisma.activity.findMany({where:{userId,occurredAt:{gte:settings.startDate,lte:settings.endDate}},orderBy:{occurredAt:'desc'},select:{id:true,category:true,distance:true,pace:true,duration:true,points:true,basePointsOverride:true,totalPointsOverride:true,pointsLog:{select:{basePoints:true,friendBonus:true,totalPoints:true}},completedWithFriend:true,companion:true,companionUserId:true,companionUserIds:true,status:true,rejectionReason:true,proofUrl:true,proofUrls:true,occurredAt:true,stravaActivityId:true}}),{route:'/dashboard'}),
+    timed('perf.dashboard.activities',()=>prisma.activity.findMany({where:{userId,occurredAt:{gte:settings.startDate,lte:settings.endDate}},orderBy:{occurredAt:'desc'},select:{id:true,category:true,distance:true,pace:true,runSegments:true,cycleScoringVersion:true,duration:true,points:true,basePointsOverride:true,totalPointsOverride:true,pointsLog:{select:{basePoints:true,friendBonus:true,totalPoints:true}},completedWithFriend:true,companion:true,companionUserId:true,companionUserIds:true,status:true,rejectionReason:true,proofUrl:true,proofUrls:true,occurredAt:true,stravaActivityId:true}}),{route:'/dashboard'}),
     timed('perf.dashboard.column_scores',()=>prisma.weeklyScore.groupBy({by:['columnId'],where:{weekStart:{gte:seasonWeekStart,lte:seasonWeekEnd}},_sum:{totalPoints:true}}),{route:'/dashboard'}),
     timed('perf.dashboard.active_columns',()=>getActiveColumnIds(),{route:'/dashboard'})
   ]);performanceLog('perf.dashboard.parallel_data',Date.now()-dataStartedAt,{route:'/dashboard'});

@@ -6,14 +6,15 @@ import { updateActivity } from "@/lib/activities";
 import { prisma } from "@/lib/prisma";
 import { recordAdminAudit } from "@/lib/admin-control";
 import { MAX_ACTIVITY_PROOFS } from "@/lib/proof-access";
+import { RunSegmentsSchema } from "@/lib/run-segment-schema";
 
-const halfPoint = z
+const scoreIncrement = z
   .number()
   .nonnegative("Total points cannot be negative")
   .max(100000)
   .refine(
-    (value) => Math.abs(value * 2 - Math.round(value * 2)) < 1e-9,
-    "Total points must use 0.5-point increments",
+    (value) => Math.abs(value * 10 - Math.round(value * 10)) < 1e-9,
+    "Total points must use 0.1-point increments; legacy and non-cycling activities require 0.5",
   );
 const proof = z.string().url().max(2048);
 
@@ -33,6 +34,7 @@ const EditActivitySchema = z
       .max(60)
       .nullable()
       .optional(),
+    runSegments: RunSegmentsSchema.nullable().optional(),
     companionUserIds: z.array(z.string().min(1).max(200)).max(100).optional(),
     companionUserId: z.string().nullable().optional(),
     companionName: z.string().nullable().optional(),
@@ -44,7 +46,7 @@ const EditActivitySchema = z
       .max(100000)
       .nullable()
       .optional(),
-    totalPointsOverride: halfPoint.nullable().optional(),
+    totalPointsOverride: scoreIncrement.nullable().optional(),
     reviewNote: z
       .string()
       .trim()

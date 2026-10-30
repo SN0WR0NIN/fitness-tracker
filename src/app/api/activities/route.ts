@@ -10,6 +10,8 @@ import { getChallengeSettings } from '@/lib/admin-control';
 import { requestLog } from '@/lib/telemetry';
 import { challengeDateRangeLabel, isWithinChallengeWindow, parseActivityDate } from '@/lib/activity-date';
 import { MAX_ACTIVITY_PROOFS, normalizeProofUrls } from '@/lib/proof-access';
+import { RunSegmentsSchema } from '@/lib/run-segment-schema';
+import { hasRequiredIntervalProofs, INTERVAL_PROOF_REQUIREMENT_MESSAGE } from '@/lib/activity-proof-requirements';
 
 const proofUrl = z.string().url().max(2048);
 type ActivityFeedRow = {
@@ -17,6 +19,8 @@ type ActivityFeedRow = {
   category: string;
   distance: number;
   pace: number | null;
+  runSegments: Prisma.JsonValue | null;
+  cycleScoringVersion: number;
   duration: number | null;
   points: number;
   completedWithFriend: boolean;
@@ -35,16 +39,22 @@ const ActivitySchema = z.object({
   category: z.enum(['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE', 'TROOP_GAMES']),
   distance: z.number().positive('Distance must be greater than zero').max(100000, 'Distance is too large').optional(),
   pace: z.number().positive('Pace must be greater than zero').max(60, 'Pace is too large').optional(),
+  runSegments: RunSegmentsSchema.optional(),
   companionUserIds: z.array(z.string().min(1).max(200)).max(100).optional(),
   companionUserId: z.string().optional(),
   proofUrl: z.preprocess((val) => (val === '' ? undefined : val), proofUrl.optional()),
   proofUrls: z.array(proofUrl).max(MAX_ACTIVITY_PROOFS, `Attach up to ${MAX_ACTIVITY_PROOFS} proof photos.`).optional(),
 }).superRefine((data, context) => {
-  if (data.category !== 'TROOP_GAMES' && data.distance === undefined) {
+  if (data.category !== 'TROOP_GAMES' && data.distance === undefined && !(data.category === 'RUN' && data.runSegments)) {
     context.addIssue({ code: 'custom', path: ['distance'], message: 'Distance is required for this activity' });
   }
+  if (data.runSegments && data.category !== 'RUN') {
+    context.addIssue({ code: 'custom', path: ['runSegments'], message: 'Interval segments are available only for Run activities.' });
+  }
   const proofs = normalizeProofUrls(data.proofUrls, data.proofUrl);
-  if (proofs.length === 0) {
+  if (!hasRequiredIntervalProofs(data.runSegments, proofs)) {
+    context.addIssue({ code: 'custom', path: ['proofUrls'], message: INTERVAL_PROOF_REQUIREMENT_MESSAGE });
+  } else if (proofs.length === 0) {
     context.addIssue({ code: 'custom', path: ['proofUrls'], message: 'At least one photo proof is required to submit an activity.' });
   }
   if (data.proofUrls && new Set(data.proofUrls).size !== data.proofUrls.length) {
@@ -107,6 +117,7 @@ export async function POST(request: NextRequest) {
       category: validatedData.category,
       distance: validatedData.distance,
       pace: validatedData.pace,
+      runSegments: validatedData.runSegments,
       companionUserId: validatedData.companionUserId,
       companionUserIds: validatedData.companionUserIds,
       proofUrl: validatedData.proofUrl,
@@ -169,6 +180,8 @@ export async function GET(request: NextRequest) {
         category: true,
         distance: true,
         pace: true,
+        runSegments: true,
+        cycleScoringVersion: true,
         duration: true,
         points: true,
         completedWithFriend: true,

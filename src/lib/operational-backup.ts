@@ -13,7 +13,7 @@ export async function captureOperationalBackup() {
     const queries: Record<string, string> = {
       columns: 'SELECT * FROM public."Column" ORDER BY id',
       users: 'SELECT id,name,email,username,role,"columnId","stravaAthleteId","createdAt","updatedAt" FROM public."User" ORDER BY id',
-      activities: 'SELECT id,"userId","columnId",category,distance,pace,duration,"completedWithFriend",companion,"companionUserId","companionUserIds","proofUrl",points,status,"reviewedById","reviewedAt","rejectionReason","occurredAt","weekStart","weekNumber","stravaActivityId","mapPolyline","elevationGain","createdAt","updatedAt" FROM public."Activity" ORDER BY id',
+      activities: 'SELECT id,"userId","columnId",category,distance,pace,"runSegments","cycleScoringVersion",duration,"completedWithFriend",companion,"companionUserId","companionUserIds","proofUrl","proofUrls",points,"basePointsOverride","totalPointsOverride",status,"reviewedById","reviewedAt","rejectionReason","occurredAt","weekStart","weekNumber","stravaActivityId","mapPolyline","elevationGain","createdAt","updatedAt" FROM public."Activity" ORDER BY id',
       pointsLogs: 'SELECT id,"activityId","basePoints","friendBonus","totalPoints","createdAt" FROM public."PointsLog" ORDER BY id',
       weeklyScores: 'SELECT * FROM public."WeeklyScore" ORDER BY id',
       profileSettings: 'SELECT * FROM public."UserProfileSettings" ORDER BY "userId"',
