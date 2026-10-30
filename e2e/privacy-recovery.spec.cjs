@@ -203,19 +203,22 @@ test('interval proofs remain separate, owned and mandatory for edits and steady-
     for (const proofUrls of [[work],[work,work]]) expect((await s.owner.api.patch(`/api/activities/${interval.id}`,{data:{proofUrls}})).status()).toBe(400);
     const unchanged=await s.db.activity.findUniqueOrThrow({where:{id:interval.id}});
     expect(unchanged.proofUrls).toEqual([work,recovery]);expect(unchanged.runSegments).toEqual(runSegments);
-    const steady=await s.create(s.owner,work,{distance:7,pace:6,activityDate:'2026-09-04'});
+    // This is a separate workout: do not reuse an attachment from the earlier
+    // interval and accidentally trigger the independent duplicate-proof guard.
+    const steadyWork=await s.upload(s.owner), steadyRecovery=await s.upload(s.owner);
+    const steady=await s.create(s.owner,steadyWork,{distance:7,pace:6,activityDate:'2026-09-04'});
     await body(await s.admin.api.post(`/api/admin/activities/${steady.id}/approve`,{data:{}}));
-    const proposed={activityDate:'2026-09-04',category:'RUN',distance:6,pace:6,runSegments,duration:null,companionUserId:null,proofUrl:work};
+    const proposed={activityDate:'2026-09-04',category:'RUN',distance:6,pace:6,runSegments,duration:null,companionUserId:null,proofUrl:steadyWork};
     const correction=()=>s.owner.api.post('/api/corrections',{data:{activityId:steady.id,reason:'Correct this steady entry into work and recovery segments',proposed}});
     expect((await correction()).status()).toBe(400);
     // A malformed legacy gallery with a repeated URL is still only one proof.
-    await s.db.activity.update({where:{id:steady.id},data:{proofUrls:[work,work]}});
+    await s.db.activity.update({where:{id:steady.id},data:{proofUrls:[steadyWork,steadyWork]}});
     expect((await correction()).status()).toBe(400);
-    await s.db.activity.update({where:{id:steady.id},data:{proofUrls:[work,recovery]}});
+    await s.db.activity.update({where:{id:steady.id},data:{proofUrls:[steadyWork,steadyRecovery]}});
     const approved=await body(await correction(),201);
     await body(await s.admin.api.post('/api/admin/corrections',{data:{id:approved.id,decision:'APPROVED',reason:'Verified separate owned work and recovery photos'}}));
     const corrected=await s.db.activity.findUniqueOrThrow({where:{id:steady.id}});
-    expect(corrected.runSegments).toEqual(runSegments);expect(corrected.proofUrls).toEqual([work,recovery]);expect(corrected.points).toBe(13);
+    expect(corrected.runSegments).toEqual(runSegments);expect(corrected.proofUrls).toEqual([steadyWork,steadyRecovery]);expect(corrected.points).toBe(13);
   } finally {await s.cleanup();}
 });
 
