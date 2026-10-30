@@ -71,6 +71,8 @@ type DashboardActivity = {
   category: ActivityCategory;
   distance: number;
   pace: number | null;
+  runSegments?: unknown;
+  cycleScoringVersion?: number;
   duration: number | null;
   points: number;
   pointsLog?: ScoreBreakdown | null;

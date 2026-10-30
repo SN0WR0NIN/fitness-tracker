@@ -99,6 +99,16 @@ async function restore(input, confirmation) {
     phase = 'post-commit-verification';
     const persisted = await db.$queryRaw`SELECT (SELECT count(*)::int FROM "Activity") AS activities,(SELECT count(*)::int FROM "PointsLog") AS logs,(SELECT count(*)::int FROM "User" WHERE NOT "mustChangePassword") AS unlocked_users`;
     if (persisted[0].activities !== result.collections.activities || persisted[0].logs !== result.collections.pointsLogs || persisted[0].unlocked_users !== 0) throw new Error('Post-commit verification failed.');
+    // Old archives omit the version and must retain legacy scoring (default 1).
+    for (const activity of backup.activities) {
+      const rows = await db.$queryRaw`SELECT "cycleScoringVersion" FROM "Activity" WHERE id=${activity.id}`;
+      if (rows[0]?.cycleScoringVersion !== (activity.cycleScoringVersion ?? 1)) throw new Error('Post-commit cycling version verification failed.');
+    }
+    // Verify interval JSON again after commit, not merely during insertion.
+    for (const activity of backup.activities.filter(row => row.runSegments != null)) {
+      const rows = await db.$queryRaw`SELECT "runSegments" = ${JSON.stringify(activity.runSegments)}::jsonb AS same FROM "Activity" WHERE id=${activity.id}`;
+      if (!rows[0]?.same) throw new Error('Post-commit interval segment verification failed.');
+    }
     console.log(JSON.stringify({ ...result, postCommitVerified: true }));
   } finally { await db.$disconnect(); }
 }

@@ -1,10 +1,12 @@
-import { DEFAULT_SCORING_RULES, type ScoringRules } from './scoring';
+import { DEFAULT_SCORING_RULES, normalizeRunSegments, runPaceBonusPerKm, runSegmentPoints, type ScoringRules } from './scoring';
 
 export type ScoreBreakdown = { basePoints: number; friendBonus: number; totalPoints: number };
 export type ScoreDisplayBreakdown = ScoreBreakdown & { distancePoints: number; pacePoints: number };
 export type ExplainedActivity = {
   category: string; status: 'APPROVED' | 'PENDING' | 'REJECTED'; points: number;
   distance?: number | null; pace?: number | null;
+  runSegments?: unknown;
+  cycleScoringVersion?: number;
   completedWithFriend: boolean; pointsLog?: ScoreBreakdown | null;
   basePointsOverride?: number | null; totalPointsOverride?: number | null;
 };
@@ -70,14 +72,27 @@ function calculationLines(
   const lines: string[] = [];
   if (activity.category === 'RUN') {
     lines.push(`Distance: ${distance.toFixed(2)} km × ${rate(rules.runBasePerKm)} pt/km = ${breakdown.distancePoints.toFixed(1)} pts.`);
-    if (activity.pace !== null && activity.pace !== undefined && Number.isFinite(activity.pace)) {
+    const runSegments = normalizeRunSegments(activity.runSegments);
+    if (runSegments.length) {
+      for (const [index, segment] of runSegments.entries()) {
+        const label = segment.kind === 'WORK' ? 'Work' : 'Recovery';
+        const bonus = runPaceBonusPerKm(segment.pace, rules);
+        lines.push(`${label} ${index + 1}: ${segment.distance.toFixed(2)} km at ${paceLabel(segment.pace)}/km → +${rate(bonus)} pace pt/km; ${runSegmentPoints(segment, rules).toFixed(2)} pts including distance.`);
+      }
+      lines.push(`Interval pace bonus total: ${breakdown.pacePoints.toFixed(1)} pts. All segments are combined before final rounding.`);
+    } else if (activity.pace !== null && activity.pace !== undefined && Number.isFinite(activity.pace)) {
       const paceBonus = runPaceRate(activity.pace, rules);
       lines.push(`Pace: ${paceLabel(activity.pace)}/km → +${rate(paceBonus)} pt/km = ${breakdown.pacePoints.toFixed(1)} pts.`);
     } else {
       lines.push(`Pace: no pace bonus recorded = ${breakdown.pacePoints.toFixed(1)} pts.`);
     }
   } else if (activity.category === 'CYCLE') {
-    lines.push(`Distance: ${distance.toFixed(2)} km ÷ ${rate(rules.cycleKmPerPoint)} km/pt = ${breakdown.distancePoints.toFixed(1)} pts.`);
+    if (activity.cycleScoringVersion === 2) {
+      lines.push(`Distance: ${distance.toFixed(2)} km ÷ 3 km/pt.`);
+      lines.push(`Session distance bonus: ${Math.floor(distance / 20)} complete 20 km blocks × 3 = ${3 * Math.floor(distance / 20)} pts. No speed bonus.`);
+    } else {
+      lines.push(`Legacy cycling: ${distance.toFixed(2)} km ÷ ${rate(rules.cycleKmPerPoint)} km/pt = ${breakdown.distancePoints.toFixed(1)} pts; no distance milestone bonus.`);
+    }
   } else if (activity.category === 'SWIM') {
     lines.push(`Distance: ${distance.toFixed(0)} m ÷ ${rate(rules.swimMetersPerPoint)} m/pt = ${breakdown.distancePoints.toFixed(1)} pts.`);
   } else if (activity.category === 'WALK_OR_HIKE') {
@@ -87,7 +102,7 @@ function calculationLines(
   }
 
   if (activity.category !== 'TROOP_GAMES') lines.push(`Friend bonus: +${breakdown.friendBonus.toFixed(1)} pts.`);
-  lines.push(`Final total: ${breakdown.totalPoints.toFixed(1)} pts after rounding down to the lower 0.5-point increment.`);
+  lines.push(`Final total: ${breakdown.totalPoints.toFixed(1)} pts after rounding down to the lower ${activity.category === 'CYCLE' && activity.cycleScoringVersion === 2 ? '0.1' : '0.5'}-point increment.`);
   return lines;
 }
 

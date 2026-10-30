@@ -10,7 +10,7 @@
     "seed": "node prisma/seed.js",
     "validate:backup": "node scripts/validate-operational-backup.cjs",
     "postinstall": "prisma generate",
-    "test:hardening": "node scripts/hardening-unit-tests.cjs"
+    "test:hardening": "node scripts/hardening-unit-tests.cjs && node scripts/correction-interval-tests.cjs && node scripts/interval-backup-tests.cjs && node scripts/cycling-scoring-tests.cjs"
   },
   "dependencies": {
     "@clerk/nextjs": "7.9.4",

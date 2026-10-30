@@ -116,8 +116,10 @@ test('external proof disclosure stays private and admin uploads attach to the ta
 test('v7 export retains ledger/history, rejects corrupt backups, and writes a synthetic restore fixture', async ({browser,baseURL,request})=>{
   const s=await accounts(browser,baseURL);
   try {
-    const a=await s.create(s.owner,await s.upload(s.owner),{companionUserIds:[s.other.id]});
+    const runSegments=[{kind:'WORK',distance:4,pace:4.5},{kind:'RECOVERY',distance:2,pace:9}];
+    const a=await s.create(s.owner,await s.upload(s.owner),{distance:6,pace:6,runSegments,companionUserIds:[s.other.id]});
     await body(await s.admin.api.post(`/api/admin/activities/${a.id}/approve`,{data:{}}));
+    const cycle=await s.create(s.owner,await s.upload(s.owner),{category:'CYCLE',distance:20,pace:undefined,activityDate:'2026-09-03'});
     // The deployed ledger is exercised only against this disposable CI database.
     await body(await s.admin.api.post('/api/admin/control',{data:{action:'scores.recalculate',payload:{confirmation:'RECALCULATE'}}}));
     expect((await request.get('/api/admin/export?type=backup')).status()).toBe(401);
@@ -127,6 +129,8 @@ test('v7 export retains ledger/history, rejects corrupt backups, and writes a sy
     expect(backup.pointsLogs.length).toBe(backup.activities.length);
     expect(backup.pointsLogs.find(p=>p.activityId===a.id).friendBonus).toBe(3);
     expect(backup.activities.find(row=>row.id===a.id).companionUserIds).toEqual([s.other.id]);
+    expect(backup.activities.find(row=>row.id===a.id).runSegments).toEqual(runSegments);
+    expect(backup.activities.find(row=>row.id===cycle.id).cycleScoringVersion).toBe(2);
     expect(backup.userAchievements.some(row=>row.user_id===s.owner.id)).toBe(true);
     const text=JSON.stringify(backup);expect(text).not.toContain('"password":');expect(text).not.toContain('stravaAccessToken');
     fs.writeFileSync('/tmp/kg-hardening-fixture.json',text,{mode:0o600});
@@ -138,5 +142,40 @@ test('v7 export retains ledger/history, rejects corrupt backups, and writes a sy
     expect(spawnSync(process.execPath,['scripts/validate-operational-backup.cjs','/tmp/kg-hardening-invalid.json']).status).toBe(1);
     // Read-only JSON exporter does not create a stored snapshot; scheduled v7
     // enrichment is exercised separately after installing its migration in CI.
+  } finally {await s.cleanup();}
+});
+
+test('interval corrections preserve history and require an explicit steady-run conversion', async ({browser,baseURL})=>{
+  const s=await accounts(browser,baseURL);
+  try {
+    const runSegments=[{kind:'WORK',distance:4,pace:4.5},{kind:'RECOVERY',distance:2,pace:9}];
+    const proofUrl=await s.upload(s.owner);
+    const entry=await s.create(s.owner,proofUrl,{runSegments,distance:6,pace:6});
+    // An old client cannot silently remove interval scoring by editing totals.
+    expect((await s.owner.api.patch(`/api/activities/${entry.id}`,{data:{distance:7}})).status()).toBe(400);
+    expect((await s.db.activity.findUniqueOrThrow({where:{id:entry.id}})).runSegments).toEqual(runSegments);
+    await body(await s.admin.api.post(`/api/admin/activities/${entry.id}/approve`,{data:{}}));
+    const proposed={activityDate:'2026-09-02',category:'RUN',distance:6,pace:6,duration:40,companionUserId:null,proofUrl};
+    expect((await s.owner.api.post('/api/corrections',{data:{activityId:entry.id,reason:'Change aggregate without segment details',proposed:{...proposed,distance:7}}})).status()).toBe(400);
+    const request=await body(await s.owner.api.post('/api/corrections',{data:{activityId:entry.id,reason:'Correct duration while preserving intervals',proposed}}),201);
+    let history=await body(await s.owner.api.get('/api/corrections'));
+    let record=history.find(row=>row.id===request.id);
+    expect(record.original.runSegments).toEqual(runSegments);
+    expect(record.proposed.runSegments).toEqual(runSegments);
+    await body(await s.admin.api.post('/api/admin/corrections',{data:{id:request.id,decision:'APPROVED',reason:'Verified duration and interval proof'}}));
+    history=await body(await s.owner.api.get('/api/corrections'));record=history.find(row=>row.id===request.id);
+    expect(record.applied.runSegments).toEqual(runSegments);
+    const changedSegments=[{kind:'WORK',distance:3,pace:4.5},{kind:'RECOVERY',distance:1,pace:9.5}];
+    const second=await body(await s.owner.api.post('/api/corrections',{data:{activityId:entry.id,reason:'Correct work and recovery distances',proposed:{...proposed,runSegments:changedSegments}}}),201);
+    await body(await s.admin.api.post('/api/admin/corrections',{data:{id:second.id,decision:'APPROVED',reason:'Verified corrected segment distances'}}));
+    const corrected=await s.db.activity.findUniqueOrThrow({where:{id:entry.id}});
+    expect(corrected.runSegments).toEqual(changedSegments);expect(corrected.distance).toBe(4);expect(corrected.pace).toBe(5.75);expect(corrected.points).toBe(8.5);
+    const third=await body(await s.owner.api.post('/api/corrections',{data:{activityId:entry.id,reason:'This workout was actually a steady run',proposed:{...proposed,distance:4,pace:5.75,runSegments:null}}}),201);
+    await body(await s.admin.api.post('/api/admin/corrections',{data:{id:third.id,decision:'APPROVED',reason:'Verified steady-run conversion proof'}}));
+    history=await body(await s.owner.api.get('/api/corrections'));record=history.find(row=>row.id===third.id);
+    expect(record.original.runSegments).toEqual(changedSegments);expect(record.proposed.runSegments).toBeNull();expect(record.applied.runSegments).toBeNull();
+    expect((await s.db.activity.findUniqueOrThrow({where:{id:entry.id}})).runSegments).toBeNull();
+    // Another member cannot inspect the owner's interval correction snapshots.
+    expect((await body(await s.other.api.get('/api/corrections'))).some(row=>row.activityId===entry.id)).toBe(false);
   } finally {await s.cleanup();}
 });

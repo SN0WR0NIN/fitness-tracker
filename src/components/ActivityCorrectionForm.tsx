@@ -8,6 +8,8 @@ import FriendMultiSelect from '@/components/FriendMultiSelect';
 import ActivityProof from '@/components/ActivityProof';
 import { activityFriendIds } from '@/lib/friend-selection';
 import type { CorrectionSnapshot } from '@/lib/activity-corrections';
+import { normalizeRunSegments, summarizeRunSegments } from '@/lib/scoring';
+import { RunSegmentsSchema } from '@/lib/run-segment-schema';
 import { maskPaceInput, normalizePaceInput, parsePaceInput } from '@/lib/pace-input';
 
 
@@ -18,6 +20,8 @@ export default function ActivityCorrectionForm({ activityId, original, users, st
   const [category,setCategory]=useState(original.category);
   const [distance,setDistance]=useState(String(original.distance));
   const [pace,setPace]=useState(normalizePaceInput(original.pace));
+  const [interval,setInterval]=useState(Boolean(original.runSegments?.length));
+  const [segments,setSegments]=useState(() => (normalizeRunSegments(original.runSegments).length ? normalizeRunSegments(original.runSegments) : [{kind:'WORK' as const,distance:1,pace:5},{kind:'RECOVERY' as const,distance:1,pace:8}]).map(segment=>({...segment,distance:String(segment.distance),pace:normalizePaceInput(segment.pace)})));
   const [duration,setDuration]=useState(original.duration === null ? '' : String(original.duration));
   const [withFriend,setWithFriend]=useState(Boolean(original.completedWithFriend || original.companionName || originalFriends.length));
   const [companion,setCompanion]=useState<string[]>(originalFriends);
@@ -46,7 +50,12 @@ export default function ActivityCorrectionForm({ activityId, original, users, st
   async function submit(event:React.FormEvent<HTMLFormElement>) {
     event.preventDefault();setMessage('');
     const parsedPace=pace.trim()?parsePaceInput(pace):null;
-    if(parsedPace===undefined){setMessage('Enter pace as min:sec. Type 545 for 5:45/km.');return;}
+    const intervalRun=category==='RUN' && interval;
+    const parsedSegments=intervalRun?RunSegmentsSchema.safeParse(segments.map(segment=>({kind:segment.kind,distance:Number(segment.distance),pace:parsePaceInput(segment.pace)}))):null;
+    if(parsedSegments && !parsedSegments.success){setMessage(parsedSegments.error.issues[0]?.message || 'Check interval distances and paces.');return;}
+    const runSegments=parsedSegments?.success?parsedSegments.data:null;
+    const summary=runSegments?summarizeRunSegments(runSegments):null;
+    if(!intervalRun && parsedPace===undefined){setMessage('Enter pace as min:sec. Type 545 for 5:45/km.');return;}
     if(withFriend && companion.length===0 && !hasLegacyCompanion){setMessage('Select at least one registered friend to request the friend bonus.');return;}
     if(!proof.trim()){setMessage('Photo proof is required for an approved-entry edit. Upload a proof image before submitting.');return;}
     setBusy(true);
@@ -54,8 +63,9 @@ export default function ActivityCorrectionForm({ activityId, original, users, st
       const proposed={
         activityDate:date,
         category,
-        distance:category==='TROOP_GAMES'?0:Number(distance),
-        pace:parsedPace,
+        distance:category==='TROOP_GAMES'?0:(summary?.distance ?? Number(distance)),
+        pace:summary?.pace ?? parsedPace,
+        runSegments,
         duration:duration===''?null:Number(duration),
         companionUserId:withFriend?(companion[0] ?? null):null,
         companionUserIds:withFriend?companion:[],
@@ -81,15 +91,26 @@ export default function ActivityCorrectionForm({ activityId, original, users, st
       <section className="grid gap-5 sm:grid-cols-2">
         <label className="text-sm font-bold">Activity date (Singapore)<input required type="date" min={startDate} max={endDate} value={date} onChange={(e)=>setDate(e.target.value)} className={input}/></label>
         <label className="text-sm font-bold">Activity type<select aria-label="Activity type" value={category} onChange={(e)=>setCategory(e.target.value as CorrectionSnapshot['category'])} className={input}><option value="RUN">Run</option><option value="CYCLE">Cycle</option><option value="SWIM">Swim</option><option value="WALK_OR_HIKE">Walk / Hike</option><option value="TROOP_GAMES">Troop Games</option></select></label>
-        {category!=='TROOP_GAMES'?<label className="text-sm font-bold">Distance ({category==='SWIM'?'metres':'km'})<input required type="number" min="0.001" max="100000" step="any" value={distance} onChange={(e)=>setDistance(e.target.value)} className={input}/></label>:null}
-        <label className="text-sm font-bold">Pace (min/km)<input inputMode="numeric" maxLength={5} autoComplete="off" value={pace} onChange={(e)=>setPace(maskPaceInput(e.target.value))} placeholder="5:45" className={input}/><span className="mt-1 block text-xs font-normal text-slate-400">Type only the digits; 545 becomes 5:45. Run scoring will be recalculated from the approved value.</span></label>
+        {category!=='TROOP_GAMES' && !(category==='RUN' && interval)?<label className="text-sm font-bold">Distance ({category==='SWIM'?'metres':'km'})<input required type="number" min="0.001" max="100000" step="any" value={distance} onChange={(e)=>setDistance(e.target.value)} className={input}/></label>:null}
+        {!(category==='RUN' && interval)?<label className="text-sm font-bold">Pace (min/km)<input inputMode="numeric" maxLength={5} autoComplete="off" value={pace} onChange={(e)=>setPace(maskPaceInput(e.target.value))} placeholder="5:45" className={input}/><span className="mt-1 block text-xs font-normal text-slate-400">Type only the digits; 545 becomes 5:45. Run scoring will be recalculated from the approved value.</span></label>:null}
         <label className="text-sm font-bold">Duration (whole minutes, optional)<input type="number" min="1" max="100000" step="1" value={duration} onChange={(e)=>setDuration(e.target.value)} className={input}/></label>
       </section>
+
+      {category==='RUN'?<section className="space-y-4 rounded-xl border border-white/10 p-4">
+        <label className="flex min-h-11 items-center gap-3 font-bold"><input type="checkbox" checked={interval} onChange={event=>setInterval(event.target.checked)}/>Interval run</label>
+        <p className="text-sm text-slate-400">{interval?'Edit each work and recovery pace group. Total distance and average pace are calculated from these segments.':'Steady-run scoring uses the distance and pace above. Switching off interval mode explicitly removes the interval segments when approved.'}</p>
+        {interval?<>{segments.map((segment,index)=><div key={index} className="grid gap-3 sm:grid-cols-4">
+          <label className="text-sm">Segment {index+1}<select aria-label={`Segment ${index+1} kind`} className={input} value={segment.kind} onChange={event=>setSegments(items=>items.map((item,i)=>i===index?{...item,kind:event.target.value as 'WORK'|'RECOVERY'}:item))}><option value="WORK">Work</option><option value="RECOVERY">Recovery</option></select></label>
+          <label className="text-sm">Distance (km)<input aria-label={`Segment ${index+1} distance`} required type="number" min="0.001" max="1000" step="any" className={input} value={segment.distance} onChange={event=>setSegments(items=>items.map((item,i)=>i===index?{...item,distance:event.target.value}:item))}/></label>
+          <label className="text-sm">Pace (min/km)<input aria-label={`Segment ${index+1} pace`} required inputMode="numeric" maxLength={5} className={input} value={segment.pace} onChange={event=>setSegments(items=>items.map((item,i)=>i===index?{...item,pace:maskPaceInput(event.target.value)}:item))}/></label>
+          <button type="button" disabled={segments.length<=2} onClick={()=>setSegments(items=>items.filter((_,i)=>i!==index))} className="min-h-11 text-sm text-rose-200 disabled:opacity-40">Remove segment {index+1}</button>
+        </div>)}<button type="button" disabled={segments.length>=20} onClick={()=>setSegments(items=>[...items,{kind:'WORK',distance:'1',pace:'5:00'}])} className="min-h-11 rounded-xl border border-white/20 px-4 disabled:opacity-40">Add segment</button></>:null}
+      </section>:null}
 
       <section className="rounded-2xl border border-white/10 bg-black/10 p-4 sm:p-5">
         <div className="flex items-start gap-3"><Users className="mt-0.5 h-5 w-5 text-sky-300"/><div><h2 className="font-black">Friend bonus</h2><p className="mt-1 text-xs text-slate-400">Add or remove friends here. The bonus itself is never typed manually; it is recalculated automatically under the daily friend-bonus rules when an admin approves the edit.</p></div></div>
         <label className={`mt-4 flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border p-4 ${withFriend?'border-sky-400/30 bg-sky-400/10':'border-white/10 bg-slate-900/40'}`}><input type="checkbox" checked={withFriend} onChange={(e)=>{setWithFriend(e.target.checked);if(!e.target.checked)setCompanion([]);}} className="h-4 w-4 accent-sky-400"/><span className="font-bold">I completed this activity with friends</span></label>
-        {withFriend?<div className="mt-4"><FriendMultiSelect users={users} value={companion} onChange={setCompanion} disabled={busy || uploading || locked}/>{hasLegacyCompanion && !companion.length?<p className="mt-2 text-xs text-slate-400">Current verified companion: {original.companionName}. Leave the friend option on to keep it, or switch it off to remove the friend bonus.</p>:null}</div>:<p className="mt-3 text-sm text-slate-500">This edit will remove the activity's friend status and any friend bonus that applies after recalculation.</p>}
+        {withFriend?<div className="mt-4"><FriendMultiSelect users={users} value={companion} onChange={setCompanion} disabled={busy || uploading || locked}/>{hasLegacyCompanion && !companion.length?<p className="mt-2 text-xs text-slate-400">Current verified companion: {original.companionName}. Leave the friend option on to keep it, or switch it off to remove the friend bonus.</p>:null}</div>:<p className="mt-3 text-sm text-slate-500">This edit will remove the activity&apos;s friend status and any friend bonus that applies after recalculation.</p>}
       </section>
 
       <section className="rounded-2xl border border-orange-300/15 bg-orange-300/[0.04] p-4 sm:p-5">
@@ -101,7 +122,7 @@ export default function ActivityCorrectionForm({ activityId, original, users, st
       <label className="block text-sm font-bold">Reason for edit<textarea required minLength={5} maxLength={1000} value={reason} onChange={(e)=>setReason(e.target.value)} placeholder="Briefly explain what needs to be corrected." className={`${input} min-h-24`}/></label>
     </fieldset>
 
-    <div className="flex items-start gap-2 rounded-xl border border-white/10 bg-black/10 p-3 text-xs text-slate-400"><Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-300"/>Distance, pace and friend changes may change the activity's points. The revised score is only applied after admin approval.</div>
+    <div className="flex items-start gap-2 rounded-xl border border-white/10 bg-black/10 p-3 text-xs text-slate-400"><Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-300"/>Distance, pace and friend changes may change the activity&apos;s points. The revised score is only applied after admin approval.</div>
     <p role="status" aria-live="polite" className="text-sm text-sky-200">{uploading?'Uploading proof…':message}</p>
     <div className="flex flex-wrap gap-3"><Link href="/activities/history" className="inline-flex min-h-11 items-center rounded-xl border border-white/10 px-5 py-3 font-bold text-slate-300">Cancel</Link><button disabled={busy || uploading || locked || reason.trim().length<5 || !proof.trim()} className="min-h-11 rounded-xl bg-lime-300 px-5 py-3 font-black text-slate-950 disabled:opacity-40">{busy?'Submitting edits…':'Submit edits for review'}</button></div>
   </form>;
