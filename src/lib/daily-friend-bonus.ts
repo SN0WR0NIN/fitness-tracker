@@ -1,10 +1,12 @@
-import { calculateActivityPoints, hasPositiveBaseScore, resolveEffectiveCategory, getWeekStart, getWeekNumber, roundScoreDown, type ActivityCategory, type ScoringRules } from './scoring';
+import { calculateActivityPoints, hasPositiveBaseScore, normalizeRunSegments, resolveEffectiveCategory, getWeekStart, getWeekNumber, roundActivityScoreDown, type ActivityCategory, type ScoringRules } from './scoring';
 import { singaporeDate } from './activity-date';
 
 export const FRIEND_BONUS_SPORTS: readonly ActivityCategory[] = ['RUN', 'CYCLE', 'SWIM', 'WALK_OR_HIKE'];
 export type DailyScoringActivity = {
   id: string; userId: string; columnId: string; category: ActivityCategory;
   distance: number; pace: number | null; completedWithFriend: boolean;
+  runSegments?: unknown;
+  cycleScoringVersion?: number;
   basePointsOverride?: number | null; totalPointsOverride?: number | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED'; occurredAt: Date; createdAt: Date;
 };
@@ -13,10 +15,11 @@ export type DailyScoringActivity = {
  * uses the unrounded activity value so final score flooring cannot erase an
  * otherwise valid positive workout. Admin point overrides do not change friend
  * eligibility or allocation; they only change the saved score arithmetic. */
-export function qualifiesForFriendBonus(activity: Pick<DailyScoringActivity, 'category' | 'distance' | 'pace'>, rules: ScoringRules): boolean {
+export function qualifiesForFriendBonus(activity: Pick<DailyScoringActivity, 'category' | 'distance' | 'pace' | 'runSegments' | 'cycleScoringVersion'>, rules: ScoringRules): boolean {
   const category = resolveEffectiveCategory(activity.category, activity.pace ?? undefined, rules);
   if (!FRIEND_BONUS_SPORTS.includes(category)) return false;
-  return hasPositiveBaseScore({ category, distance: activity.distance, pace: activity.pace ?? undefined }, rules);
+  return hasPositiveBaseScore({ category, distance: activity.distance, pace: activity.pace ?? undefined,
+    runSegments: normalizeRunSegments(activity.runSegments), cycleScoringVersion: activity.cycleScoringVersion ?? 1 }, rules);
 }
 
 /** Approved workouts claim first; pending amounts are estimates only. Within
@@ -35,9 +38,11 @@ export function planDailyActivityScores<T extends DailyScoringActivity>(activiti
     const allowed = eligible && !claimed.has(key);
     if (allowed) claimed.add(key);
     const calculated = calculateActivityPoints({ category, distance: activity.distance,
-      pace: activity.pace ?? undefined, completedWithFriend: allowed }, rules);
+      pace: activity.pace ?? undefined, runSegments: normalizeRunSegments(activity.runSegments), completedWithFriend: allowed, cycleScoringVersion: activity.cycleScoringVersion ?? 1 }, rules);
     const basePoints = activity.basePointsOverride ?? calculated.basePoints;
-    const totalPoints = activity.totalPointsOverride ?? roundScoreDown(basePoints + calculated.friendBonus);
+    // Use the raw combined total for new rules; never re-floor the 2dp display base.
+    // Preserve legacy steady calculations during rebuilds.
+    const totalPoints = activity.totalPointsOverride ?? (activity.basePointsOverride == null && (category === 'CYCLE' && activity.cycleScoringVersion === 2 || category === 'RUN' && normalizeRunSegments(activity.runSegments).length > 0) ? calculated.totalPoints : roundActivityScoreDown(basePoints + calculated.friendBonus, category, activity.cycleScoringVersion ?? 1));
     const scoring = { basePoints, friendBonus: calculated.friendBonus, totalPoints };
     return { activity, category, scoring, weekStart: getWeekStart(activity.occurredAt),
       weekNumber: getWeekNumber(activity.occurredAt, startDate) };

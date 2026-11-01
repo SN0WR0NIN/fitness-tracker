@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
-
 const PASSWORD = process.env.E2E_PASSWORD || 'E2E-only-Password-123!';
+
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6ioAAAAASUVORK5CYII=', 'base64');
 
 test('dashboard activities stay compact until the athlete opens one', async ({ page }) => {
@@ -21,6 +21,10 @@ test('dashboard activities stay compact until the athlete opens one', async ({ p
   expect(created.status(), await created.text()).toBe(201);
 
   await page.goto('/dashboard');
+  const activities = page.locator('details.profile-main-fold').filter({
+    has: page.getByText('My activities', { exact: true }),
+  });
+  await activities.locator(':scope > summary').click();
   const card = page.getByTestId('dashboard-activity').first();
   await expect(card).toBeVisible();
   await expect(card).not.toHaveAttribute('open', '');

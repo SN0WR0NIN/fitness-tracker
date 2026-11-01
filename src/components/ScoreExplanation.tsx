@@ -6,7 +6,7 @@ export default function ScoreExplanation({ activity, compact = false, scoringRul
   const statusTone = activity.status === 'APPROVED' ? 'text-emerald-300' : activity.status === 'REJECTED' ? 'text-rose-300' : 'text-amber-200';
   const roundingNote = explanation.overridden
     ? 'An administrator has manually set part or all of this score.'
-    : 'Saved totals always round down to the lower 0.5-point increment.';
+    : `Saved totals round down to the lower ${activity.category === 'CYCLE' && activity.cycleScoringVersion === 2 ? '0.1' : '0.5'}-point increment.`;
 
   const breakdown = explanation.breakdown ? (
     <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">

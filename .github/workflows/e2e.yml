@@ -1,16 +1,17 @@
 name: Stay Active E2E
 on:
   pull_request:
-    branches: [master]
+    branches: [master, season-2026-legacy]
   push:
-    branches: [master]
+    branches: [master, season-2026-legacy]
   workflow_dispatch:
 concurrency:
   group: stay-active-e2e-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   e2e:
-    runs-on: ubuntu-latest
+    # Playwright 1.55 supports Ubuntu 24.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       postgres:
@@ -40,18 +41,33 @@ jobs:
       - name: Install application dependencies
         run: npm ci
       - name: Hardening unit and archive checks
-        run: npm run test:hardening
+        run: |
+          npm run test:hardening
+          node scripts/cycling-scoring-tests.cjs
+          node scripts/correction-interval-tests.cjs
+          node scripts/interval-backup-tests.cjs
+          node scripts/e2e-environment.cjs
+      - name: Rehearse additive migration against populated legacy schema
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: node scripts/check-populated-legacy-upgrade.cjs
       - name: Prepare ephemeral database
         run: |
           npx prisma generate
           npx prisma db push --skip-generate --accept-data-loss
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/interval-run-segments.sql
           node scripts/e2e-bootstrap.cjs
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/season-week-finalization.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/finalized-week-guard.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/season-week-finalization-security.sql
+          node scripts/check-e2e-season.cjs
           npx prisma db execute --schema prisma/schema.prisma --file prisma/focused-controls.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/achievement-engine.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/multiple-activity-friends.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/achievement-final-state.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/achievement-participant-roles.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/admin-score-overrides.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/cycling-scoring-version.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/multiple-proof-photos.sql
       - name: Lint safety app changes
         run: >-
@@ -71,6 +87,10 @@ jobs:
           src/app/api/admin/maintenance/route.ts src/app/api/admin/corrections/route.ts src/app/api/corrections/route.ts
           src/app/admin/page.tsx src/app/admin/duplicates/page.tsx src/app/admin/awards/page.tsx src/app/results/page.tsx src/app/notifications/page.tsx
           src/components/DuplicateReviewCentre.tsx src/components/NotificationBell.tsx src/components/Navbar.tsx src/components/WeeklyAwardsAdminControls.tsx src/components/NotificationPreferencesForm.tsx
+          src/lib/scoring.ts src/lib/run-segment-schema.ts src/lib/correction-run-metrics.ts src/lib/activity-proof-requirements.ts
+          src/components/ActivityCorrectionForm.tsx src/components/CorrectionReviewList.tsx
+          src/app/activities/history/page.tsx src/app/rules/page.tsx
+          scripts/cycling-scoring-tests.cjs scripts/correction-interval-tests.cjs scripts/interval-backup-tests.cjs scripts/check-populated-legacy-upgrade.cjs
       - name: Production build
         run: npm run build
       - name: Install Playwright
@@ -95,6 +115,7 @@ jobs:
       - name: Install and verify scheduled backup v7 in disposable database only
         run: |
           npx prisma db execute --schema prisma/schema.prisma --file prisma/points-log-backup-v7.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/interval-run-backup.sql
           node scripts/check-v7-snapshot.cjs
       - name: Restore synthetic operational fixture into a new empty isolated database
         env:

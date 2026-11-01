@@ -17,10 +17,18 @@ finally { fs.rmSync(temporary, { recursive: true, force: true }); }
 if (core.status !== 0) { console.error(core.stderr || 'Core backup validation failed.'); process.exit(1); }
 const errors = []; const check = (value, message) => { if (!value) errors.push(message); };
 check(Array.isArray(backup.pointsLogs), 'Version 7 requires a pointsLogs array.');
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- CommonJS validator.
+const { validateRunSegments } = require('./validate-backup-run-segments.cjs');
 const activities = new Map(backup.activities.map(a => [a.id, a]));
 for (const activity of backup.activities) {
+  validateRunSegments(activity, check);
+  if (activity.cycleScoringVersion !== undefined) check([1, 2].includes(activity.cycleScoringVersion), 'Invalid cycling scoring version.');
   for (const key of ['basePointsOverride','totalPointsOverride']) { const value = activity[key]; if (value !== undefined && value !== null) check(typeof value === 'number' && Number.isFinite(value) && value >= 0, `Invalid ${key}.`); }
-  if (activity.totalPointsOverride !== undefined && activity.totalPointsOverride !== null) check(Math.abs(activity.totalPointsOverride * 2 - Math.round(activity.totalPointsOverride * 2)) < 1e-9, 'Total score override must use 0.5-point increments.');
+  if (activity.totalPointsOverride !== undefined && activity.totalPointsOverride !== null) {
+    const increment = activity.category === 'CYCLE' && activity.cycleScoringVersion === 2 ? 10 : 2;
+    check(Math.abs(activity.totalPointsOverride * increment - Math.round(activity.totalPointsOverride * increment)) < 1e-9,
+      'Total score override must use the scoring increment for this activity.');
+  }
   if (activity.proofUrls !== undefined) {
     check(Array.isArray(activity.proofUrls), 'proofUrls must be an array when present.');
     if (Array.isArray(activity.proofUrls)) {
@@ -28,6 +36,14 @@ for (const activity of backup.activities) {
       check(new Set(activity.proofUrls).size === activity.proofUrls.length, 'Activity proof references must be unique.');
       for (const proof of activity.proofUrls) check(typeof proof === 'string' && proof.length > 0 && proof.length <= 2048, 'Invalid activity proof reference.');
       if (activity.proofUrls.length && activity.proofUrl !== undefined && activity.proofUrl !== null) check(activity.proofUrls[0] === activity.proofUrl, 'Legacy primary proof must match the first proofUrls entry.');
+    }
+  }
+}
+for (const correction of backup.activityCorrections) {
+  for (const key of ['original', 'proposed', 'applied']) {
+    if (correction[key]) {
+      validateRunSegments(correction[key], check);
+      if (correction[key].cycleScoringVersion !== undefined) check([1, 2].includes(correction[key].cycleScoringVersion), 'Invalid archived cycling scoring version.');
     }
   }
 }

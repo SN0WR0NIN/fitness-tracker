@@ -1,10 +1,11 @@
 'use client';
+import { normalizeRunSegments } from '@/lib/scoring';
 import FriendMultiSelect from '@/components/FriendMultiSelect';
 import { activityFriendIds } from '@/lib/friend-selection';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-type Activity = { id: string; category: string; distance: number; pace: number | null; proofUrl: string | null; companionUserId: string | null; companionUserIds?: string[]; stravaActivityId: string | null };
+type Activity = { runSegments?: unknown; id: string; category: string; distance: number; pace: number | null; proofUrl: string | null; companionUserId: string | null; companionUserIds?: string[]; stravaActivityId: string | null };
 export default function PendingActivityEditor({ activity, users }: { activity: Activity; users: { id: string; name: string }[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -18,7 +19,13 @@ export default function PendingActivityEditor({ activity, users }: { activity: A
   async function save(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setMessage('');
     try {
-      const body = activity.stravaActivityId ? { companionUserIds: companion } : { category, distance: category === 'TROOP_GAMES' ? undefined : Number(distance), pace: category === 'RUN' && pace ? Number(pace) : null, proofUrl: proof.trim() || null, companionUserIds: companion };
+      const body: Record<string, unknown> = activity.stravaActivityId ? { companionUserIds: companion } : { category, distance: category === 'TROOP_GAMES' ? undefined : Number(distance), pace: category === 'RUN' && pace ? Number(pace) : null, proofUrl: proof.trim() || null, companionUserIds: companion };
+      const convertsInterval = !activity.stravaActivityId && normalizeRunSegments(activity.runSegments).length > 0 &&
+        (body.category !== activity.category || body.distance !== activity.distance || body.pace !== activity.pace);
+      if (convertsInterval) {
+        if (!window.confirm('Replace this interval workout with a steady activity? Its work and recovery segments will be removed and the score recalculated.')) return;
+        body.runSegments = null;
+      }
       const response = await fetch(`/api/activities/${activity.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not save.');
       setMessage('Saved. Points recalculated; still awaiting approval.'); setOpen(false); router.refresh();

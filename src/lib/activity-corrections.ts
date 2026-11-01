@@ -1,13 +1,16 @@
 import { assertAttachableProof, normalizeProofUrls } from '@/lib/proof-access';
+import { hasRequiredIntervalProofs, INTERVAL_PROOF_REQUIREMENT_MESSAGE } from '@/lib/activity-proof-requirements';
 import { resolveActivityFriends } from '@/lib/activity-friends';
 import { activityFriendIds, sameFriendSelection } from '@/lib/friend-selection';
 import { reconcileParticipantScores } from '@/lib/scoring-ledger';
 import { planDailyActivityScores } from '@/lib/daily-friend-bonus';
+import { correctionRunMetrics } from '@/lib/correction-run-metrics';
+import { RunSegmentsSchema } from '@/lib/run-segment-schema';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import type { Activity, Prisma } from '@prisma/client';
+import { Prisma, type Activity } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { DEFAULT_SCORING_RULES, resolveEffectiveCategory, getWeekStart, getWeekNumber } from '@/lib/scoring';
+import { DEFAULT_SCORING_RULES, normalizeRunSegments, resolveEffectiveCategory, getWeekStart, getWeekNumber } from '@/lib/scoring';
 import type { ChallengeSettings } from '@/lib/admin-control';
 import { duplicateReason } from '@/lib/activity-duplicates';
 import { isWithinChallengeWindow, parseActivityDate, singaporeDate } from '@/lib/activity-date';
@@ -19,17 +22,19 @@ export const CorrectionValuesSchema = z.object({
   activityDate: z.string().refine((date) => Boolean(parseActivityDate(date)), 'Choose a valid Singapore date, today or earlier.'),
   category: z.enum(['RUN','CYCLE','SWIM','WALK_OR_HIKE','TROOP_GAMES']),
   distance: z.number().min(0).max(100000),
+  runSegments: RunSegmentsSchema.nullable().optional(),
   pace: z.number().positive().max(60).nullable(),
   duration: z.number().int().positive().max(100000).nullable(),
   companionUserId: z.string().min(1).nullable(),
   companionUserIds: z.array(z.string().min(1).max(200)).max(100).optional(),
   completedWithFriend: z.boolean().optional(),
   proofUrl: proofSchema,
-}).strict().refine((value) => value.category === 'TROOP_GAMES' || value.distance > 0, 'Distance must be greater than zero.');
+}).strict().refine((value) => value.category === 'TROOP_GAMES' || value.distance > 0 || Boolean(value.runSegments?.length), 'Distance must be greater than zero.')
+  .refine((value) => !value.runSegments || value.category === 'RUN', 'Interval segments are available only for Run activities.');
 export const CreateCorrectionSchema = z.object({ activityId: z.string().min(1), reason: z.string().trim().min(5).max(1000), proposed: CorrectionValuesSchema }).strict();
 export const DecideCorrectionSchema = z.object({ id: z.string().uuid(), decision: z.enum(['APPROVED','REJECTED']), reason: z.string().trim().min(5).max(1000), duplicateOverrideReason: z.string().trim().min(10).max(1000).optional() }).strict();
 export type CorrectionValues = z.infer<typeof CorrectionValuesSchema>;
-export type CorrectionSnapshot = CorrectionValues & { version: string; points: number; weekNumber: number; occurredAt: string; companionName: string | null };
+export type CorrectionSnapshot = CorrectionValues & { cycleScoringVersion?: number; version: string; points: number; weekNumber: number; occurredAt: string; companionName: string | null };
 export type CorrectionRecord = {
   id: string; activityId: string; userId: string; participantName: string; status: string; reason: string;
   original: CorrectionSnapshot; proposed: CorrectionSnapshot; applied: CorrectionSnapshot | null;
@@ -38,7 +43,9 @@ export type CorrectionRecord = {
 
 export function correctionSnapshot(activity: Activity): CorrectionSnapshot {
   return { activityDate: singaporeDate(activity.occurredAt), category: activity.category, distance: activity.distance,
+    runSegments: normalizeRunSegments(activity.runSegments).length ? normalizeRunSegments(activity.runSegments) : null,
     pace: activity.pace, duration: activity.duration, companionUserId: activity.companionUserId, companionUserIds: activityFriendIds(activity), completedWithFriend: activity.completedWithFriend, proofUrl: activity.proofUrl,
+    cycleScoringVersion: activity.cycleScoringVersion ?? 1,
     version: activity.updatedAt.toISOString(), points: activity.points, weekNumber: activity.weekNumber,
     occurredAt: activity.occurredAt.toISOString(), companionName: activity.companion };
 }
@@ -69,16 +76,24 @@ async function prepareChange(tx: Prisma.TransactionClient, activity: Activity, p
   let companion = friendSetting === false ? null : friends.companion;
   if (friendSetting !== false && !friends.companionUserIds.length && !activity.companionUserId && activity.companion && activity.completedWithFriend) companion = activity.companion;
   if (friendSetting === true && !companion) throw new FeatureError('Select at least one registered friend for the friend bonus.');
-  const category = resolveEffectiveCategory(proposed.category, proposed.pace ?? undefined, settings.scoringRules);
-  const distance = category === 'TROOP_GAMES' ? 0 : proposed.distance;
+  let metrics: ReturnType<typeof correctionRunMetrics>;
+  try { metrics = correctionRunMetrics(activity, proposed); }
+  catch (error) { throw new FeatureError(error instanceof Error ? error.message : 'Invalid interval correction.'); }
+  const category = resolveEffectiveCategory(proposed.category, metrics.pace ?? undefined, settings.scoringRules);
+  const distance = category === 'TROOP_GAMES' ? 0 : metrics.distance;
+  const { runSegments, pace } = metrics;
   const proofUrls = proofGalleryForCorrection(activity, proposed.proofUrl);
+  if ((proposed.runSegments !== undefined || proposed.proofUrl !== activity.proofUrl)
+    && !hasRequiredIntervalProofs(runSegments, proofUrls)) {
+    throw new FeatureError(INTERVAL_PROOF_REQUIREMENT_MESSAGE, 400);
+  }
   const proofUrl = proofUrls[0] ?? null;
   const companionUserId = companion ? friends.companionUserId : null;
   const companionUserIds = companion ? friends.companionUserIds : [];
   const siblings = await tx.activity.findMany({ where: { userId: activity.userId, id: { not: activity.id } } });
-  const candidate = { ...activity, category, distance, pace: proposed.pace, occurredAt, proofUrl, proofUrls, companionUserId, companionUserIds, companion, completedWithFriend: Boolean(companion) };
+  const candidate = { ...activity, category, distance, pace, runSegments, occurredAt, proofUrl, proofUrls, companionUserId, companionUserIds, companion, completedWithFriend: Boolean(companion) };
   const scoring = planDailyActivityScores([...siblings, candidate], settings.scoringRules, settings.startDate).find(item => item.activity.id === activity.id)!.scoring;
-  return { category, distance, pace: proposed.pace, duration: proposed.duration, occurredAt, weekStart: getWeekStart(occurredAt), weekNumber: getWeekNumber(occurredAt,settings.startDate), proofUrl, proofUrls, companionUserId, companionUserIds, companion, completedWithFriend: Boolean(companion), points: scoring.totalPoints, scoring };
+  return { category, distance, pace, runSegments: runSegments as Prisma.JsonArray, duration: proposed.duration, occurredAt, weekStart: getWeekStart(occurredAt), weekNumber: getWeekNumber(occurredAt,settings.startDate), proofUrl, proofUrls, companionUserId, companionUserIds, companion, completedWithFriend: Boolean(companion), points: scoring.totalPoints, scoring };
 }
 
 async function audit(tx: Prisma.TransactionClient, actorId: string, action: string, target: string, details: unknown) {
@@ -115,7 +130,7 @@ export async function createCorrection(userId: string, input: z.infer<typeof Cre
     const original = correctionSnapshot(activity);
     const values = CorrectionValuesSchema.parse(input.proposed);
     await assertAttachableProof(tx, values.proofUrl, userId, activity.proofUrl);
-    const unchanged = Object.entries(values).filter(([key]) => !['companionUserId','companionUserIds'].includes(key)).every(([key,value]) => original[key as keyof CorrectionSnapshot] === value) && sameFriendSelection(original, values);
+    const unchanged = Object.entries(values).filter(([key]) => !['companionUserId','companionUserIds','runSegments'].includes(key)).every(([key,value]) => original[key as keyof CorrectionSnapshot] === value) && sameFriendSelection(original, values) && (values.runSegments === undefined || JSON.stringify(values.runSegments) === JSON.stringify(original.runSegments));
     if (unchanged) throw new FeatureError('Change at least one activity field before sending a correction.');
     const change = await prepareChange(tx,activity,values,await settingsInTransaction(tx));
     await assertCorrectionWeekWritable(tx, change.occurredAt, change.weekNumber);
@@ -164,15 +179,15 @@ export async function decideCorrection(adminId: string, input: z.infer<typeof De
     let dirtyWeeks: number[] = [];
     if (input.decision === 'APPROVED' && activity) {
       const raw = request.proposed;
-      const values = CorrectionValuesSchema.parse({activityDate:raw.activityDate,category:raw.category,distance:raw.distance,pace:raw.pace,duration:raw.duration,companionUserId:raw.companionUserId,companionUserIds:raw.companionUserIds,completedWithFriend:raw.completedWithFriend,proofUrl:raw.proofUrl});
+      const values = CorrectionValuesSchema.parse({activityDate:raw.activityDate,category:raw.category,distance:raw.distance,pace:raw.pace,runSegments:raw.runSegments,duration:raw.duration,companionUserId:raw.companionUserId,companionUserIds:raw.companionUserIds,completedWithFriend:raw.completedWithFriend,proofUrl:raw.proofUrl});
       await assertAttachableProof(tx, values.proofUrl, request.user_id, activity.proofUrl);
       const change = await prepareChange(tx,activity,values,await settingsInTransaction(tx));
       await assertCorrectionWeekWritable(tx, change.occurredAt, change.weekNumber);
       const candidates = await tx.activity.findMany({where:{userId:activity.userId,id:{not:activity.id},status:{not:'REJECTED'}}});
       const matches = candidates.flatMap((candidate) => {const reason=duplicateReason({...activity,...change},candidate);return reason?[{id:candidate.id,reason}]:[];});
       if (matches.length && !input.duplicateOverrideReason) throw new FeatureError('Possible duplicate. Compare the matching activities before approving; an explicit override explanation is required.',409,{matches});
-      const {scoring,...data} = change;
-      const updated = await tx.activity.update({where:{id:activity.id},data:{...data,reviewedById:adminId,reviewedAt:new Date()}});
+      const {scoring,runSegments,...data} = change;
+      const updated = await tx.activity.update({where:{id:activity.id},data:{...data,runSegments:runSegments.length?runSegments:Prisma.DbNull,reviewedById:adminId,reviewedAt:new Date()}});
       await tx.pointsLog.updateMany({where:{activityId:activity.id},data:scoring});
       await reconcileParticipantScores(tx, activity.userId);
       applied=correctionSnapshot(await tx.activity.findUniqueOrThrow({where:{id:activity.id}}));
